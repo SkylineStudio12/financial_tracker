@@ -22,3 +22,21 @@ export function formatImpliedRate(amountMinor: number, amountRonMinor: number): 
 export function formatDate(isoDate: string): string {
   return isoDate;
 }
+
+/**
+ * Parse user-typed major units into integer minor units without float math.
+ * Accepts "1234.56", "1234,56", "1234". Returns null when not parseable.
+ */
+export function parseAmountToMinor(input: string): number | null {
+  const normalized = input.trim().replace(/\s/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const [whole, fraction = ""] = normalized.split(".");
+  const minor = Number(whole) * 100 + Number(fraction.padEnd(2, "0") || "0");
+  return Number.isSafeInteger(minor) ? minor : null;
+}
+
+/** Minor units → "1234,56" for prefilling form inputs (no separators). */
+export function minorToInput(amountMinor: number): string {
+  const abs = Math.abs(amountMinor);
+  return `${Math.floor(abs / 100)},${String(abs % 100).padStart(2, "0")}`;
+}

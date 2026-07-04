@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 import { formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
 import { getTransactionDetail } from "@/lib/ledger/queries";
@@ -29,13 +30,24 @@ export default async function TransactionDetailPage({
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
-      <div>
+      <div className="flex items-center justify-between">
         <Link
           href={`/e/${entityId}/transactions`}
           className="text-sm text-accent hover:underline"
         >
           ← Transactions
         </Link>
+        <div className="flex items-center gap-2">
+          {(transaction.kind === "standard" || transaction.kind === "transfer") && (
+            <Link
+              href={`/e/${entityId}/transactions/${transaction.id}/edit`}
+              className="rounded-md bg-surface-raised border border-edge px-3 py-1.5 text-sm text-fg hover:border-accent"
+            >
+              Edit
+            </Link>
+          )}
+          <DeleteTransactionButton transactionId={transaction.id} entityId={entityId} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">

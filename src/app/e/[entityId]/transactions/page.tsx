@@ -66,7 +66,15 @@ export default async function TransactionsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Transactions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Transactions</h1>
+        <Link
+          href={`/e/${entityId}/transactions/new`}
+          className="rounded-md bg-surface-raised border border-edge px-3 py-1.5 text-sm text-fg hover:border-accent"
+        >
+          New transaction
+        </Link>
+      </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
         <label className={labelClass}>

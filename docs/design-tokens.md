@@ -163,6 +163,14 @@ Useful pairing note: black passes AA **on** both neon fills (16.60:1 on green,
 | `accent-foreground` | `neutral-0` | Text/icons on accent (21:1) |
 | `accent-hover` | `neutral-800` | Hover/pressed state (black can't darken, so it lifts) |
 
+### 2.4b Interaction & elevation (added phase 2.6, owner-approved 2026-07-04)
+
+| Semantic token | Value | Role |
+|---|---|---|
+| `scrim` | `neutral-1000` at 20% | Modal overlay (+ subtle backdrop blur at component level) |
+| `focus-ring` | `accent` at 30% | 3 px focus-visible ring on interactive controls |
+| `shadow-raised` | `0 8px 24px rgb(0 0 0 / 0.08)` | Elevation for `surface-raised` (dialogs, popovers) — resolves the deferred flag below |
+
 ### 2.5 Typography roles
 
 | Semantic token | References | Role |

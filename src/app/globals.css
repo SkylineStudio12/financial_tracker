@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* shadcn behavior plumbing (kept after reconciliation): tw-animate-css is
+ * animation utilities; shadcn/tailwind.css is data-state variants and
+ * keyframes only — verified to define NO colors. All visuals stay ours. */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /*
  * Central design tokens — implements docs/design-tokens.md (the spec).
@@ -62,6 +67,12 @@
   --color-accent: var(--color-neutral-1000);
   --color-accent-foreground: var(--color-neutral-0);
   --color-accent-hover: var(--color-neutral-800);
+
+  /* Interaction/elevation (owner-approved 2026-07-04, phase 2.6):
+   * scrim behind modals, focus-visible ring, shadow for raised surfaces. */
+  --color-scrim: color-mix(in srgb, var(--color-neutral-1000) 20%, transparent);
+  --color-focus-ring: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  --shadow-raised: 0 8px 24px rgb(0 0 0 / 0.08);
 
   /* ---- Radius roles -------------------------------------------------- */
   --radius-card: 20px;

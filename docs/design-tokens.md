@@ -70,9 +70,21 @@ Base unit **4 px**. Steps are multiples of the base; no off-scale values.
 
 ### 1.5 Type scale (fixed — do not extend)
 
-Font: **Lufga**. Weights: **Light (300)** and **Regular (400)** only — heavier
-weights are banned; emphasis comes from size and text-color tokens, never from
-weight. Fallback stack: `Lufga, system-ui, sans-serif`.
+Font: **Lufga**. The scale uses **Light (300)** and **Regular (400)**;
+**Medium (500)** is the permitted ceiling for exceptional needs (owner
+decision 2026-07-04) — semibold and bolder remain banned. Emphasis comes from
+size and text-color tokens, never from weight. Fallback stack:
+`Lufga, system-ui, sans-serif`.
+
+**Verified (2026-07-04):** the project's Lufga cut has **no `tnum` feature and
+proportional digits** ('1' = 375 units vs '0' = 643), so amounts cannot align
+in pure Lufga. Decision: money values use the tabular companion font below;
+Lufga covers all other text.
+
+| Primitive | Value |
+|---|---|
+| `font-family-sans` | Lufga (Light 300 / Regular 400 / Medium 500) |
+| `font-family-numeric` | Geist Sans — verified to ship `tnum` — with `font-numeric` enabled |
 
 | Primitive | Size | Weight | Line height | Letter spacing | Notes |
 |---|---|---|---|---|---|
@@ -163,11 +175,15 @@ Useful pairing note: black passes AA **on** both neon fills (16.60:1 on green,
 | `font-secondary` | `type-14` | Secondary text |
 | `font-caption` | `type-12` | Small labels, captions |
 | `font-micro` | `type-11` | Uppercase metadata rows |
-| `font-amount-hero` | `type-52` + `font-numeric` | Hero money figure |
-| `font-amount` | `type-17` + `font-numeric` | Amounts in rows/tables |
-| `font-amount-sm` | `type-14` + `font-numeric` | Amounts in dense tables |
+| `font-amount-hero` | `type-52` metrics + `font-family-numeric` | Hero money figure |
+| `font-amount` | `type-17` metrics + `font-family-numeric` | Amounts in rows/tables |
+| `font-amount-sm` | `type-14` metrics + `font-family-numeric` | Amounts in dense tables |
 
-All `font-amount-*` styles enable `tnum` so amount columns align vertically.
+All `font-amount-*` styles render in `font-family-numeric` (Geist Sans,
+`tnum` on) at the type-scale sizes/line-heights, because Lufga's digits are
+proportional. `font-number-lg` (27 px card numbers) also uses
+`font-family-numeric` when the number sits in an aligned column; standalone
+single figures may stay in Lufga for look, at the designer's discretion.
 
 ### 2.6 Density presets
 
@@ -257,5 +273,8 @@ Regular text tokens (also verified):
 - The type scale has no size between 31 and 52; if a screen ever needs an
   intermediate display size, that is a scale change to decide explicitly — do
   not improvise one.
-- Lufga must be loaded with `tnum` support confirmed; if the licensed cut lacks
-  tabular figures, amounts will misalign and we should revisit.
+- ~~Lufga must be loaded with `tnum` support confirmed.~~ **Resolved
+  2026-07-04**: verified missing (no `tnum`, proportional digits); amounts use
+  the Geist Sans companion (`font-family-numeric`), confirmed to ship `tnum`.
+- The Lufga files came from a font-sharing site; confirm licensing before any
+  public (non-local) deployment.

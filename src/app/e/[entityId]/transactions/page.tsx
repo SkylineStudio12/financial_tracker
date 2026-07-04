@@ -61,16 +61,17 @@ export default async function TransactionsPage({
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   const selectClass =
-    "bg-surface border border-edge rounded-md px-2 py-1.5 text-sm text-fg";
-  const labelClass = "flex flex-col gap-1 text-xs text-fg-muted";
+    "bg-surface border border-border-input rounded-input px-2 h-[var(--density-control-height)] text-secondary text-text-primary";
+  const labelClass = "flex flex-col gap-1 text-caption text-text-muted";
+  const cellClass = "px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)]";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Transactions</h1>
+        <h1 className="text-title text-text-primary">Transactions</h1>
         <Link
           href={`/e/${entityId}/transactions/new`}
-          className="rounded-md bg-surface-raised border border-edge px-3 py-1.5 text-sm text-fg hover:border-accent"
+          className="inline-flex items-center rounded-input bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
         >
           New transaction
         </Link>
@@ -141,32 +142,35 @@ export default async function TransactionsPage({
         </label>
         <button
           type="submit"
-          className="rounded-md bg-surface-raised border border-edge px-3 py-1.5 text-sm text-fg hover:border-accent"
+          className="rounded-input bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
         >
           Apply
         </button>
-        <Link href="?" className="px-2 py-1.5 text-sm text-fg-muted hover:text-fg">
+        <Link
+          href="?"
+          className="inline-flex items-center px-2 h-[var(--density-control-height)] text-secondary text-text-muted hover:text-text-primary"
+        >
           Reset
         </Link>
       </form>
 
-      <div className="overflow-x-auto rounded-md border border-edge">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
+        <table className="w-full text-secondary">
           <thead>
-            <tr className="bg-surface text-left text-xs uppercase tracking-wider text-fg-muted">
-              <th className="px-3 py-2 font-medium">Date</th>
-              <th className="px-3 py-2 font-medium">Description</th>
-              <th className="px-3 py-2 font-medium">Category</th>
-              <th className="px-3 py-2 font-medium">Tags</th>
-              <th className="px-3 py-2 font-medium">Account</th>
-              <th className="px-3 py-2 font-medium text-right">Amount</th>
-              <th className="px-3 py-2 font-medium text-right">RON</th>
+            <tr className="text-left text-micro uppercase text-text-muted">
+              <th className={`${cellClass} font-normal`}>Date</th>
+              <th className={`${cellClass} font-normal`}>Description</th>
+              <th className={`${cellClass} font-normal`}>Category</th>
+              <th className={`${cellClass} font-normal`}>Tags</th>
+              <th className={`${cellClass} font-normal`}>Account</th>
+              <th className={`${cellClass} font-normal text-right`}>Amount</th>
+              <th className={`${cellClass} font-normal text-right`}>RON</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-fg-muted">
+                <td colSpan={7} className={`${cellClass} py-8 text-center text-text-muted`}>
                   No transactions match.
                 </td>
               </tr>
@@ -175,23 +179,27 @@ export default async function TransactionsPage({
               <RowLink
                 key={row.id}
                 href={`/e/${entityId}/transactions/${row.id}`}
-                className="cursor-pointer border-t border-edge hover:bg-surface"
+                className="cursor-pointer border-t border-border-hairline hover:bg-canvas"
               >
-                <td className="px-3 py-2 whitespace-nowrap text-fg-muted">
+                <td className={`${cellClass} whitespace-nowrap text-text-muted`}>
                   {formatDate(row.date)}
                 </td>
-                <td className="px-3 py-2">{row.description}</td>
-                <td className="px-3 py-2 text-fg-muted">{row.category ?? "—"}</td>
-                <td className="px-3 py-2 text-fg-muted">{row.tagNames.join(", ") || "—"}</td>
-                <td className="px-3 py-2 text-fg-muted">{row.accountName}</td>
+                <td className={`${cellClass} text-text-primary`}>{row.description}</td>
+                <td className={`${cellClass} text-text-secondary`}>{row.category ?? "—"}</td>
+                <td className={`${cellClass} text-text-secondary`}>
+                  {row.tagNames.join(", ") || "—"}
+                </td>
+                <td className={`${cellClass} text-text-secondary`}>{row.accountName}</td>
                 <td
-                  className={`px-3 py-2 text-right whitespace-nowrap font-mono ${
-                    row.amount < 0 ? "text-negative" : "text-positive"
+                  className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums ${
+                    row.amount < 0 ? "text-status-negative-text" : "text-status-positive-text"
                   }`}
                 >
                   {formatMinor(row.amount, row.currency)}
                 </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap font-mono text-fg-muted">
+                <td
+                  className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums text-text-muted`}
+                >
                   {formatMinor(row.amountRon, "RON")}
                 </td>
               </RowLink>
@@ -200,7 +208,7 @@ export default async function TransactionsPage({
         </table>
       </div>
 
-      <div className="flex items-center gap-3 text-sm text-fg-muted">
+      <div className="flex items-center gap-3 text-secondary text-text-muted">
         <span>
           {total} transaction{total === 1 ? "" : "s"} · page {page} of {pageCount}
         </span>

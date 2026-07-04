@@ -45,7 +45,7 @@ export default async function EditTransactionPage({
   const back = (
     <Link
       href={`/e/${entityId}/transactions/${transactionId}`}
-      className="text-sm text-accent hover:underline"
+      className="text-secondary text-accent hover:underline"
     >
       ← Back to detail
     </Link>
@@ -65,9 +65,9 @@ export default async function EditTransactionPage({
       note: transaction.notes ?? "",
     };
     return (
-      <div className="flex flex-col gap-4">
+      <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
         {back}
-        <h1 className="text-lg font-semibold">Edit transfer</h1>
+        <h1 className="text-title text-text-primary">Edit transfer</h1>
         <TransferForm entityId={entityId} options={options} initial={initial} />
       </div>
     );
@@ -77,9 +77,9 @@ export default async function EditTransactionPage({
   const equityLegs = legs.filter((l) => l.accountType === "equity");
   if (transaction.kind !== "standard" || realLegs.length !== 1 || equityLegs.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
         {back}
-        <p className="text-sm text-fg-muted">
+        <p className="text-secondary text-text-muted">
           This transaction&apos;s posting shape (guided flow or auto tax accrual) cannot be
           edited with the standard form. Delete and re-create it instead.
         </p>
@@ -118,9 +118,9 @@ export default async function EditTransactionPage({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       {back}
-      <h1 className="text-lg font-semibold">Edit transaction</h1>
+      <h1 className="text-title text-text-primary">Edit transaction</h1>
       <StandardForm entityId={entityId} options={options} initial={initial} />
     </div>
   );

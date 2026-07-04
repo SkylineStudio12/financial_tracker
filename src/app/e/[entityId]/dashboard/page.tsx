@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 const ESTIMATE_RULES: string[] = ["cass_dividend"];
 
 const amountClass = (value: number) =>
-  `px-3 py-2 text-right whitespace-nowrap font-mono ${
-    value < 0 ? "text-negative" : "text-fg"
+  `px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums ${
+    value < 0 ? "text-status-negative-text" : "text-text-primary"
   }`;
 
 function periodLabel(group: Pick<AccrualGroup, "year" | "quarter">): string {
@@ -64,28 +64,28 @@ export default async function DashboardPage({
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
-      <h1 className="text-lg font-semibold">Dashboard — {entity.name}</h1>
+    <div className="flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
+      <h1 className="text-title text-text-primary">Dashboard — {entity.name}</h1>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
+        <h2 className="text-micro uppercase text-text-muted">
           Account balances
         </h2>
-        <div className="overflow-x-auto rounded-md border border-edge">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
+          <table className="w-full text-secondary">
             <thead>
-              <tr className="bg-surface text-left text-xs uppercase tracking-wider text-fg-muted">
-                <th className="px-3 py-2 font-medium">Account</th>
-                <th className="px-3 py-2 font-medium">Type</th>
-                <th className="px-3 py-2 font-medium text-right">Balance</th>
-                <th className="px-3 py-2 font-medium text-right">RON</th>
+              <tr className="text-left text-micro uppercase text-text-muted">
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Account</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Type</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Balance</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">RON</th>
               </tr>
             </thead>
             <tbody>
               {balances.map((account) => (
-                <tr key={account.accountId} className="border-t border-edge">
-                  <td className="px-3 py-2">{account.name}</td>
-                  <td className="px-3 py-2 text-fg-muted">{account.type}</td>
+                <tr key={account.accountId} className="border-t border-border-hairline">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">{account.name}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{account.type}</td>
                   <td className={amountClass(account.balance)}>
                     {formatMinor(account.balance, account.currency)}
                   </td>
@@ -101,42 +101,42 @@ export default async function DashboardPage({
 
       {netCash && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
+          <h2 className="text-micro uppercase text-text-muted">
             Net cash position (all entities)
           </h2>
-          <div className="rounded-md border border-edge">
-            <table className="w-full text-sm">
+          <div className="rounded-card border border-border-hairline bg-surface">
+            <table className="w-full text-secondary">
               <tbody>
                 {netCash.cashByEntity.map((row) => (
-                  <tr key={row.entityName} className="border-t border-edge first:border-t-0">
-                    <td className="px-3 py-2 text-fg-muted">Cash — {row.entityName}</td>
+                  <tr key={row.entityName} className="border-t border-border-hairline first:border-t-0">
+                    <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Cash — {row.entityName}</td>
                     <td className={amountClass(row.cashRon)}>
                       {formatMinor(row.cashRon, "RON")}
                     </td>
                   </tr>
                 ))}
-                <tr className="border-t border-edge">
-                  <td className="px-3 py-2 text-fg-muted">Total cash</td>
+                <tr className="border-t border-border-hairline">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Total cash</td>
                   <td className={amountClass(netCash.totalCashRon)}>
                     {formatMinor(netCash.totalCashRon, "RON")}
                   </td>
                 </tr>
-                <tr className="border-t border-edge">
-                  <td className="px-3 py-2 text-fg-muted">Accrued tax liabilities</td>
+                <tr className="border-t border-border-hairline">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Accrued tax liabilities</td>
                   <td className={amountClass(netCash.accruedTaxRon)}>
                     {formatMinor(netCash.accruedTaxRon, "RON")}
                   </td>
                 </tr>
-                <tr className="border-t border-edge bg-surface">
-                  <td className="px-3 py-2 font-medium">Net cash</td>
-                  <td className={`${amountClass(netCash.netRon)} font-medium`}>
+                <tr className="border-t border-border-hairline">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-body text-text-primary">Net cash</td>
+                  <td className={`${amountClass(netCash.netRon)} text-body`}>
                     {formatMinor(netCash.netRon, "RON")}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-text-muted">
             Bank and cash accounts only; brokerage balances excluded. RON values are
             historical-cost sums at transaction-date BNR rates.
           </p>
@@ -145,25 +145,25 @@ export default async function DashboardPage({
 
       {entity.type === "company" && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
+          <h2 className="text-micro uppercase text-text-muted">
             Tax panel — accrued {currentYear} Q{currentQuarter}
           </h2>
-          <div className="rounded-md border border-edge">
-            <table className="w-full text-sm">
+          <div className="rounded-card border border-border-hairline bg-surface">
+            <table className="w-full text-secondary">
               <tbody>
                 {currentQuarterGroups.length === 0 && (
                   <tr>
-                    <td className="px-3 py-4 text-center text-fg-muted" colSpan={2}>
+                    <td className="px-[var(--density-row-padding-x)] py-8 text-center text-text-muted" colSpan={2}>
                       Nothing accrued this quarter.
                     </td>
                   </tr>
                 )}
                 {currentQuarterGroups.map((group) => (
-                  <tr key={group.ruleType} className="border-t border-edge first:border-t-0">
-                    <td className="px-3 py-2">
+                  <tr key={group.ruleType} className="border-t border-border-hairline first:border-t-0">
+                    <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
                       {group.ruleType}
                       {ESTIMATE_RULES.includes(group.ruleType) && (
-                        <span className="ml-2 rounded px-1.5 py-0.5 text-xs bg-surface-raised text-warning">
+                        <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                           ESTIMATE
                         </span>
                       )}
@@ -177,15 +177,15 @@ export default async function DashboardPage({
             </table>
           </div>
 
-          <h2 className="mt-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">
+          <h2 className="mt-2 text-micro uppercase text-text-muted">
             Accruals by period
           </h2>
-          <div className="rounded-md border border-edge">
-            <table className="w-full text-sm">
+          <div className="rounded-card border border-border-hairline bg-surface">
+            <table className="w-full text-secondary">
               <tbody>
                 {periods.size === 0 && (
                   <tr>
-                    <td className="px-3 py-4 text-center text-fg-muted" colSpan={2}>
+                    <td className="px-[var(--density-row-padding-x)] py-8 text-center text-text-muted" colSpan={2}>
                       No accruals yet.
                     </td>
                   </tr>
@@ -193,12 +193,12 @@ export default async function DashboardPage({
                 {[...periods.values()].map((period) => (
                   <tr
                     key={periodLabel(period)}
-                    className="border-t border-edge first:border-t-0"
+                    className="border-t border-border-hairline first:border-t-0"
                   >
-                    <td className="px-3 py-2 text-fg-muted">
+                    <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                       {periodLabel(period)}
                       {period.hasEstimate && (
-                        <span className="ml-2 rounded px-1.5 py-0.5 text-xs bg-surface-raised text-warning">
+                        <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                           includes estimates
                         </span>
                       )}

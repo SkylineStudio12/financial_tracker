@@ -151,23 +151,23 @@ export function SalaryFlow({
       </div>
 
       {preview && (
-        <div className="rounded-md border border-edge">
-          <table className="w-full text-sm">
+        <div className="rounded-card border border-border-hairline bg-surface">
+          <table className="w-full text-secondary">
             <tbody>
               {rows.map(([label, amount]) => (
-                <tr key={label} className="border-t border-edge first:border-t-0">
-                  <td className="px-3 py-2 text-fg-muted">{label}</td>
+                <tr key={label} className="border-t border-border-hairline first:border-t-0">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{label}</td>
                   <td
-                    className={`px-3 py-2 text-right font-mono ${
-                      amount < 0 ? "text-negative" : "text-fg"
+                    className={`px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums ${
+                      amount < 0 ? "text-status-negative-text" : "text-text-primary"
                     }`}
                   >
                     {formatMinor(amount, "RON")}
                   </td>
                 </tr>
               ))}
-              <tr className="border-t border-edge">
-                <td colSpan={2} className="px-3 py-2 text-xs text-warning">
+              <tr className="border-t border-border-hairline">
+                <td colSpan={2} className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-caption text-status-warning-text">
                   {preview.rateNote} · transaction date {preview.date}
                 </td>
               </tr>

@@ -29,11 +29,11 @@ export default async function TransactionDetailPage({
   const postingById = new Map(postings.map((p) => [p.id, p]));
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="density-compact flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
       <div className="flex items-center justify-between">
         <Link
           href={`/e/${entityId}/transactions`}
-          className="text-sm text-accent hover:underline"
+          className="text-secondary text-accent hover:underline"
         >
           ← Transactions
         </Link>
@@ -41,7 +41,7 @@ export default async function TransactionDetailPage({
           {(transaction.kind === "standard" || transaction.kind === "transfer") && (
             <Link
               href={`/e/${entityId}/transactions/${transaction.id}/edit`}
-              className="rounded-md bg-surface-raised border border-edge px-3 py-1.5 text-sm text-fg hover:border-accent"
+              className="inline-flex items-center rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-text-primary hover:border-accent"
             >
               Edit
             </Link>
@@ -51,14 +51,14 @@ export default async function TransactionDetailPage({
       </div>
 
       <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">{transaction.description}</h1>
-        <div className="text-sm text-fg-muted">
+        <h1 className="text-card-title text-text-primary">{transaction.description}</h1>
+        <div className="text-secondary text-text-muted">
           {formatDate(transaction.date)} · {transaction.kind}
           {tagNames.length > 0 && <> · tags: {tagNames.join(", ")}</>}
         </div>
-        {transaction.notes && <p className="text-sm text-fg-muted">{transaction.notes}</p>}
+        {transaction.notes && <p className="text-secondary text-text-muted">{transaction.notes}</p>}
         {appliedRates.length > 0 && (
-          <div className="text-sm text-fg-muted">
+          <div className="text-secondary text-text-muted">
             Applied FX rate{appliedRates.length > 1 ? "s" : ""}:{" "}
             {appliedRates
               .map((r) => `1 ${r.currency} = ${r.rate} RON (BNR ${r.rateDate})`)
@@ -68,38 +68,38 @@ export default async function TransactionDetailPage({
       </div>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
+        <h2 className="text-micro uppercase text-text-muted">
           Postings
         </h2>
-        <div className="overflow-x-auto rounded-md border border-edge">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
+          <table className="w-full text-secondary">
             <thead>
-              <tr className="bg-surface text-left text-xs uppercase tracking-wider text-fg-muted">
-                <th className="px-3 py-2 font-medium">Account</th>
-                <th className="px-3 py-2 font-medium">Category</th>
-                <th className="px-3 py-2 font-medium">Counterparty</th>
-                <th className="px-3 py-2 font-medium text-right">Amount</th>
-                <th className="px-3 py-2 font-medium text-right">RON</th>
-                <th className="px-3 py-2 font-medium text-right">Rate</th>
+              <tr className="text-left text-micro uppercase text-text-muted">
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Account</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Category</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Counterparty</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Amount</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">RON</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Rate</th>
               </tr>
             </thead>
             <tbody>
               {postings.map((posting) => (
-                <tr key={posting.id} className="border-t border-edge">
-                  <td className="px-3 py-2">{posting.accountName}</td>
-                  <td className="px-3 py-2 text-fg-muted">{posting.categoryName ?? "—"}</td>
-                  <td className="px-3 py-2 text-fg-muted">{posting.counterparty ?? "—"}</td>
+                <tr key={posting.id} className="border-t border-border-hairline">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">{posting.accountName}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{posting.categoryName ?? "—"}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{posting.counterparty ?? "—"}</td>
                   <td
-                    className={`px-3 py-2 text-right whitespace-nowrap font-mono ${
-                      posting.amount < 0 ? "text-negative" : "text-positive"
+                    className={`px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums ${
+                      posting.amount < 0 ? "text-status-negative-text" : "text-status-positive-text"
                     }`}
                   >
                     {formatMinor(posting.amount, posting.currency)}
                   </td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap font-mono text-fg-muted">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
                     {formatMinor(posting.amountRon, "RON")}
                   </td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap font-mono text-fg-muted">
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
                     {posting.currency === "RON"
                       ? "—"
                       : formatImpliedRate(posting.amount, posting.amountRon)}
@@ -113,40 +113,40 @@ export default async function TransactionDetailPage({
 
       {accruals.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-fg-muted">
+          <h2 className="text-micro uppercase text-text-muted">
             Tax accruals
           </h2>
-          <div className="overflow-x-auto rounded-md border border-edge">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
+            <table className="w-full text-secondary">
               <thead>
-                <tr className="bg-surface text-left text-xs uppercase tracking-wider text-fg-muted">
-                  <th className="px-3 py-2 font-medium">Rule</th>
-                  <th className="px-3 py-2 font-medium">Rate</th>
-                  <th className="px-3 py-2 font-medium">Period</th>
-                  <th className="px-3 py-2 font-medium text-right">Amount</th>
+                <tr className="text-left text-micro uppercase text-text-muted">
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Rule</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Rate</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Period</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {accruals.map((accrual) => {
                   const posting = postingById.get(accrual.postingId);
                   return (
-                    <tr key={accrual.id} className="border-t border-edge">
-                      <td className="px-3 py-2">
+                    <tr key={accrual.id} className="border-t border-border-hairline">
+                      <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
                         {accrual.ruleType}
                         {accrual.ruleType === "cass_dividend" && (
-                          <span className="ml-2 rounded px-1.5 py-0.5 text-xs bg-surface-raised text-warning">
+                          <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                             ESTIMATE
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-fg-muted">
+                      <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                         {(accrual.rateBps / 100).toFixed(2)}%
                       </td>
-                      <td className="px-3 py-2 text-fg-muted">
+                      <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                         {accrual.year}
                         {accrual.quarter ? ` Q${accrual.quarter}` : ""}
                       </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap font-mono text-fg-muted">
+                      <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
                         {posting ? formatMinor(posting.amountRon, "RON") : "—"}
                       </td>
                     </tr>

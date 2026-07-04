@@ -12,11 +12,11 @@ export default async function SalaryFlowPage({
   const { isCompany, personalAccounts } = await getFlowPageData(entityId);
 
   if (!isCompany) {
-    return <p className="text-sm text-fg-muted">Salary entry is available for companies only.</p>;
+    return <p className="text-secondary text-text-muted">Salary entry is available for companies only.</p>;
   }
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">New salary</h1>
+    <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
+      <h1 className="text-title text-text-primary">New salary</h1>
       <SalaryFlow companyId={entityId} personalAccounts={personalAccounts} />
     </div>
   );

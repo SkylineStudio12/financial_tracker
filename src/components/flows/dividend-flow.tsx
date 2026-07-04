@@ -112,36 +112,36 @@ export function DividendFlow({
       </label>
 
       {preview && (
-        <div className="rounded-md border border-edge">
-          <table className="w-full text-sm">
+        <div className="rounded-card border border-border-hairline bg-surface">
+          <table className="w-full text-secondary">
             <tbody>
               <tr>
-                <td className="px-3 py-2 text-fg-muted">Gross dividend</td>
-                <td className="px-3 py-2 text-right font-mono">{formatMinor(preview.gross, "RON")}</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Gross dividend</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.gross, "RON")}</td>
               </tr>
-              <tr className="border-t border-edge">
-                <td className="px-3 py-2 text-fg-muted">Dividend tax (withheld)</td>
-                <td className="px-3 py-2 text-right font-mono text-negative">
+              <tr className="border-t border-border-hairline">
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Dividend tax (withheld)</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-negative-text">
                   {formatMinor(-preview.withholdingTax, "RON")}
                 </td>
               </tr>
-              <tr className="border-t border-edge">
-                <td className="px-3 py-2 text-fg-muted">Net to shareholder</td>
-                <td className="px-3 py-2 text-right font-mono">{formatMinor(preview.net, "RON")}</td>
+              <tr className="border-t border-border-hairline">
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Net to shareholder</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.net, "RON")}</td>
               </tr>
-              <tr className="border-t border-edge">
-                <td className="px-3 py-2">
-                  <span className="text-fg-muted">CASS accrual</span>{" "}
-                  <span className="rounded px-1.5 py-0.5 text-xs bg-surface-raised text-warning">
+              <tr className="border-t border-border-hairline">
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
+                  <span className="text-text-secondary">CASS accrual</span>{" "}
+                  <span className="rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                     ESTIMATE
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right font-mono text-warning">
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-warning-text">
                   {formatMinor(-preview.cassEstimate, "RON")}
                 </td>
               </tr>
-              <tr className="border-t border-edge">
-                <td colSpan={2} className="px-3 py-2 text-xs text-warning">
+              <tr className="border-t border-border-hairline">
+                <td colSpan={2} className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-caption text-status-warning-text">
                   {preview.rateNote}
                 </td>
               </tr>

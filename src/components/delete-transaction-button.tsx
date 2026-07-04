@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteTransactionAction } from "@/lib/ledger/actions";
-import { errorClass, primaryButtonClass } from "./forms/ui";
+import { errorClass } from "./forms/ui";
 
 export function DeleteTransactionButton({
   transactionId,
@@ -19,7 +19,7 @@ export function DeleteTransactionButton({
       <button
         type="button"
         disabled={pending}
-        className={`${primaryButtonClass} hover:border-negative`}
+        className="rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-status-negative-text hover:border-status-negative-text disabled:opacity-50"
         onClick={() => {
           if (!window.confirm("Soft-delete this transaction?")) return;
           startTransition(async () => {

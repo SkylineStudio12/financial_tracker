@@ -17,12 +17,14 @@ export default async function NewTransactionPage({
   const isTransfer = type === "transfer";
   const options = await getFormOptions(entityId);
 
-  const tabOn = "rounded-md border border-accent bg-surface-raised px-3 py-1.5 text-sm text-fg";
-  const tabOff = "rounded-md border border-edge px-3 py-1.5 text-sm text-fg-muted hover:text-fg";
+  const tabOn =
+    "inline-flex items-center rounded-input bg-accent text-accent-foreground px-3 h-[var(--density-control-height)] text-secondary";
+  const tabOff =
+    "inline-flex items-center rounded-input border border-border-input px-3 h-[var(--density-control-height)] text-secondary text-text-muted hover:text-text-primary";
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">New transaction</h1>
+    <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
+      <h1 className="text-title text-text-primary">New transaction</h1>
       <div className="flex gap-2">
         <Link href="?" className={isTransfer ? tabOff : tabOn}>
           Expense / Income

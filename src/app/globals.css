@@ -1,36 +1,135 @@
 @import "tailwindcss";
 
 /*
- * Central design tokens — the single source for all visual values.
- * Dark-first: these ARE the app colors; a future design phase restyles the
- * app by editing this block only. Components must reference tokens through
- * Tailwind utilities (bg-surface, text-fg-muted, ...) — never raw values.
+ * Central design tokens — implements docs/design-tokens.md (the spec).
+ * Light-first: off-white canvas, white cards, black accent, green/red
+ * reserved for money status. Two tiers: primitives feed semantic tokens;
+ * components use SEMANTIC tokens only, never primitives or raw values.
  */
 @theme {
+  /* Wipe Tailwind's default palette so only system colors exist. */
+  --color-*: initial;
+
+  /* ---- Tier 1: primitives ------------------------------------------- */
+  /* Neutral ramp (white → black, cool-tinted) */
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f5f6f8;
+  --color-neutral-100: #ebedef; /* raw palette: inactive grey */
+  --color-neutral-150: #e3e6e9;
+  --color-neutral-200: #d6dade;
+  --color-neutral-300: #b9bfc7;
+  --color-neutral-400: #99a1ab;
+  --color-neutral-500: #67707f;
+  --color-neutral-600: #5c636e;
+  --color-neutral-700: #40454e;
+  --color-neutral-800: #26292e;
+  --color-neutral-900: #141719;
+  --color-neutral-1000: #000000;
+
+  /* Status primitives (raw neons are fills-only; -700 are text-safe) */
+  --color-green-neon: #86ff7b; /* raw palette: ready green */
+  --color-green-700: #157a3c; /* derived: 5.41:1 white, 5.00:1 canvas */
+  --color-red-neon: #ff6262; /* raw palette: alert red */
+  --color-red-700: #c93636; /* derived: 5.17:1 white, 4.78:1 canvas */
+  --color-amber-700: #8a5a00; /* derived: 5.93:1 white, 5.48:1 canvas */
+
+  /* ---- Tier 2: semantic tokens -------------------------------------- */
   /* Surfaces */
-  --color-bg: #0e1116;
-  --color-surface: #151a23;
-  --color-surface-raised: #1b2230;
-  --color-edge: #262e3d;
+  --color-canvas: var(--color-neutral-50);
+  --color-surface: var(--color-neutral-0);
+  --color-surface-raised: var(--color-neutral-0); /* + elevation shadow (component pass) */
+  --color-surface-inactive: var(--color-neutral-100);
+  --color-border-hairline: var(--color-neutral-150);
+  --color-border-input: var(--color-neutral-200);
 
   /* Text */
-  --color-fg: #e5e9f0;
-  --color-fg-muted: #8b94a7;
+  --color-text-primary: var(--color-neutral-900);
+  --color-text-secondary: var(--color-neutral-600);
+  --color-text-muted: var(--color-neutral-500);
+  --color-text-disabled: var(--color-neutral-400);
 
-  /* Semantics */
-  --color-accent: #6ea8fe;
-  --color-positive: #4fc576;
-  --color-negative: #e5636f;
-  --color-warning: #d9a441;
+  /* Status (finance): -text passes AA on canvas and surface; -fill is vivid */
+  --color-status-positive-text: var(--color-green-700);
+  --color-status-positive-fill: var(--color-green-neon);
+  --color-status-negative-text: var(--color-red-700);
+  --color-status-negative-fill: var(--color-red-neon);
+  --color-status-neutral-text: var(--color-neutral-600);
+  --color-status-neutral-fill: var(--color-neutral-300);
+  /* Extension beyond the raw palette: estimates/caution (ESTIMATE badges). */
+  --color-status-warning-text: var(--color-amber-700);
+
+  /* Accent: black is the interactive/selected accent */
+  --color-accent: var(--color-neutral-1000);
+  --color-accent-foreground: var(--color-neutral-0);
+  --color-accent-hover: var(--color-neutral-800);
+
+  /* ---- Radius roles -------------------------------------------------- */
+  --radius-card: 20px;
+  --radius-input: 12px;
+  --radius-badge: 8px;
+  --radius-pill: 9999px;
+
+  /* ---- Type scale (fixed; Lufga light/regular, Medium is the ceiling) - */
+  --text-display: 52px; /* hero number, light */
+  --text-display--line-height: 56px;
+  --text-display--letter-spacing: -0.01em;
+  --text-display--font-weight: 300;
+  --text-title: 31px; /* page/section title, light */
+  --text-title--line-height: 36px;
+  --text-title--letter-spacing: -0.005em;
+  --text-title--font-weight: 300;
+  --text-number-lg: 27px; /* large number in cards */
+  --text-number-lg--line-height: 32px;
+  --text-number-lg--letter-spacing: -0.005em;
+  --text-card-title: 21px;
+  --text-card-title--line-height: 28px;
+  --text-body: 17px;
+  --text-body--line-height: 24px;
+  --text-secondary: 14px;
+  --text-secondary--line-height: 20px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0.005em;
+  --text-micro: 11px; /* uppercase metadata (uppercasing at component level) */
+  --text-micro--line-height: 14px;
+  --text-micro--letter-spacing: 0.06em;
+
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-lufga);
+  --font-numeric: var(--font-geist-sans); /* tnum verified; use with tabular-nums */
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
   font-family: var(--font-sans);
+}
+
+/* Density presets — both reference the spacing scale (--spacing = 4px base).
+ * Comfortable is the default; scope .density-compact around tables, lists,
+ * and entry forms. */
+:root {
+  --density-card-padding: calc(var(--spacing) * 6); /* 24px */
+  --density-section-gap: calc(var(--spacing) * 8); /* 32px */
+  --density-row-padding-y: calc(var(--spacing) * 4); /* 16px */
+  --density-row-padding-x: calc(var(--spacing) * 4); /* 16px */
+  --density-stack-gap: calc(var(--spacing) * 4); /* 16px */
+  --density-control-height: calc(var(--spacing) * 11); /* 44px */
+
+  /* Iconography: Lucide with absoluteStrokeWidth */
+  --icon-stroke: 1.5;
+  --icon-size-inline: 14px;
+  --icon-size-default: 16px;
+  --icon-size-ui: 20px;
+  --icon-size-feature: 24px;
+}
+.density-compact {
+  --density-card-padding: calc(var(--spacing) * 4); /* 16px */
+  --density-section-gap: calc(var(--spacing) * 4); /* 16px */
+  --density-row-padding-y: calc(var(--spacing) * 2); /* 8px */
+  --density-row-padding-x: calc(var(--spacing) * 3); /* 12px */
+  --density-stack-gap: calc(var(--spacing) * 2); /* 8px */
+  --density-control-height: calc(var(--spacing) * 9); /* 36px */
 }

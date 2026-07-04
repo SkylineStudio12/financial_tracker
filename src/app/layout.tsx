@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -16,15 +16,9 @@ const lufga = localFont({
 });
 
 // Geist Sans is the numeric companion (--font-numeric): Lufga has no tabular
-// figures, Geist ships tnum. Geist Mono remains only for legacy font-mono
-// amount styling until the component restyle.
+// figures, Geist ships tnum.
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
@@ -41,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${lufga.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${lufga.variable} ${geistSans.variable} h-full antialiased`}
     >
       <body className="min-h-full">{children}</body>
     </html>

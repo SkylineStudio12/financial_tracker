@@ -18,6 +18,14 @@ export interface PostingInput {
   counterparty?: string | null;
 }
 
+/** Links a posting (by its index in `postings`) to the tax rule applied. */
+export interface AccrualInput {
+  postingIndex: number;
+  taxRuleId: string;
+  year: number;
+  quarter: number | null;
+}
+
 export interface TransactionInput {
   entityId: string;
   /** YYYY-MM-DD */
@@ -28,6 +36,8 @@ export interface TransactionInput {
   externalRef?: string | null;
   tagIds?: string[];
   postings: PostingInput[];
+  /** Tax accrual links for postings on tax_liability accounts. */
+  accruals?: AccrualInput[];
 }
 
 /** Thrown for any business-rule violation; message is user-presentable. */

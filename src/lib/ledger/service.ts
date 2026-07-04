@@ -23,6 +23,7 @@ import {
   auditLog,
   categories,
   postings,
+  taxAccruals,
   transactions,
   transactionTags,
 } from "@/db/schema";
@@ -142,6 +143,16 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
         "For cross-currency transfers, mirror the sending leg's RON amount on the receiving leg.",
     );
   }
+
+  for (const accrual of input.accruals ?? []) {
+    const posting = input.postings[accrual.postingIndex];
+    if (!posting) {
+      throw new LedgerValidationError(`Accrual references posting ${accrual.postingIndex} which does not exist`);
+    }
+    if (accountById.get(posting.accountId)!.type !== "tax_liability") {
+      throw new LedgerValidationError("Tax accruals must link a posting on a tax_liability account");
+    }
+  }
   return prepared;
 }
 
@@ -176,17 +187,32 @@ async function insertTransactionRows(
         })
         .returning();
 
-  await tx.insert(postings).values(
-    prepared.map((p) => ({
-      transactionId: transaction.id,
-      accountId: p.accountId,
-      amount: p.amount,
-      currency: p.currency,
-      amountRon: p.amountRon,
-      categoryId: p.categoryId ?? null,
-      counterparty: p.counterparty ?? null,
-    })),
-  );
+  const insertedPostings = await tx
+    .insert(postings)
+    .values(
+      prepared.map((p) => ({
+        transactionId: transaction.id,
+        accountId: p.accountId,
+        amount: p.amount,
+        currency: p.currency,
+        amountRon: p.amountRon,
+        categoryId: p.categoryId ?? null,
+        counterparty: p.counterparty ?? null,
+      })),
+    )
+    .returning({ id: postings.id });
+
+  if (input.accruals?.length) {
+    await tx.insert(taxAccruals).values(
+      input.accruals.map((accrual) => ({
+        transactionId: transaction.id,
+        postingId: insertedPostings[accrual.postingIndex].id,
+        taxRuleId: accrual.taxRuleId,
+        year: accrual.year,
+        quarter: accrual.quarter,
+      })),
+    );
+  }
 
   if (input.tagIds?.length) {
     await tx

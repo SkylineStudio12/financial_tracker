@@ -131,7 +131,14 @@ export default async function TransactionDetailPage({
                   const posting = postingById.get(accrual.postingId);
                   return (
                     <tr key={accrual.id} className="border-t border-edge">
-                      <td className="px-3 py-2">{accrual.ruleType}</td>
+                      <td className="px-3 py-2">
+                        {accrual.ruleType}
+                        {accrual.ruleType === "cass_dividend" && (
+                          <span className="ml-2 rounded px-1.5 py-0.5 text-xs bg-surface-raised text-warning">
+                            ESTIMATE
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-fg-muted">
                         {(accrual.rateBps / 100).toFixed(2)}%
                       </td>

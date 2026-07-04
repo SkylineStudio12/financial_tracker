@@ -14,10 +14,11 @@ export default async function EntityLayout({
 }) {
   const { entityId } = await params;
   const entityRows = await db
-    .select({ id: entities.id, name: entities.name })
+    .select({ id: entities.id, name: entities.name, type: entities.type })
     .from(entities)
     .where(isNull(entities.deletedAt))
     .orderBy(asc(entities.createdAt));
+  const isCompany = entityRows.find((e) => e.id === entityId)?.type === "company";
 
   return (
     <div className="flex min-h-screen">
@@ -55,6 +56,22 @@ export default async function EntityLayout({
           >
             Dashboard
           </Link>
+          {isCompany && (
+            <>
+              <Link
+                href={`/e/${entityId}/flows/salary`}
+                className="rounded-md px-2 py-1.5 text-sm text-fg-muted hover:text-fg"
+              >
+                New salary
+              </Link>
+              <Link
+                href={`/e/${entityId}/flows/dividend`}
+                className="rounded-md px-2 py-1.5 text-sm text-fg-muted hover:text-fg"
+              >
+                New dividend
+              </Link>
+            </>
+          )}
         </nav>
       </aside>
       <main className="flex-1 min-w-0 p-6">{children}</main>

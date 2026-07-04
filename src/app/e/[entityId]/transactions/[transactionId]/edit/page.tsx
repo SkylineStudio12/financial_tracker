@@ -80,8 +80,8 @@ export default async function EditTransactionPage({
       <div className="flex flex-col gap-4">
         {back}
         <p className="text-sm text-fg-muted">
-          This transaction was created by a guided flow and cannot be edited with the
-          standard form. Delete and re-create it instead.
+          This transaction&apos;s posting shape (guided flow or auto tax accrual) cannot be
+          edited with the standard form. Delete and re-create it instead.
         </p>
       </div>
     );

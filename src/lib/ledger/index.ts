@@ -5,6 +5,7 @@ export {
 } from "./service";
 export {
   LedgerValidationError,
+  type AccrualInput,
   type PostingInput,
   type TransactionInput,
   type TransactionKind,

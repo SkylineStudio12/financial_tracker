@@ -14,11 +14,13 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "db:verify": "tsx src/db/verify-schema.ts",
+    "fx:sync": "tsx scripts/fx-sync.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
+    "fast-xml-parser": "^5.9.3",
     "next": "16.2.10",
     "pg": "^8.22.0",
     "react": "19.2.4",

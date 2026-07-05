@@ -15,6 +15,9 @@ const buttonVariants = cva(
         default: "bg-accent text-accent-foreground hover:bg-accent-hover",
         secondary:
           "border-border-input bg-surface text-text-primary hover:border-accent",
+        // outline = the quiet secondary look (registry components expect it)
+        outline:
+          "border-border-input bg-surface text-text-primary hover:border-accent",
         ghost: "text-text-muted hover:text-text-primary",
         destructive:
           "border-border-input bg-surface text-status-negative-text hover:border-status-negative-text",
@@ -22,7 +25,10 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-[var(--density-control-height)] px-4",
+        sm: "h-8 px-3",
         icon: "size-8 rounded-badge",
+        "icon-sm": "size-7 rounded-badge",
+        "icon-xs": "size-6 rounded-badge",
       },
     },
     defaultVariants: {

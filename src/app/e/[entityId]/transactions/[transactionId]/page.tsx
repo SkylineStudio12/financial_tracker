@@ -13,6 +13,11 @@ export default async function TransactionDetailPage({
   params: Promise<{ entityId: string; transactionId: string }>;
 }) {
   const { entityId, transactionId } = await params;
+  // Non-UUID segments (e.g. a stale /transactions/new URL) must 404 rather
+  // than reach Postgres as an invalid uuid.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
+    notFound();
+  }
   const detail = await getTransactionDetail(transactionId);
   if (!detail) notFound();
   const { transaction, postings, tagNames, accruals } = detail;

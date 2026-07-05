@@ -24,6 +24,9 @@ import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
 
 export interface StandardPayload {
   transactionId?: string;
+  /** When true, skip the redirect on success and return { ok } instead —
+   * used by the modal so the list stays put and the form can repeat-enter. */
+  stay?: boolean;
   entityId: string;
   accountId: string;
   date: string;
@@ -39,6 +42,8 @@ export interface StandardPayload {
 
 export interface TransferPayload {
   transactionId?: string;
+  /** See StandardPayload.stay. */
+  stay?: boolean;
   entityId: string;
   fromAccountId: string;
   toAccountId: string;
@@ -51,7 +56,7 @@ export interface TransferPayload {
   note?: string;
 }
 
-type ActionResult = { error: string };
+type ActionResult = { error: string } | { ok: true };
 
 async function loadAccount(accountId: string) {
   const [account] = await db
@@ -224,6 +229,7 @@ export async function saveStandardTransaction(
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
+  if (payload.stay) return { ok: true };
   redirect(`/e/${payload.entityId}/transactions`);
 }
 
@@ -280,6 +286,7 @@ export async function saveTransferTransaction(
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
+  if (payload.stay) return { ok: true };
   redirect(`/e/${payload.entityId}/transactions`);
 }
 

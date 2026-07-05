@@ -22,6 +22,9 @@ export default async function EditTransactionPage({
   params: Promise<{ entityId: string; transactionId: string }>;
 }) {
   const { entityId, transactionId } = await params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
+    notFound();
+  }
   const detail = await getTransactionDetail(transactionId);
   if (!detail) notFound();
   const { transaction, tagNames } = detail;

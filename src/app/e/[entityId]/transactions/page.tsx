@@ -6,7 +6,9 @@ import {
   listTransactions,
   type TransactionFilters,
 } from "@/lib/ledger/queries";
+import { getFormOptions } from "@/lib/ledger/form-options";
 import type { TransactionKind } from "@/lib/ledger";
+import { NewTransactionDialog } from "@/components/new-transaction-dialog";
 import { RowLink } from "@/components/row-link";
 
 export const dynamic = "force-dynamic";
@@ -54,9 +56,10 @@ export default async function TransactionsPage({
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
 
-  const [{ rows, total, pageSize }, options] = await Promise.all([
+  const [{ rows, total, pageSize }, options, formOptions] = await Promise.all([
     listTransactions(entityId, filters, page),
     getFilterOptions(entityId),
+    getFormOptions(entityId),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -69,12 +72,7 @@ export default async function TransactionsPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <div className="flex items-center justify-between">
         <h1 className="text-title text-text-primary">Transactions</h1>
-        <Link
-          href={`/e/${entityId}/transactions/new`}
-          className="inline-flex items-center rounded-input bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
-        >
-          New transaction
-        </Link>
+        <NewTransactionDialog entityId={entityId} options={formOptions} />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">

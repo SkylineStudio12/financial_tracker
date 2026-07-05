@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import { saveStandardTransaction, type StandardPayload } from "@/lib/ledger/actions";
-import type { FormOptions } from "./option-types";
+import { Button } from "@/components/ui/button";
 import {
-  errorClass,
-  fieldClass,
-  ghostButtonClass,
-  labelClass,
-  primaryButtonClass,
-  toggleOffClass,
-  toggleOnClass,
-} from "./ui";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { FormOptions } from "./option-types";
+import { errorClass, fieldClass, ghostButtonClass, labelClass } from "./ui";
 
 interface SplitDraft {
   categoryId: string;
@@ -37,12 +37,28 @@ export function StandardForm({
   entityId,
   options,
   initial,
+  stay = false,
+  onSaved,
+  cancelSlot,
+  onDirtyChange,
 }: {
   entityId: string;
   options: FormOptions;
   initial?: StandardFormInitial;
+  /** Modal mode: skip the redirect, reset for fast repeat entry, notify. */
+  stay?: boolean;
+  onSaved?: () => void;
+  cancelSlot?: React.ReactNode;
+  /** Reports whether any field differs from its initial value (close guard). */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const bankAccounts = options.accounts.filter((a) => a.type !== "equity");
+  const accountItems = bankAccounts.map((a) => ({
+    value: a.id,
+    label: `${a.name} (${a.currency})`,
+  }));
+  const categoryItems = options.categories.map((c) => ({ value: c.id, label: c.name }));
+
   const [direction, setDirection] = useState<"expense" | "income">(
     initial?.direction ?? "expense",
   );
@@ -62,6 +78,16 @@ export function StandardForm({
   useEffect(() => {
     amountRef.current?.focus();
   }, []);
+
+  // Dirty = any field differs from its first-render snapshot.
+  const valuesSnapshot = JSON.stringify({
+    direction, accountId, date, total, description, splits, tagsText, counterparty,
+  });
+  const [initialSnapshot] = useState(valuesSnapshot);
+  const dirty = valuesSnapshot !== initialSnapshot;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const currency = options.accounts.find((a) => a.id === accountId)?.currency ?? "RON";
   const totalMinor = parseAmountToMinor(total);
@@ -84,10 +110,23 @@ export function StandardForm({
     return true;
   }, [accountId, date, description, totalMinor, splits, isSplit, splitSum]);
 
+  /** After a modal save: clear the entry fields, keep account/date/direction
+   * context, and put the cursor back in the amount for the next receipt. */
+  const resetForRepeat = () => {
+    setTotal("");
+    setDescription("");
+    setSplits([{ categoryId: "", amount: "" }]);
+    setTagsText("");
+    setCounterparty("");
+    setError(null);
+    amountRef.current?.focus();
+  };
+
   const submit = () => {
     if (!valid || totalMinor === null) return;
     const payload: StandardPayload = {
       transactionId: initial?.transactionId,
+      stay,
       entityId,
       accountId,
       date,
@@ -103,7 +142,12 @@ export function StandardForm({
     };
     startTransition(async () => {
       const result = await saveStandardTransaction(payload);
-      if (result?.error) setError(result.error);
+      if (result && "error" in result) {
+        setError(result.error);
+      } else if (result && "ok" in result) {
+        resetForRepeat();
+        onSaved?.();
+      }
     });
   };
 
@@ -116,36 +160,41 @@ export function StandardForm({
       }}
     >
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
-          className={direction === "expense" ? toggleOnClass : toggleOffClass}
+          variant={direction === "expense" ? "default" : "secondary"}
           onClick={() => setDirection("expense")}
         >
           Expense
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={direction === "income" ? toggleOnClass : toggleOffClass}
+          variant={direction === "income" ? "default" : "secondary"}
           onClick={() => setDirection("income")}
         >
           Income
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
           Account
-          <select
-            className={fieldClass}
+          <Select
+            items={accountItems}
             value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
+            onValueChange={(value) => setAccountId((value as string) ?? "")}
           >
-            {bankAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} ({account.currency})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {accountItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className={labelClass}>
           Date
@@ -182,23 +231,31 @@ export function StandardForm({
       <div className="flex flex-col gap-2">
         {splits.map((split, index) => (
           <div key={index} className="flex items-end gap-2">
-            <label className={`${labelClass} flex-1`}>
+            <div className={`${labelClass} flex-1`}>
               {index === 0 ? "Category" : ""}
-              <select
-                className={fieldClass}
-                value={split.categoryId}
-                onChange={(e) =>
-                  setSplits(splits.map((s, i) => (i === index ? { ...s, categoryId: e.target.value } : s)))
+              <Select
+                items={categoryItems}
+                value={split.categoryId === "" ? null : split.categoryId}
+                onValueChange={(value) =>
+                  setSplits(
+                    splits.map((s, i) =>
+                      i === index ? { ...s, categoryId: (value as string) ?? "" } : s,
+                    ),
+                  )
                 }
               >
-                <option value="">Pick…</option>
-                {options.categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {isSplit && (
               <label className={`${labelClass} w-32`}>
                 {index === 0 ? `Amount (${currency})` : ""}
@@ -267,10 +324,11 @@ export function StandardForm({
 
       {error && <p className={errorClass}>{error}</p>}
 
-      <div>
-        <button type="submit" className={primaryButtonClass} disabled={!valid || pending}>
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={!valid || pending}>
           {pending ? "Saving…" : initial ? "Save changes" : "Save transaction"}
-        </button>
+        </Button>
+        {cancelSlot}
       </div>
     </form>
   );

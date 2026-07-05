@@ -24,7 +24,7 @@ export function DeleteTransactionButton({
           if (!window.confirm("Soft-delete this transaction?")) return;
           startTransition(async () => {
             const result = await deleteTransactionAction(transactionId, entityId);
-            if (result?.error) setError(result.error);
+            if (result && "error" in result) setError(result.error);
           });
         }}
       >

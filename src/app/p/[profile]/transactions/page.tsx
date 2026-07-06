@@ -77,9 +77,14 @@ export default async function TransactionsPage({
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  const selectClass =
-    "bg-surface border border-border-input rounded-input px-2 h-[var(--density-control-height)] text-secondary text-text-primary";
-  const labelClass = "flex flex-col gap-1 text-caption text-text-muted";
+  // Compact pill filters: quiet by default so the data stays the focus;
+  // a pill asserts itself on interaction (focus ring, search grows) and
+  // keeps the stronger input border while its filter is applied.
+  const pill = (active: boolean) =>
+    `flex items-center gap-1.5 rounded-pill border bg-surface pl-3 pr-2 h-[var(--density-control-height)] text-caption transition-colors focus-within:border-border-input focus-within:ring-2 focus-within:ring-focus-ring ${
+      active ? "border-border-input text-text-secondary" : "border-border-hairline text-text-muted"
+    }`;
+  const pillControl = "bg-transparent text-secondary text-text-primary outline-none";
   const cellClass = "px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)]";
 
   return (
@@ -89,18 +94,18 @@ export default async function TransactionsPage({
         <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
       </div>
 
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <label className={labelClass}>
+      <form method="get" className="flex flex-wrap items-center gap-2">
+        <label className={pill(Boolean(filters.from))}>
           From
-          <input type="date" name="from" defaultValue={filters.from} className={selectClass} />
+          <input type="date" name="from" defaultValue={filters.from} className={pillControl} />
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.to))}>
           To
-          <input type="date" name="to" defaultValue={filters.to} className={selectClass} />
+          <input type="date" name="to" defaultValue={filters.to} className={pillControl} />
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.accountId))}>
           Account
-          <select name="account" defaultValue={filters.accountId ?? ""} className={selectClass}>
+          <select name="account" defaultValue={filters.accountId ?? ""} className={pillControl}>
             <option value="">All</option>
             {options.accounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -109,9 +114,9 @@ export default async function TransactionsPage({
             ))}
           </select>
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.categoryId))}>
           Category
-          <select name="category" defaultValue={filters.categoryId ?? ""} className={selectClass}>
+          <select name="category" defaultValue={filters.categoryId ?? ""} className={pillControl}>
             <option value="">All</option>
             {options.categories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -120,9 +125,9 @@ export default async function TransactionsPage({
             ))}
           </select>
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.kind))}>
           Kind
-          <select name="kind" defaultValue={filters.kind ?? ""} className={selectClass}>
+          <select name="kind" defaultValue={filters.kind ?? ""} className={pillControl}>
             <option value="">All</option>
             {transactionKind.enumValues.map((kind) => (
               <option key={kind} value={kind}>
@@ -131,9 +136,9 @@ export default async function TransactionsPage({
             ))}
           </select>
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.tagId))}>
           Tag
-          <select name="tag" defaultValue={filters.tagId ?? ""} className={selectClass}>
+          <select name="tag" defaultValue={filters.tagId ?? ""} className={pillControl}>
             <option value="">All</option>
             {options.tags.map((tag) => (
               <option key={tag.id} value={tag.id}>
@@ -142,19 +147,19 @@ export default async function TransactionsPage({
             ))}
           </select>
         </label>
-        <label className={labelClass}>
+        <label className={pill(Boolean(filters.search))}>
           Search
           <input
             type="text"
             name="q"
             defaultValue={filters.search}
             placeholder="Description…"
-            className={selectClass}
+            className={`${pillControl} w-24 transition-[width] duration-200 focus:w-48`}
           />
         </label>
         <button
           type="submit"
-          className="rounded-input bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
+          className="rounded-pill bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
         >
           Apply
         </button>

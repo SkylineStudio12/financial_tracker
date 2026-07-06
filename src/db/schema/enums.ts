@@ -2,6 +2,16 @@ import { pgEnum } from "drizzle-orm/pg-core";
 
 export const entityType = pgEnum("entity_type", ["household", "company"]);
 
+/**
+ * Owner of a Household account — a presentation-layer view filter, not a new
+ * bookkeeping unit. Every real Household account belongs to exactly one
+ * person (there are no joint accounts); Household itself is the shared
+ * consolidated view over both people's accounts. NULL where ownership does
+ * not apply: company accounts and the structural Household equity account.
+ * Tax logic never reads this column.
+ */
+export const accountOwner = pgEnum("account_owner", ["greg", "andra"]);
+
 export const accountType = pgEnum("account_type", [
   "bank",
   "cash",

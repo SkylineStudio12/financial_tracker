@@ -21,22 +21,43 @@ async function main() {
 
   await db.transaction(async (tx) => {
     // --- Entities -----------------------------------------------------------
+    // Fixed UUIDs: the PROFILES config (src/lib/profiles) resolves companies
+    // by entity id, so a fresh seed must reproduce the same ids the config
+    // was written against. Do not change these.
     const [household, companyA, companyB] = await tx
       .insert(entities)
       .values([
-        { name: "Household", type: "household" },
-        { name: "Company A", type: "company" },
-        { name: "Company B", type: "company" },
+        {
+          id: "428c897c-42b9-401e-845a-8a6a796044a5",
+          name: "Household",
+          type: "household" as const,
+        },
+        {
+          id: "e6bd79dd-d499-44db-9780-919e8ad4f629",
+          name: "Skyline Studio SRL", // Greg's company
+          type: "company" as const,
+        },
+        {
+          id: "c831d56d-8fe8-4817-b225-6bb76879d6eb",
+          name: "DRMX Digital SRL", // Andra's company
+          type: "company" as const,
+        },
       ])
       .returning();
 
     // --- Accounts -----------------------------------------------------------
     // Every entity gets an equity account so opening balances have a
     // counter-leg; each company gets a tax_liability account for accruals.
+    // Every real Household account belongs to exactly one person (no joint
+    // accounts) — owner is the view filter for the personal profiles, not a
+    // bookkeeping split. The structural equity account and company accounts
+    // carry no owner.
     await tx.insert(accounts).values([
-      { entityId: household.id, name: "Personal bank", type: "bank", currency: "RON" },
-      { entityId: household.id, name: "Cash", type: "cash", currency: "RON" },
-      { entityId: household.id, name: "Revolut brokerage", type: "brokerage", currency: "USD" },
+      { entityId: household.id, name: "Greg — bank", type: "bank", currency: "RON", owner: "greg" as const },
+      { entityId: household.id, name: "Greg — cash", type: "cash", currency: "RON", owner: "greg" as const },
+      { entityId: household.id, name: "Greg — Revolut brokerage", type: "brokerage", currency: "USD", owner: "greg" as const },
+      { entityId: household.id, name: "Andra — bank", type: "bank", currency: "RON", owner: "andra" as const },
+      { entityId: household.id, name: "Andra — savings", type: "bank", currency: "RON", owner: "andra" as const },
       { entityId: household.id, name: "Opening equity", type: "equity", currency: "RON" },
       ...[companyA, companyB].flatMap((company) => [
         { entityId: company.id, name: "Company bank", type: "bank" as const, currency: "RON" as const },

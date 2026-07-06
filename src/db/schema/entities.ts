@@ -1,5 +1,5 @@
 import { boolean, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { accountType, currency, entityType } from "./enums";
+import { accountOwner, accountType, currency, entityType } from "./enums";
 import { id, softDelete, timestamps } from "./helpers";
 
 /** A bookkeeping unit: the household or one of the companies (SRL). */
@@ -22,6 +22,11 @@ export const accounts = pgTable(
     name: text("name").notNull(),
     type: accountType("type").notNull(),
     currency: currency("currency").notNull(),
+    /**
+     * Household-only view filter (greg/andra — no joint accounts exist);
+     * NULL on company accounts and the structural equity account.
+     */
+    owner: accountOwner("owner"),
     isActive: boolean("is_active").notNull().default(true),
     ...timestamps,
     ...softDelete,

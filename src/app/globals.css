@@ -80,35 +80,41 @@
   --radius-badge: 8px;
   --radius-pill: 9999px;
 
-  /* ---- Type scale (fixed; Lufga light/regular, Medium is the ceiling) - */
-  --text-display: 52px; /* hero number, light */
-  --text-display--line-height: 56px;
+  /* ---- Type scale — shadcn/Tailwind sizes (2026-07-06) -----------------
+   * Values match shadcn typography (ui.shadcn.com/docs/.../typography):
+   * display=text-4xl(h1), title=text-3xl(h2), number-lg=text-2xl(h3),
+   * card-title=text-xl(h4), body=text-base(p), secondary=text-sm(small).
+   * Weights stay at the Medium ceiling — headings remain light (300), NOT
+   * shadcn's extrabold/semibold. Letter-spacing preserved from our scale.
+   * micro (11px) is below shadcn's range and left unchanged. */
+  --text-display: 36px; /* text-4xl (shadcn h1) — hero number, light */
+  --text-display--line-height: 40px;
   --text-display--letter-spacing: -0.01em;
   --text-display--font-weight: 300;
-  --text-title: 31px; /* page/section title, light */
+  --text-title: 30px; /* text-3xl (shadcn h2) — page/section title, light */
   --text-title--line-height: 36px;
   --text-title--letter-spacing: -0.005em;
   --text-title--font-weight: 300;
-  --text-number-lg: 27px; /* large number in cards */
+  --text-number-lg: 24px; /* text-2xl (shadcn h3) — large number in cards */
   --text-number-lg--line-height: 32px;
   --text-number-lg--letter-spacing: -0.005em;
-  --text-card-title: 21px;
+  --text-card-title: 20px; /* text-xl (shadcn h4) */
   --text-card-title--line-height: 28px;
-  --text-body: 17px;
+  --text-body: 16px; /* text-base (shadcn p) */
   --text-body--line-height: 24px;
-  --text-secondary: 14px;
+  --text-secondary: 14px; /* text-sm (shadcn small/muted) */
   --text-secondary--line-height: 20px;
-  --text-caption: 12px;
+  --text-caption: 12px; /* text-xs */
   --text-caption--line-height: 16px;
   --text-caption--letter-spacing: 0.005em;
-  --text-micro: 11px; /* uppercase metadata (uppercasing at component level) */
+  --text-micro: 11px; /* below shadcn range; uppercase metadata, unchanged */
   --text-micro--line-height: 14px;
   --text-micro--letter-spacing: 0.06em;
 
 }
 
 @theme inline {
-  --font-sans: var(--font-lufga);
+  --font-sans: var(--font-geist-sans);
   --font-numeric: var(--font-geist-sans); /* tnum verified; use with tabular-nums */
 }
 

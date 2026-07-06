@@ -189,13 +189,13 @@ const SAMPLE_ROWS = [
 /* ------------------------------------------------------------ foundations */
 
 const TYPE_SCALE = [
-  { cls: "text-display", label: "text-display · 52px · Light" },
-  { cls: "text-title", label: "text-title · 31px · Light" },
-  { cls: "text-number-lg", label: "text-number-lg · 27px · Regular" },
-  { cls: "text-card-title", label: "text-card-title · 21px · Regular" },
-  { cls: "text-body", label: "text-body · 17px · Regular" },
-  { cls: "text-secondary", label: "text-secondary · 14px · Regular" },
-  { cls: "text-caption", label: "text-caption · 12px · Regular" },
+  { cls: "text-display", label: "text-display · 36px · Light · shadcn text-4xl (h1)" },
+  { cls: "text-title", label: "text-title · 30px · Light · shadcn text-3xl (h2)" },
+  { cls: "text-number-lg", label: "text-number-lg · 24px · Regular · shadcn text-2xl (h3)" },
+  { cls: "text-card-title", label: "text-card-title · 20px · Regular · shadcn text-xl (h4)" },
+  { cls: "text-body", label: "text-body · 16px · Regular · shadcn text-base (p)" },
+  { cls: "text-secondary", label: "text-secondary · 14px · Regular · shadcn text-sm" },
+  { cls: "text-caption", label: "text-caption · 12px · Regular · shadcn text-xs" },
   { cls: "text-micro uppercase", label: "text-micro · 11px · Regular · uppercase" },
 ];
 
@@ -333,7 +333,7 @@ export function Gallery() {
           {/* ------------------------------------------------ Foundations */}
           <section className="flex flex-col gap-4">
             <SectionTitle>Foundations</SectionTitle>
-            <Demo label="Type scale — Lufga, Light + Regular only">
+            <Demo label="Type scale — Geist, shadcn sizes, Light + Regular only">
               <div className="flex flex-col gap-4">
                 {TYPE_SCALE.map((t) => (
                   <div key={t.cls} className="flex items-baseline gap-6">

@@ -70,32 +70,34 @@ Base unit **4 px**. Steps are multiples of the base; no off-scale values.
 
 ### 1.5 Type scale (fixed — do not extend)
 
-Font: **Lufga**. The scale uses **Light (300)** and **Regular (400)**;
-**Medium (500)** is the permitted ceiling for exceptional needs (owner
+Font: **Geist** (2026-07-06 — replaced Lufga). One variable typeface for all
+text; also the numeric font (Geist ships `tnum`, so amounts align in the same
+family via `tabular-nums`). The scale uses **Light (300)** and **Regular
+(400)**; **Medium (500)** is the permitted ceiling for exceptional needs (owner
 decision 2026-07-04) — semibold and bolder remain banned. Emphasis comes from
 size and text-color tokens, never from weight. Fallback stack:
-`Lufga, system-ui, sans-serif`.
+`Geist, system-ui, sans-serif`.
 
-**Verified (2026-07-04):** the project's Lufga cut has **no `tnum` feature and
-proportional digits** ('1' = 375 units vs '0' = 643), so amounts cannot align
-in pure Lufga. Decision: money values use the tabular companion font below;
-Lufga covers all other text.
+**Sizes (2026-07-06):** adopted from shadcn typography
+(ui.shadcn.com/docs/components/base/typography). Named `type-*` primitives are
+kept as size aliases; the value is what changed. Weights stay light/regular
+(NOT shadcn's extrabold/semibold), letter-spacing preserved from our scale.
 
 | Primitive | Value |
 |---|---|
-| `font-family-sans` | Lufga (Light 300 / Regular 400 / Medium 500) |
-| `font-family-numeric` | Geist Sans — verified to ship `tnum` — with `font-numeric` enabled |
+| `font-family-sans` | Geist (Light 300 / Regular 400 / Medium 500) |
+| `font-family-numeric` | Geist — ships `tnum` — with `font-numeric` enabled |
 
-| Primitive | Size | Weight | Line height | Letter spacing | Notes |
-|---|---|---|---|---|---|
-| `type-52` | 52 px | 300 light | 56 px (1.08) | −0.01 em | Hero number |
-| `type-31` | 31 px | 300 light | 36 px (1.16) | −0.005 em | Page/section title |
-| `type-27` | 27 px | 400 regular | 32 px (1.19) | −0.005 em | Large number in cards |
-| `type-21` | 21 px | 400 regular | 28 px (1.33) | 0 | Card title / subsection |
-| `type-17` | 17 px | 400 regular | 24 px (1.41) | 0 | Body / default UI |
-| `type-14` | 14 px | 400 regular | 20 px (1.43) | 0 | Secondary text |
-| `type-12` | 12 px | 400 regular | 16 px (1.33) | +0.005 em | Small label / caption |
-| `type-11` | 11 px | 400 regular | 14 px (1.27) | +0.06 em | Micro label, UPPERCASE |
+| Primitive | Size | shadcn | Weight | Line height | Letter spacing | Notes |
+|---|---|---|---|---|---|---|
+| `type-36` | 36 px | text-4xl (h1) | 300 light | 40 px (1.11) | −0.01 em | Hero number |
+| `type-30` | 30 px | text-3xl (h2) | 300 light | 36 px (1.20) | −0.005 em | Page/section title |
+| `type-24` | 24 px | text-2xl (h3) | 400 regular | 32 px (1.33) | −0.005 em | Large number in cards |
+| `type-20` | 20 px | text-xl (h4) | 400 regular | 28 px (1.40) | 0 | Card title / subsection |
+| `type-16` | 16 px | text-base (p) | 400 regular | 24 px (1.50) | 0 | Body / default UI |
+| `type-14` | 14 px | text-sm (small) | 400 regular | 20 px (1.43) | 0 | Secondary text |
+| `type-12` | 12 px | text-xs | 400 regular | 16 px (1.33) | +0.005 em | Small label / caption |
+| `type-11` | 11 px | — (below range) | 400 regular | 14 px (1.27) | +0.06 em | Micro label, UPPERCASE |
 
 Numeric feature primitive: `font-numeric` = `font-feature-settings: "tnum" 1, "lnum" 1`.
 
@@ -175,23 +177,22 @@ Useful pairing note: black passes AA **on** both neon fills (16.60:1 on green,
 
 | Semantic token | References | Role |
 |---|---|---|
-| `font-display` | `type-52` | Hero dashboard figure |
-| `font-title` | `type-31` | Page/section titles |
-| `font-number-lg` | `type-27` + `font-numeric` | Large card numbers |
-| `font-card-title` | `type-21` | Card titles, subsections |
-| `font-body` | `type-17` | Default UI text |
+| `font-display` | `type-36` | Hero dashboard figure |
+| `font-title` | `type-30` | Page/section titles |
+| `font-number-lg` | `type-24` + `font-numeric` | Large card numbers |
+| `font-card-title` | `type-20` | Card titles, subsections |
+| `font-body` | `type-16` | Default UI text |
 | `font-secondary` | `type-14` | Secondary text |
 | `font-caption` | `type-12` | Small labels, captions |
 | `font-micro` | `type-11` | Uppercase metadata rows |
-| `font-amount-hero` | `type-52` metrics + `font-family-numeric` | Hero money figure |
-| `font-amount` | `type-17` metrics + `font-family-numeric` | Amounts in rows/tables |
+| `font-amount-hero` | `type-36` metrics + `font-family-numeric` | Hero money figure |
+| `font-amount` | `type-16` metrics + `font-family-numeric` | Amounts in rows/tables |
 | `font-amount-sm` | `type-14` metrics + `font-family-numeric` | Amounts in dense tables |
 
-All `font-amount-*` styles render in `font-family-numeric` (Geist Sans,
-`tnum` on) at the type-scale sizes/line-heights, because Lufga's digits are
-proportional. `font-number-lg` (27 px card numbers) also uses
-`font-family-numeric` when the number sits in an aligned column; standalone
-single figures may stay in Lufga for look, at the designer's discretion.
+All `font-amount-*` styles render in `font-family-numeric` (Geist, `tnum` on)
+at the type-scale sizes/line-heights, applied via `tabular-nums`. Since the UI
+font is now also Geist, numeric and body share one family; `tabular-nums`
+remains the switch that keeps digits aligned in columns.
 
 ### 2.6 Density presets
 
@@ -278,11 +279,14 @@ Regular text tokens (also verified):
 - `surface-raised` shares `neutral-0` with `surface`; its separation depends on
   an elevation shadow to be defined in the component pass (no shadow tokens in
   this foundation).
-- The type scale has no size between 31 and 52; if a screen ever needs an
+- The type scale has no size between 30 and 36; if a screen ever needs an
   intermediate display size, that is a scale change to decide explicitly — do
   not improvise one.
 - ~~Lufga must be loaded with `tnum` support confirmed.~~ **Resolved
-  2026-07-04**: verified missing (no `tnum`, proportional digits); amounts use
-  the Geist Sans companion (`font-family-numeric`), confirmed to ship `tnum`.
-- The Lufga files came from a font-sharing site; confirm licensing before any
-  public (non-local) deployment.
+  2026-07-04**: Lufga verified missing `tnum` (proportional digits). **Superseded
+  2026-07-06**: Lufga replaced by Geist as the single UI + numeric font (Geist
+  ships `tnum`); amounts use `tabular-nums`.
+- ~~The Lufga files came from a font-sharing site; confirm licensing before any
+  public (non-local) deployment.~~ **Moot 2026-07-06**: Lufga removed. Geist is
+  loaded from Google Fonts via `next/font` (OFL — no licensing concern); the
+  unused `Lufga-*.otf` files can be deleted from `src/fonts/`.

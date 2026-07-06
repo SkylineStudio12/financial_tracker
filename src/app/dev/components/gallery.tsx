@@ -19,6 +19,17 @@ import {
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -539,8 +550,27 @@ export function Gallery() {
           {/* ------------------------------------------------- Overlays */}
           <section className="flex flex-col gap-4">
             <SectionTitle>Overlays</SectionTitle>
-            <Demo label="Dialog · Drawer · Dropdown menu · Popover · Sheet · Tooltip">
+            <Demo label="Alert dialog · Dialog · Drawer · Dropdown menu · Popover · Sheet · Tooltip">
               <div className="flex flex-wrap items-center gap-3">
+                <AlertDialog>
+                  <AlertDialogTrigger render={<Button variant="secondary" />}>
+                    Open alert dialog
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Discard this transaction?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        The confirm step the app uses before throwing away unsaved
+                        work — accent action, quiet cancel, no outside-press close.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep editing</AlertDialogCancel>
+                      <AlertDialogAction>Discard</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
                 <Dialog>
                   <DialogTrigger render={<Button variant="secondary" />}>Open dialog</DialogTrigger>
                   <DialogContent>
@@ -888,7 +918,6 @@ export function Gallery() {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {[
                 "Accordion",
-                "Alert Dialog",
                 "Aspect Ratio",
                 "Button Group",
                 "Carousel",

@@ -4,6 +4,16 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -34,6 +44,9 @@ export function NewTransactionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"standard" | "transfer">("standard");
+  // Token-styled discard prompt (replaces window.confirm): an intercepted
+  // close parks here until the user picks Discard or Keep editing.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const router = useRouter();
   // Refresh only after the close animation completes: refreshing in the same
   // batch as setOpen(false) cancels the exit animation and Base UI never
@@ -58,13 +71,20 @@ export function NewTransactionDialog({
     if (
       !nextOpen &&
       dirty.current &&
-      (details?.reason === "escape-key" || details?.reason === "outside-press") &&
-      !window.confirm("Discard this unsaved transaction?")
+      (details?.reason === "escape-key" || details?.reason === "outside-press")
     ) {
-      return; // keep the dialog open
+      setConfirmDiscard(true); // intercept: ask first, keep the dialog open
+      return;
     }
     if (nextOpen) dirty.current = false; // fresh mount on open
     setOpen(nextOpen);
+  };
+
+  const handleDiscard = () => {
+    // Deliberate discard bypasses the guard: close directly, like a save.
+    setConfirmDiscard(false);
+    dirty.current = false;
+    setOpen(false);
   };
 
   const handleOpenChangeComplete = (nowOpen: boolean) => {
@@ -79,6 +99,7 @@ export function NewTransactionDialog({
   );
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange} onOpenChangeComplete={handleOpenChangeComplete}>
       <DialogTrigger render={<Button />}>New transaction</DialogTrigger>
       <DialogContent className="density-compact sm:max-w-xl">
@@ -124,5 +145,20 @@ export function NewTransactionDialog({
         )}
       </DialogContent>
     </Dialog>
+    <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard this transaction?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The details you entered will be lost.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep editing</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDiscard}>Discard</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

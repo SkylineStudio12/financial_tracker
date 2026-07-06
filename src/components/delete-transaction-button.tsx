@@ -22,7 +22,7 @@ export function DeleteTransactionButton({
       <button
         type="button"
         disabled={pending}
-        className="rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-status-negative-text hover:border-status-negative-text disabled:opacity-50"
+        className="rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-status-negative-text outline-none hover:border-status-negative-text focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50"
         onClick={() => {
           if (!window.confirm("Soft-delete this transaction?")) return;
           startTransition(async () => {

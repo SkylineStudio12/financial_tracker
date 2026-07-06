@@ -75,7 +75,7 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
           <button
             key={profile.slug}
             type="button"
-            className="flex w-full items-center gap-2 rounded-badge px-2 py-1.5 text-left hover:bg-surface-inactive"
+            className="flex w-full items-center gap-2 rounded-badge px-2 py-1.5 text-left outline-none hover:bg-surface-inactive focus-visible:ring-3 focus-visible:ring-focus-ring"
             onClick={() => {
               setOpen(false);
               router.push(`/p/${profile.slug}/transactions`);

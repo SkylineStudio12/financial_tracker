@@ -15,7 +15,7 @@ export function RowLink({
   const router = useRouter();
   return (
     <tr
-      className={className}
+      className={`outline-none focus-visible:ring-3 focus-visible:ring-focus-ring ${className ?? ""}`}
       role="link"
       tabIndex={0}
       onClick={() => router.push(href)}

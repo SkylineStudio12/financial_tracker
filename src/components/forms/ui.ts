@@ -4,7 +4,7 @@
  * Forms live in compact density; control height comes from the density var.
  */
 export const fieldClass =
-  "bg-surface border border-border-input rounded-input px-3 h-[var(--density-control-height)] text-secondary text-text-primary w-full";
+  "bg-surface border border-border-input rounded-input px-3 h-[var(--density-control-height)] text-secondary text-text-primary w-full transition-colors outline-none placeholder:text-text-muted focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50 disabled:bg-surface-inactive";
 export const labelClass = "flex flex-col gap-1 text-caption text-text-muted";
 export const primaryButtonClass =
   "rounded-input bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover disabled:opacity-50";

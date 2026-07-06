@@ -12,6 +12,11 @@ export function formatMinor(amountMinor: number, currency: string): string {
   return `${amountFormatter.format(amountMinor / 100)} ${currency}`;
 }
 
+/** 1234567 → "12.345,67" — number only, so the currency can render muted. */
+export function formatMinorNumber(amountMinor: number): string {
+  return amountFormatter.format(amountMinor / 100);
+}
+
 /** Effective FX rate implied by a posting's stored amounts (display only). */
 export function formatImpliedRate(amountMinor: number, amountRonMinor: number): string {
   if (amountMinor === 0) return "–";

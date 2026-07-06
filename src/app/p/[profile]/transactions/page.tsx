@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { transactionKind } from "@/db/schema";
 import { getProfile } from "@/lib/profiles";
-import { formatDate, formatMinor } from "@/lib/format";
+import { formatDate, formatMinor, formatMinorNumber } from "@/lib/format";
 import {
   getFilterOptions,
   listTransactions,
@@ -33,6 +33,15 @@ function parseFilters(searchParams: SearchParams): TransactionFilters {
     tagId: single(searchParams.tag),
     search: single(searchParams.q),
   };
+}
+
+/**
+ * Money color by MEANING, read from the stored kind/sign (display only):
+ * a transfer is a movement, not a loss — it renders neutral, never red.
+ */
+function amountTone(kind: TransactionKind, amount: number): string {
+  if (kind === "transfer") return "text-status-neutral-text";
+  return amount < 0 ? "text-status-negative-text" : "text-status-positive-text";
 }
 
 function pageHref(searchParams: SearchParams, page: number): string {
@@ -184,21 +193,22 @@ export default async function TransactionsPage({
                 href={`/p/${profile.slug}/transactions/${row.id}`}
                 className="cursor-pointer border-t border-border-hairline hover:bg-canvas"
               >
+                {/* Number-first hierarchy: the amount anchors the row; date,
+                    category, tags, and account are muted metadata. */}
                 <td className={`${cellClass} whitespace-nowrap text-text-muted`}>
                   {formatDate(row.date)}
                 </td>
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
-                <td className={`${cellClass} text-text-secondary`}>{row.category ?? "—"}</td>
-                <td className={`${cellClass} text-text-secondary`}>
+                <td className={`${cellClass} text-text-muted`}>{row.category ?? "—"}</td>
+                <td className={`${cellClass} text-text-muted`}>
                   {row.tagNames.join(", ") || "—"}
                 </td>
-                <td className={`${cellClass} text-text-secondary`}>{row.accountName}</td>
+                <td className={`${cellClass} text-text-muted`}>{row.accountName}</td>
                 <td
-                  className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums ${
-                    row.amount < 0 ? "text-status-negative-text" : "text-status-positive-text"
-                  }`}
+                  className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums font-medium ${amountTone(row.kind, row.amount)}`}
                 >
-                  {formatMinor(row.amount, row.currency)}
+                  {formatMinorNumber(row.amount)}
+                  <span className="ml-1 font-normal text-text-muted">{row.currency}</span>
                 </td>
                 <td
                   className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums text-text-muted`}

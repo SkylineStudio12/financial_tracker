@@ -37,13 +37,15 @@ cost it twice. **Read this file before starting any unit of work.**
 
 ---
 
-### L-0001 · 2026-07-06 · styling · ratified
+### L-0001 · 2026-07-06 · styling · ratified (strengthened 2026-07-07)
 **Lesson:** Form fields shipped without any focus state and passed several
 reviews — absence of a state is invisible until you tab into it.
-**Apply:** Every new/changed interactive element gets `focus-visible:ring-3
-ring-focus-ring` (or a primitive that provides it) at creation time; the
-review checklist gates on it.
-**Origin:** Phase-2 restyle stage 3 — `fieldClass` had no focus treatment.
+**Apply:** New interactive elements either compose `Button`/a primitive that
+carries the ring, or copy the exact ring classes (`outline-none
+focus-visible:ring-3 focus-visible:ring-focus-ring`); raw-class buttons and
+`tabIndex` elements silently bypass the cva ring — sweep for them at review.
+**Origin:** Phase-2 restyle stage 3 (`fieldClass`); baseline sweep 2026-07-07
+(RowLink, popover rows, raw-class buttons).
 
 ### L-0002 · 2026-07-04 · primitives · ratified
 **Lesson:** `shadcn` init/add injects a parallel oklch palette, a `.dark`

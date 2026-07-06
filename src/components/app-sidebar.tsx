@@ -4,12 +4,9 @@
  * App sidebar: profile switcher on top, grouped navigation, user block at
  * the bottom. Profiles come from the PROFILES config (src/lib/profiles) —
  * the switcher lists all five; company-only nav (salary/dividend flows)
- * renders only when the active profile has `companyFlows`.
- *
- * Stage 2 scope: navigation still uses the /e/[entityId] routes, so the two
- * personal profiles land on the Household entity view for now. Stage 3
- * introduces /p/[profile] routes and the owner filter; only the hrefs here
- * change then.
+ * renders only when the active profile has `companyFlows`. The active
+ * profile is the /p/[profile] URL segment, so personal profiles highlight
+ * exactly (stage 3).
  */
 
 import * as React from "react";
@@ -41,7 +38,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { PROFILES, type Profile } from "@/lib/profiles";
+import { getProfile, PROFILES, type Profile } from "@/lib/profiles";
 
 const ICON_PROPS = { absoluteStrokeWidth: true, strokeWidth: 1.5 } as const;
 
@@ -81,7 +78,7 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
             className="flex w-full items-center gap-2 rounded-badge px-2 py-1.5 text-left hover:bg-surface-inactive"
             onClick={() => {
               setOpen(false);
-              router.push(`/e/${profile.entityId}/transactions`);
+              router.push(`/p/${profile.slug}/transactions`);
             }}
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-badge border border-border-hairline text-text-secondary">
@@ -101,13 +98,10 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
   );
 }
 
-export function AppSidebar({ activeEntityId }: { activeEntityId: string }) {
+export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string }) {
   const pathname = usePathname();
-  // First config entry for the entity: Household entity resolves to the
-  // shared profile until owner-filtered routes arrive in stage 3.
-  const activeProfile =
-    PROFILES.find((p) => p.entityId === activeEntityId) ?? PROFILES[0];
-  const base = `/e/${activeEntityId}`;
+  const activeProfile = getProfile(activeProfileSlug) ?? PROFILES[0];
+  const base = `/p/${activeProfile.slug}`;
 
   const views = [
     { href: `${base}/transactions`, label: "Transactions", icon: ReceiptIcon },

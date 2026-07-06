@@ -35,6 +35,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export function StandardForm({
   entityId,
+  profileSlug,
   options,
   initial,
   stay = false,
@@ -43,6 +44,8 @@ export function StandardForm({
   onDirtyChange,
 }: {
   entityId: string;
+  /** Active profile view, so redirecting saves land back on it. */
+  profileSlug?: string;
   options: FormOptions;
   initial?: StandardFormInitial;
   /** Modal mode: skip the redirect, reset for fast repeat entry, notify. */
@@ -127,6 +130,7 @@ export function StandardForm({
     const payload: StandardPayload = {
       transactionId: initial?.transactionId,
       stay,
+      profileSlug,
       entityId,
       accountId,
       date,

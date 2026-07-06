@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { transactionKind } from "@/db/schema";
+import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor } from "@/lib/format";
 import {
   getFilterOptions,
@@ -48,18 +50,21 @@ export default async function TransactionsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ entityId: string }>;
+  params: Promise<{ profile: string }>;
   searchParams: Promise<SearchParams>;
 }) {
-  const { entityId } = await params;
+  const { profile: slug } = await params;
+  const profile = getProfile(slug);
+  if (!profile) notFound();
+  const { entityId, owner } = profile;
   const query = await searchParams;
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
 
   const [{ rows, total, pageSize }, options, formOptions] = await Promise.all([
-    listTransactions(entityId, filters, page),
-    getFilterOptions(entityId),
-    getFormOptions(entityId),
+    listTransactions(entityId, filters, page, owner),
+    getFilterOptions(entityId, owner),
+    getFormOptions(entityId, owner),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -72,7 +77,7 @@ export default async function TransactionsPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <div className="flex items-center justify-between">
         <h1 className="text-title text-text-primary">Transactions</h1>
-        <NewTransactionDialog entityId={entityId} options={formOptions} />
+        <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
@@ -176,7 +181,7 @@ export default async function TransactionsPage({
             {rows.map((row) => (
               <RowLink
                 key={row.id}
-                href={`/e/${entityId}/transactions/${row.id}`}
+                href={`/p/${profile.slug}/transactions/${row.id}`}
                 className="cursor-pointer border-t border-border-hairline hover:bg-canvas"
               >
                 <td className={`${cellClass} whitespace-nowrap text-text-muted`}>

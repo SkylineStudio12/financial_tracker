@@ -8,8 +8,8 @@ import { redirect } from "next/navigation";
 export default async function LegacyNewTransactionPage({
   params,
 }: {
-  params: Promise<{ entityId: string }>;
+  params: Promise<{ profile: string }>;
 }) {
-  const { entityId } = await params;
-  redirect(`/e/${entityId}/transactions`);
+  const { profile } = await params;
+  redirect(`/p/${profile}/transactions`);
 }

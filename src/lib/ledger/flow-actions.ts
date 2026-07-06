@@ -22,6 +22,14 @@ import {
 } from "@/lib/ledger";
 import { computeDividend, computeSalary } from "@/lib/tax/compute";
 import { getActiveRule, quarterOf, yearOf, type ActiveRule } from "@/lib/tax/rules";
+import { profileForEntity } from "@/lib/profiles";
+
+/** Companies map 1:1 to profiles, so the post-save view derives from the id. */
+function companyTransactionsPath(companyId: string): string {
+  const profile = profileForEntity(companyId);
+  if (!profile) throw new LedgerValidationError("Unknown company — no profile maps to it");
+  return `/p/${profile.slug}/transactions`;
+}
 
 export interface SalaryFlowPayload {
   companyId: string;
@@ -191,7 +199,7 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
-  redirect(`/e/${payload.companyId}/transactions`);
+  redirect(companyTransactionsPath(payload.companyId));
 }
 
 export interface DividendPreview {
@@ -270,5 +278,5 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
-  redirect(`/e/${payload.companyId}/transactions`);
+  redirect(companyTransactionsPath(payload.companyId));
 }

@@ -20,13 +20,30 @@ import {
   type PostingInput,
   type TransactionInput,
 } from "@/lib/ledger";
+import { getProfile, profileForEntity } from "@/lib/profiles";
 import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
+
+/**
+ * Post-save destination: the caller's profile view. The slug comes from the
+ * client, so validate it against the PROFILES config (and the entity it
+ * claims to scope) before interpolating; fall back to the entity's default
+ * profile.
+ */
+function transactionsPath(entityId: string, profileSlug?: string): string {
+  const profile = profileSlug ? getProfile(profileSlug) : undefined;
+  const safe =
+    profile && profile.entityId === entityId ? profile : profileForEntity(entityId);
+  if (!safe) throw new LedgerValidationError("Unknown entity — no profile maps to it");
+  return `/p/${safe.slug}/transactions`;
+}
 
 export interface StandardPayload {
   transactionId?: string;
   /** When true, skip the redirect on success and return { ok } instead —
    * used by the modal so the list stays put and the form can repeat-enter. */
   stay?: boolean;
+  /** Profile view to return to after a redirecting save (validated). */
+  profileSlug?: string;
   entityId: string;
   accountId: string;
   date: string;
@@ -44,6 +61,8 @@ export interface TransferPayload {
   transactionId?: string;
   /** See StandardPayload.stay. */
   stay?: boolean;
+  /** See StandardPayload.profileSlug. */
+  profileSlug?: string;
   entityId: string;
   fromAccountId: string;
   toAccountId: string;
@@ -230,7 +249,7 @@ export async function saveStandardTransaction(
     throw error;
   }
   if (payload.stay) return { ok: true };
-  redirect(`/e/${payload.entityId}/transactions`);
+  redirect(transactionsPath(payload.entityId, payload.profileSlug));
 }
 
 export async function saveTransferTransaction(
@@ -287,12 +306,13 @@ export async function saveTransferTransaction(
     throw error;
   }
   if (payload.stay) return { ok: true };
-  redirect(`/e/${payload.entityId}/transactions`);
+  redirect(transactionsPath(payload.entityId, payload.profileSlug));
 }
 
 export async function deleteTransactionAction(
   transactionId: string,
   entityId: string,
+  profileSlug?: string,
 ): Promise<ActionResult | undefined> {
   try {
     await softDeleteTransaction(transactionId);
@@ -300,5 +320,5 @@ export async function deleteTransactionAction(
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
-  redirect(`/e/${entityId}/transactions`);
+  redirect(transactionsPath(entityId, profileSlug));
 }

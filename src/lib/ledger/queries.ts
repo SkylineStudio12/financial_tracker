@@ -14,6 +14,7 @@ import {
   transactions,
   transactionTags,
 } from "@/db/schema";
+import type { AccountOwner } from "@/lib/profiles";
 import type { TransactionKind } from "./types";
 
 export interface TransactionFilters {
@@ -43,8 +44,28 @@ export interface TransactionListRow {
 
 const PAGE_SIZE = 25;
 
-function filterConditions(entityId: string, filters: TransactionFilters) {
+function filterConditions(entityId: string, filters: TransactionFilters, owner?: AccountOwner) {
   const conditions = [eq(transactions.entityId, entityId), isNull(transactions.deletedAt)];
+  // Personal-profile view filter: only transactions touching that person's
+  // accounts. The equity counter-leg (owner NULL) never hides a transaction —
+  // any owned leg qualifies it. There are no joint accounts.
+  if (owner) {
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(postings)
+          .innerJoin(accounts, eq(accounts.id, postings.accountId))
+          .where(
+            and(
+              eq(postings.transactionId, transactions.id),
+              eq(accounts.owner, owner),
+              isNull(postings.deletedAt),
+            ),
+          ),
+      ),
+    );
+  }
   if (filters.from) conditions.push(gte(transactions.date, filters.from));
   if (filters.to) conditions.push(lte(transactions.date, filters.to));
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
@@ -103,8 +124,9 @@ export async function listTransactions(
   entityId: string,
   filters: TransactionFilters,
   page: number,
+  owner?: AccountOwner,
 ): Promise<{ rows: TransactionListRow[]; total: number; pageSize: number }> {
-  const where = filterConditions(entityId, filters);
+  const where = filterConditions(entityId, filters, owner);
 
   const [{ total }] = await db.select({ total: count() }).from(transactions).where(where);
 
@@ -217,11 +239,17 @@ export async function getTransactionDetail(transactionId: string) {
 }
 
 /** Data for filter dropdowns on the list page. */
-export async function getFilterOptions(entityId: string) {
+export async function getFilterOptions(entityId: string, owner?: AccountOwner) {
   const accountRows = await db
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
-    .where(and(eq(accounts.entityId, entityId), isNull(accounts.deletedAt)))
+    .where(
+      and(
+        eq(accounts.entityId, entityId),
+        isNull(accounts.deletedAt),
+        ...(owner ? [eq(accounts.owner, owner)] : []),
+      ),
+    )
     .orderBy(accounts.name);
   const categoryRows = await db
     .select({ id: categories.id, name: categories.name })

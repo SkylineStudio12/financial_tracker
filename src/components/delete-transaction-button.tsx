@@ -7,9 +7,12 @@ import { errorClass } from "./forms/ui";
 export function DeleteTransactionButton({
   transactionId,
   entityId,
+  profileSlug,
 }: {
   transactionId: string;
   entityId: string;
+  /** Active profile view, so the post-delete redirect lands back on it. */
+  profileSlug?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -23,7 +26,7 @@ export function DeleteTransactionButton({
         onClick={() => {
           if (!window.confirm("Soft-delete this transaction?")) return;
           startTransition(async () => {
-            const result = await deleteTransactionAction(transactionId, entityId);
+            const result = await deleteTransactionAction(transactionId, entityId, profileSlug);
             if (result && "error" in result) setError(result.error);
           });
         }}

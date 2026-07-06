@@ -6,6 +6,7 @@ import { accounts, postings } from "@/db/schema";
 import { minorToInput } from "@/lib/format";
 import { getTransactionDetail } from "@/lib/ledger/queries";
 import { getFormOptions } from "@/lib/ledger/form-options";
+import { getProfile } from "@/lib/profiles";
 import { StandardForm, type StandardFormInitial } from "@/components/forms/standard-form";
 import { TransferForm, type TransferFormInitial } from "@/components/forms/transfer-form";
 
@@ -19,17 +20,20 @@ export const dynamic = "force-dynamic";
 export default async function EditTransactionPage({
   params,
 }: {
-  params: Promise<{ entityId: string; transactionId: string }>;
+  params: Promise<{ profile: string; transactionId: string }>;
 }) {
-  const { entityId, transactionId } = await params;
+  const { profile: slug, transactionId } = await params;
+  const profile = getProfile(slug);
+  if (!profile) notFound();
+  const { entityId, owner } = profile;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
     notFound();
   }
   const detail = await getTransactionDetail(transactionId);
-  if (!detail) notFound();
+  if (!detail || detail.transaction.entityId !== entityId) notFound();
   const { transaction, tagNames } = detail;
 
-  const options = await getFormOptions(entityId);
+  const options = await getFormOptions(entityId, owner);
 
   // Need account ids per posting (detail query returns display fields only).
   const legs = await db
@@ -47,7 +51,7 @@ export default async function EditTransactionPage({
 
   const back = (
     <Link
-      href={`/e/${entityId}/transactions/${transactionId}`}
+      href={`/p/${profile.slug}/transactions/${transactionId}`}
       className="text-secondary text-accent hover:underline"
     >
       ← Back to detail
@@ -71,7 +75,7 @@ export default async function EditTransactionPage({
       <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
         {back}
         <h1 className="text-title text-text-primary">Edit transfer</h1>
-        <TransferForm entityId={entityId} options={options} initial={initial} />
+        <TransferForm entityId={entityId} profileSlug={profile.slug} options={options} initial={initial} />
       </div>
     );
   }
@@ -124,7 +128,7 @@ export default async function EditTransactionPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       {back}
       <h1 className="text-title text-text-primary">Edit transaction</h1>
-      <StandardForm entityId={entityId} options={options} initial={initial} />
+      <StandardForm entityId={entityId} profileSlug={profile.slug} options={options} initial={initial} />
     </div>
   );
 }

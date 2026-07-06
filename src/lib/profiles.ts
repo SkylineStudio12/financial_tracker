@@ -80,3 +80,11 @@ export const PROFILES: readonly Profile[] = [
 export function getProfile(slug: string): Profile | undefined {
   return PROFILES.find((p) => p.slug === slug);
 }
+
+/**
+ * Default profile for an entity id — used by legacy /e/[entityId] redirects.
+ * The Household entity resolves to the shared profile (it is listed first).
+ */
+export function profileForEntity(entityId: string): Profile | undefined {
+  return PROFILES.find((p) => p.entityId === entityId);
+}

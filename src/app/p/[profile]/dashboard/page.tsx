@@ -9,6 +9,7 @@ import {
   getTaxAccrualGroups,
   type AccrualGroup,
 } from "@/lib/ledger/dashboard";
+import { getProfile } from "@/lib/profiles";
 import { quarterOf, yearOf } from "@/lib/tax/rules";
 
 export const dynamic = "force-dynamic";
@@ -27,18 +28,22 @@ function periodLabel(group: Pick<AccrualGroup, "year" | "quarter">): string {
 export default async function DashboardPage({
   params,
 }: {
-  params: Promise<{ entityId: string }>;
+  params: Promise<{ profile: string }>;
 }) {
-  const { entityId } = await params;
+  const { profile: slug } = await params;
+  const profile = getProfile(slug);
+  if (!profile) notFound();
+  const { entityId, owner } = profile;
   const [entity] = await db
     .select({ name: entities.name, type: entities.type })
     .from(entities)
     .where(and(eq(entities.id, entityId), isNull(entities.deletedAt)));
   if (!entity) notFound();
 
-  const balances = await getAccountBalances(entityId);
-  const isHousehold = entity.type === "household";
-  const netCash = isHousehold ? await getNetCashPosition() : null;
+  const balances = await getAccountBalances(entityId, owner);
+  // The all-entities net cash consolidation belongs to the SHARED household
+  // view only; personal profiles show just that person's balances.
+  const netCash = profile.slug === "household" ? await getNetCashPosition() : null;
   const accrualGroups = entity.type === "company" ? await getTaxAccrualGroups(entityId) : [];
 
   const today = new Date().toISOString().slice(0, 10);
@@ -65,7 +70,7 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
-      <h1 className="text-title text-text-primary">Dashboard — {entity.name}</h1>
+      <h1 className="text-title text-text-primary">Dashboard — {profile.label}</h1>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-micro uppercase text-text-muted">

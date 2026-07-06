@@ -1,14 +1,20 @@
 import { SalaryFlow } from "@/components/flows/salary-flow";
+import { notFound } from "next/navigation";
 import { getFlowPageData } from "@/lib/ledger/flow-page-data";
+import { getProfile } from "@/lib/profiles";
 
 export const dynamic = "force-dynamic";
 
 export default async function SalaryFlowPage({
   params,
 }: {
-  params: Promise<{ entityId: string }>;
+  params: Promise<{ profile: string }>;
 }) {
-  const { entityId } = await params;
+  const { profile: slug } = await params;
+  const profile = getProfile(slug);
+  // Visibility derives from the PROFILES config: company profiles only.
+  if (!profile || !profile.companyFlows) notFound();
+  const entityId = profile.entityId;
   const { isCompany, personalAccounts } = await getFlowPageData(entityId);
 
   if (!isCompany) {

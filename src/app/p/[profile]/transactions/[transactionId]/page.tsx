@@ -4,22 +4,26 @@ import { DeleteTransactionButton } from "@/components/delete-transaction-button"
 import { formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
 import { getTransactionDetail } from "@/lib/ledger/queries";
+import { getProfile } from "@/lib/profiles";
 
 export const dynamic = "force-dynamic";
 
 export default async function TransactionDetailPage({
   params,
 }: {
-  params: Promise<{ entityId: string; transactionId: string }>;
+  params: Promise<{ profile: string; transactionId: string }>;
 }) {
-  const { entityId, transactionId } = await params;
+  const { profile: slug, transactionId } = await params;
+  const profile = getProfile(slug);
+  if (!profile) notFound();
   // Non-UUID segments (e.g. a stale /transactions/new URL) must 404 rather
   // than reach Postgres as an invalid uuid.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
     notFound();
   }
   const detail = await getTransactionDetail(transactionId);
-  if (!detail) notFound();
+  // Guard the transaction to the profile's entity (cross-entity ids 404).
+  if (!detail || detail.transaction.entityId !== profile.entityId) notFound();
   const { transaction, postings, tagNames, accruals } = detail;
 
   // BNR rates applied at the transaction date, one per non-RON currency.
@@ -37,7 +41,7 @@ export default async function TransactionDetailPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
       <div className="flex items-center justify-between">
         <Link
-          href={`/e/${entityId}/transactions`}
+          href={`/p/${profile.slug}/transactions`}
           className="text-secondary text-accent hover:underline"
         >
           ← Transactions
@@ -45,13 +49,13 @@ export default async function TransactionDetailPage({
         <div className="flex items-center gap-2">
           {(transaction.kind === "standard" || transaction.kind === "transfer") && (
             <Link
-              href={`/e/${entityId}/transactions/${transaction.id}/edit`}
+              href={`/p/${profile.slug}/transactions/${transaction.id}/edit`}
               className="inline-flex items-center rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-text-primary hover:border-accent"
             >
               Edit
             </Link>
           )}
-          <DeleteTransactionButton transactionId={transaction.id} entityId={entityId} />
+          <DeleteTransactionButton transactionId={transaction.id} entityId={profile.entityId} profileSlug={profile.slug} />
         </div>
       </div>
 

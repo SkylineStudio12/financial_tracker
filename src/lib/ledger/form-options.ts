@@ -1,10 +1,14 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, categories, tags } from "@/db/schema";
+import type { AccountOwner } from "@/lib/profiles";
 import type { FormOptions } from "@/components/forms/option-types";
 
 /** Accounts, categories, and tag names the entry forms need. */
-export async function getFormOptions(entityId: string): Promise<FormOptions> {
+export async function getFormOptions(
+  entityId: string,
+  owner?: AccountOwner,
+): Promise<FormOptions> {
   const accountRows = await db
     .select({
       id: accounts.id,
@@ -18,6 +22,8 @@ export async function getFormOptions(entityId: string): Promise<FormOptions> {
         eq(accounts.entityId, entityId),
         eq(accounts.isActive, true),
         isNull(accounts.deletedAt),
+        // Entry forms in a personal profile offer only that person's accounts.
+        ...(owner ? [eq(accounts.owner, owner)] : []),
       ),
     )
     .orderBy(accounts.name);

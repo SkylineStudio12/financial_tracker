@@ -24,9 +24,12 @@ import type { FormOptions } from "@/components/forms/option-types";
  */
 export function NewTransactionDialog({
   entityId,
+  profileSlug,
   options,
 }: {
   entityId: string;
+  /** Active profile view; forwarded to the forms (modal saves stay put). */
+  profileSlug?: string;
   options: FormOptions;
 }) {
   const [open, setOpen] = useState(false);
@@ -101,6 +104,7 @@ export function NewTransactionDialog({
         {type === "standard" ? (
           <StandardForm
             entityId={entityId}
+            profileSlug={profileSlug}
             options={options}
             stay
             onSaved={handleSaved}
@@ -110,6 +114,7 @@ export function NewTransactionDialog({
         ) : (
           <TransferForm
             entityId={entityId}
+            profileSlug={profileSlug}
             options={options}
             stay
             onSaved={handleSaved}

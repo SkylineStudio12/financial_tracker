@@ -28,6 +28,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export function TransferForm({
   entityId,
+  profileSlug,
   options,
   initial,
   stay = false,
@@ -36,6 +37,8 @@ export function TransferForm({
   onDirtyChange,
 }: {
   entityId: string;
+  /** Active profile view, so redirecting saves land back on it. */
+  profileSlug?: string;
   options: FormOptions;
   initial?: TransferFormInitial;
   /** Modal mode: skip the redirect, reset for fast repeat entry, notify. */
@@ -104,6 +107,7 @@ export function TransferForm({
     const payload: TransferPayload = {
       transactionId: initial?.transactionId,
       stay,
+      profileSlug,
       entityId,
       fromAccountId,
       toAccountId,

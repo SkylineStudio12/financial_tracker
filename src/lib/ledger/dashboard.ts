@@ -8,6 +8,7 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, entities, postings, taxAccruals, taxRules, transactions } from "@/db/schema";
+import type { AccountOwner } from "@/lib/profiles";
 import type { TaxRuleType } from "@/lib/tax/rules";
 
 export interface AccountBalance {
@@ -19,7 +20,10 @@ export interface AccountBalance {
   balanceRon: number;
 }
 
-export async function getAccountBalances(entityId: string): Promise<AccountBalance[]> {
+export async function getAccountBalances(
+  entityId: string,
+  owner?: AccountOwner,
+): Promise<AccountBalance[]> {
   return db
     .select({
       accountId: accounts.id,
@@ -35,7 +39,14 @@ export async function getAccountBalances(entityId: string): Promise<AccountBalan
       and(eq(postings.accountId, accounts.id), isNull(postings.deletedAt)),
     )
     .where(
-      and(eq(accounts.entityId, entityId), eq(accounts.isActive, true), isNull(accounts.deletedAt)),
+      and(
+        eq(accounts.entityId, entityId),
+        eq(accounts.isActive, true),
+        isNull(accounts.deletedAt),
+        // Personal profile: only that person's accounts (no joint accounts
+        // exist; the structural equity account has owner NULL and drops out).
+        ...(owner ? [eq(accounts.owner, owner)] : []),
+      ),
     )
     .groupBy(accounts.id)
     .orderBy(accounts.type, accounts.name);

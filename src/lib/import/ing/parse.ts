@@ -66,7 +66,7 @@ export function parseRomanianAmountToMinor(text: string): number {
 }
 
 /** "02.06.2026" → "2026-06-02" */
-function toIsoDate(text: string): string {
+export function toIsoDate(text: string): string {
   const [d, m, y] = text.split(".");
   return `${y}-${m}-${d}`;
 }
@@ -103,7 +103,7 @@ function stripChrome(lines: string[]): { body: string[]; headerMeta: string[] } 
   return { body, headerMeta };
 }
 
-interface HeaderInfo {
+export interface HeaderInfo {
   statementNumber: string;
   accountIban: string;
   period: string;
@@ -150,8 +150,10 @@ function parseHeader(headerMeta: string[], body: string[]): HeaderInfo {
   };
 }
 
-/** One raw row: its date, line number, body lines, amount, and balance. */
-interface RawRow {
+/** One raw row: its date, line number, body lines, amount, and balance.
+ * SHARED with the CSV parser (parse-csv.ts), which synthesizes body lines in
+ * this same shape so both formats run through identical interpretation. */
+export interface RawRow {
   bookDate: string;
   lineNo: string;
   bodyLines: string[];
@@ -218,7 +220,9 @@ function extractReference(
   return { value, consumed };
 }
 
-function interpretRow(raw: RawRow): IngStatementRow {
+/** Body lines → typed row. EXPORTED for the CSV parser: one interpretation
+ * for both formats means a format cannot fork field-extraction behavior. */
+export function interpretRow(raw: RawRow): IngStatementRow {
   const lines = raw.bodyLines;
   const consumed = new Set<number>();
   let bankReference: string | null = null;
@@ -290,6 +294,14 @@ function interpretRow(raw: RawRow): IngStatementRow {
   if (lines.length > 0 && !consumed.has(0) && lines[0] !== "Service Fee") {
     counterpartyName = lines[0].trim();
     consumed.add(0);
+    // ING glues a "/suffix" (fiscal code) onto the counterparty name
+    // ("Trezorerie operativa Sector 1/41481580"); the PDF print layout may
+    // wrap that suffix onto its own line. Re-glue it so both statement
+    // formats agree on the name (the CSV keeps it whole).
+    if (lines.length > 1 && !consumed.has(1) && lines[1].startsWith("/")) {
+      counterpartyName += lines[1].trim();
+      consumed.add(1);
+    }
   }
 
   const description = lines
@@ -314,7 +326,11 @@ function interpretRow(raw: RawRow): IngStatementRow {
   };
 }
 
-function selfVerify(header: HeaderInfo, rows: IngStatementRow[], raws: RawRow[]): void {
+/** EXPORTED for the CSV parser — both formats must pass the same checks.
+ * (For CSV, which declares no counts/totals, the caller derives checks 2–3's
+ * expectations from the rows; the balance replay and the ref-uniqueness
+ * tripwire are the load-bearing checks there.) */
+export function selfVerify(header: HeaderInfo, rows: IngStatementRow[], raws: RawRow[]): void {
   // 1. Balance replay.
   let balance = header.openingBalanceMinor;
   for (let k = 0; k < raws.length; k += 1) {

@@ -19,6 +19,7 @@ import { OWNER_BANK_NAMES, SUGGESTED_CATEGORY_BY_KIND } from "./config";
 import { classifyStatementRows, type ClassifiedRow } from "./ing/classify";
 import { normalizeStatementNumber, parseStatementPeriod, resolveExternalRef } from "./ing/identity";
 import { parseIngStatement } from "./ing/parse";
+import { isIngCsv, parseIngCsvStatement } from "./ing/parse-csv";
 
 export interface CreateBatchResult {
   batchId: string;
@@ -59,7 +60,12 @@ export async function createImportBatch(params: {
     );
   }
 
-  const stmt = parseIngStatement(params.text);
+  // Format routing (CSV amendment): CSV is the DEFAULT source, detected by
+  // its header row; anything else goes to the PDF-text parser. Both produce
+  // the same typed statement — everything downstream is format-agnostic.
+  const source = isIngCsv(params.text) ? "ing_csv" : "ing_pdf_text";
+  const stmt =
+    source === "ing_csv" ? parseIngCsvStatement(params.text) : parseIngStatement(params.text);
   const classified = classifyStatementRows(stmt.rows, {
     ownerNames: params.ownerNames ?? OWNER_BANK_NAMES[params.entityId] ?? [],
   });
@@ -153,7 +159,7 @@ export async function createImportBatch(params: {
       .values({
         entityId: params.entityId,
         bankAccountId: params.bankAccountId,
-        source: "ing_pdf_text",
+        source,
         statementNumber: normalizeStatementNumber(stmt.statementNumber),
         statementIban: stmt.accountIban,
         periodStart: period.start,

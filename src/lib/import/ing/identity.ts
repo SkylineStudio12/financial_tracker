@@ -4,9 +4,17 @@
  *
  * Two-class external_ref:
  * - Ref-bearing rows (6/17 in the fixture) use the ING long bank reference,
- *   raw — the Stage-1 design, unchanged.
+ *   raw — the Stage-1 design, unchanged. Both input formats print the same
+ *   references, so these keys are FORMAT-INDEPENDENT.
  * - Refless rows (POS, fees, the revenue credit) get a SYNTHETIC,
  *   STATEMENT-SCOPED key: ING:{accountIban}:{statementNumber}:{lineNo}.
+ *   Its scope and position components are FORMAT-DEPENDENT (CSV amendment):
+ *   PDF text uses the printed "Nr.N" + statement lineNo; the CSV export has
+ *   neither, so its parser derives the scope from the sentinel dates and the
+ *   position from the CSV row index — each stable and unique within one
+ *   export, but the SAME statement imported in BOTH formats does NOT
+ *   cross-dedup at row level. The format-agnostic (account, period) batch
+ *   overlap guard catches that case and flags the refless rows per-row.
  *
  * Why this and not a content composite or the fallback identifiers:
  * - Position-aware by construction: lineNo is unique within one statement,

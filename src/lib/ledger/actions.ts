@@ -9,7 +9,7 @@
 import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, entities, tags } from "@/db/schema";
+import { accounts, tags } from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
 import {
   createTransaction,
@@ -21,7 +21,7 @@ import {
   type TransactionInput,
 } from "@/lib/ledger";
 import { getProfile, profileForEntity } from "@/lib/profiles";
-import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
+import { planMicroTaxAccrual } from "@/lib/tax/micro-tax";
 
 /**
  * Post-save destination: the caller's profile view. The slug comes from the
@@ -175,61 +175,20 @@ export async function saveStandardTransaction(
       })),
     ];
 
-    // Company revenue: income on a company auto-accrues micro revenue tax at
-    // the active rate — liability leg (negative = owed) balanced by an
-    // equity expense leg on the company's "Taxes" category.
+    // Company revenue: income on a company auto-accrues micro revenue tax —
+    // construction lives in the shared helper so the statement importer
+    // produces identical accruals (entity-type check included there).
     const accruals: AccrualInput[] = [];
     if (payload.direction === "income" && account.type !== "equity") {
-      const [entity] = await db
-        .select({ type: entities.type })
-        .from(entities)
-        .where(eq(entities.id, payload.entityId));
-      if (entity?.type === "company") {
-        const microRule = await getActiveRule("micro_revenue_tax", payload.date);
-        const totalRon = splitRon.reduce((sum, v) => sum + v, 0);
-        const microTax = Math.round((totalRon * microRule.rateBps) / 10_000);
-        if (microTax > 0) {
-          const [taxAccount] = await db
-            .select({ id: accounts.id })
-            .from(accounts)
-            .where(
-              and(
-                eq(accounts.entityId, payload.entityId),
-                eq(accounts.type, "tax_liability"),
-                eq(accounts.isActive, true),
-                isNull(accounts.deletedAt),
-              ),
-            );
-          if (!taxAccount) {
-            throw new LedgerValidationError("Company has no tax_liability account");
-          }
-          const [taxesCategory] = await db
-            .select({ id: categories.id })
-            .from(categories)
-            .where(
-              and(
-                eq(categories.entityId, payload.entityId),
-                eq(categories.name, "Taxes"),
-                isNull(categories.deletedAt),
-              ),
-            );
-          if (!taxesCategory) {
-            throw new LedgerValidationError(
-              'Company needs a "Taxes" category for the micro revenue tax accrual',
-            );
-          }
-          accruals.push({
-            postingIndex: postingInputs.length,
-            taxRuleId: microRule.id,
-            year: yearOf(payload.date),
-            quarter: quarterOf(payload.date),
-          });
-          postingInputs.push(
-            { accountId: taxAccount.id, amount: -microTax },
-            { accountId: equity.id, amount: microTax, categoryId: taxesCategory.id },
-          );
-        }
-      }
+      const plan = await planMicroTaxAccrual({
+        entityId: payload.entityId,
+        date: payload.date,
+        revenueRonMinor: splitRon.reduce((sum, v) => sum + v, 0),
+        equityAccountId: equity.id,
+        basePostingIndex: postingInputs.length,
+      });
+      postingInputs.push(...plan.postings);
+      accruals.push(...plan.accruals);
     }
 
     await persist(

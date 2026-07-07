@@ -1,0 +1,172 @@
+Account Statement
+Nr.6 / 30.06.2026
+Principal Current Account | RON
+RO96 INGB 0000 9999 1247 9494
+SKYLINE STUDIO S.R.L. | CUI 41481580
+ING Bank N.V. Amsterdam Bucharest Branch,
+54A Aviator Popisteanu Street, Building no. 3, district 1, 012095 Bucharest, Romania
+TR: J1994016100409, Tax ID: RO6151100, RIC: RB-PJS-40-024/18.02.1999
+Tel: +40 21 222 16 00, Fax: +40 21 222 14 01, www.ing.ro
+BIC code (SWIFT): INGBROBU Strada ARGENTINA, Nr 25 Bucuresti Sectorul 1, 
+11753
+   Page 1 of 2
+This document was issued through an electronic payment system. Check ingwb.com/dgs to see whether and to which guarantee scheme your deposit 
+is eligible. Valid without signature and stamp.
+Opening balance:  Total credits (1):  Total debits (16): Closing balance: Date
+40,988.95 26,213.76 -8,189.76 59,012.95   01 - 30.06.2026
+Book Date Counterparty Debit Credit Balance after
+Bank Reference Transaction Description
+02.06.2026
+1461
+ROMPETROL DWS R081 C1
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 31-05-2026 Auth. Code: 631085
+-457.10 40,531.85
+08.06.2026
+1462
+Coman N Ciprian Expert Contabil
+RO08BTRL01601202M17970XX
+BANCA TRANSILVANIA S.A. CENTRALA
+Transfer ING Business
+Instant reference: 
+1780914896626777164009
+Bank reference 71cf08f6-b8ab-3adf-b8b0-
+7399ff939582
+-25.00 40,506.85
+08.06.2026
+1463
+Service Fee -0.45 40,506.40
+08.06.2026
+1464
+SC Coman Aktiv Serv SRL
+RO32INGB0000999909655909
+ING BANK BUCURESTI CENTRALA
+Transfer ING Business
+Bank reference fb54dad3-cfea-3833-
+957b-89afe667b15a
+-225.00 40,281.40
+10.06.2026
+1465
+Grigore Filimon   
+RO02INGB0000999910829858
+ING BANK BUCURESTI CENTRALA
+Transfer ING Business
+Bank reference 0524b6fa-d874-338c-
+a2ba-bb525b06ae6c
+-2,695.00 37,586.40
+10.06.2026
+1466
+PROCONS AUDIT-EXPERT SRL
+RO29INGB0000999909281058
+ING BANK BUCURESTI CENTRALA
+Transfer ING Business
+Bank reference afbefaf7-61f9-30b2-9038-
+f7fd93df4292
+-55.00 37,531.40
+19.06.2026
+1471
+OPENAI *CHATGPT SUBSCR
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 18-06-2026 Auth. Code: 474543
+Amount: 24,20 USD
+Settlement Amount: 21,09 EUR Rate: 5.42
+-114.31 37,417.09
+19.06.2026
+1473
+WWW.ORANGE.RO CONTUL-M
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 17-06-2026 Auth. Code: 062556
+-52.33 37,364.76
+Account Statement
+Nr.6 / 30.06.2026
+Principal Current Account | RON
+RO96 INGB 0000 9999 1247 9494
+SKYLINE STUDIO S.R.L. | CUI 41481580
+ING Bank N.V. Amsterdam Bucharest Branch,
+54A Aviator Popisteanu Street, Building no. 3, district 1, 012095 Bucharest, Romania
+TR: J1994016100409, Tax ID: RO6151100, RIC: RB-PJS-40-024/18.02.1999
+Tel: +40 21 222 16 00, Fax: +40 21 222 14 01, www.ing.ro
+BIC code (SWIFT): INGBROBU Strada ARGENTINA, Nr 25 Bucuresti Sectorul 1, 
+11753
+   Page 2 of 2
+This document was issued through an electronic payment system. Check ingwb.com/dgs to see whether and to which guarantee scheme your deposit 
+is eligible. Valid without signature and stamp.
+19.06.2026
+1475
+Trezorerie operativa Sector 1
+/41481580
+RO14TREZ7015503XXXXXXXXX
+TREZORERII
+Transfer ING Business
+Internal reference: 953601288
+Bank reference 
+050002100000000000000197278918
+-3,927.00 33,437.76
+19.06.2026
+1476
+Service Fee -0.51 33,437.25
+19.06.2026
+1478
+CAM/41481580
+RO54TREZ70120A470300XXXX
+TREZORERII
+Transfer ING Business
+Internal reference: 953601294
+Bank reference 
+050002100000000000000197278963
+-101.00 33,336.25
+19.06.2026
+1479
+Service Fee -0.51 33,335.74
+20.06.2026
+1481
+ORCT BUCURESTI
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 17-06-2026 Auth. Code: 500382
+-247.09 33,088.65
+25.06.2026
+1482
+HOLYCODE SRL
+RO47RZBR0000060022862253
+CUI:44498625
+Incoming funds
+/ROC/Servicii dezvoltare software 0
+6.2026 cf. contract 17/09.08.2023
+Internal reference: 954344576
+26,213.76 59,302.41
+28.06.2026
+1486
+ANTHROPIC* CLAUDE SUB
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 26-06-2026 Auth. Code: 010788
+Amount: 21,78 EUR
+Settlement Amount: 21,78 EUR Rate: 
+5.4216
+-118.08 59,184.33
+30.06.2026
+1489
+FIGMA
+POS purchase
+GRIGORE FILIMON
+Card No: **** 3421
+Date: 28-06-2026 Auth. Code: 000230
+Amount: 24,20 EUR
+Settlement Amount: 24,20 EUR Rate: 
+5.4288
+-131.38 59,052.95
+30.06.2026
+1491
+Service Fee
+Monthly fee ING FIX UTIL offer 40
+-40.00 59,012.95
+END OF ACCOUNT STATEMENT

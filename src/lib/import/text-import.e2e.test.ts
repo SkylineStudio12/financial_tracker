@@ -218,10 +218,15 @@ async function run(env: ImportTestEntity) {
   // period) overlap guard must flag every refless row for individual
   // confirmation, while ref-bearing rows hard-dedup via the bank's own
   // reference regardless of format.
+  // Whitespace-perturbed like the text re-import above: the rawTextHash
+  // guard is GLOBAL (not entity-scoped), so the owner's real import of this
+  // same CSV into Skyline on the shared dev DB would otherwise short-circuit
+  // this batch before the controls under test (row dedup + overlap guard)
+  // ever run. The parser drops blank lines, so the parse is identical.
   const csvImport = await createImportBatch({
     entityId: env.entityId,
     bankAccountId: env.bankAccountId,
-    text: csvFixture,
+    text: csvFixture + "\n\n",
     ownerNames: ["Grigore Filimon"],
   });
   await ok("CSV of the already-booked statement: 6 ref-bearing rows dedup ACROSS formats", () => {

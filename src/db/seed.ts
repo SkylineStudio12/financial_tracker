@@ -63,6 +63,15 @@ async function main() {
       // single-currency + RON-mirror posting model.
       { entityId: household.id, name: "Andra — Revolut brokerage USD", type: "brokerage", currency: "USD", owner: "andra" as const },
       { entityId: household.id, name: "Andra — Revolut brokerage EUR", type: "brokerage", currency: "EUR", owner: "andra" as const },
+      // Position accounts (Phase 4 Stage 2): one per brokerage CASH account,
+      // same currency and owner. They carry open holdings AT COST — a buy
+      // moves cash → positions, a sell unwinds exactly the consumed lots'
+      // basis, so the balance is total cost (original ccy) / total RON basis
+      // of open lots. Type stays `brokerage` (no `position` enum value — see
+      // the parked-plan note on cost-basis aggregation until Stage 4).
+      { entityId: household.id, name: "Greg — Revolut positions USD", type: "brokerage", currency: "USD", owner: "greg" as const },
+      { entityId: household.id, name: "Andra — Revolut positions USD", type: "brokerage", currency: "USD", owner: "andra" as const },
+      { entityId: household.id, name: "Andra — Revolut positions EUR", type: "brokerage", currency: "EUR", owner: "andra" as const },
       { entityId: household.id, name: "Opening equity", type: "equity", currency: "RON" },
       ...[companyA, companyB].flatMap((company) => [
         { entityId: company.id, name: "Company bank", type: "bank" as const, currency: "RON" as const },
@@ -95,12 +104,23 @@ async function main() {
       "Taxes",
     ];
 
+    // Investment categories (Phase 4 Stage 2). Gains and losses are TWO
+    // categories (owner decision): Phase 5 reads gross gains and gross
+    // losses as clean figures, never decomposing one signed line.
+    const investmentCategories = [
+      { name: "Investment gains", kind: "income" as const },
+      { name: "Investment losses", kind: "expense" as const },
+      { name: "Dividends", kind: "income" as const },
+      { name: "Brokerage fees", kind: "expense" as const },
+    ];
+
     await tx.insert(categories).values([
       ...householdCategories.map((name) => ({
         entityId: household.id,
         name,
         kind: "expense" as const,
       })),
+      ...investmentCategories.map((c) => ({ entityId: household.id, ...c })),
       ...[companyA, companyB].flatMap((company) =>
         companyCategories.map((name) => ({
           entityId: company.id,

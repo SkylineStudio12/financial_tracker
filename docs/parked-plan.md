@@ -161,6 +161,27 @@ Known properties surfaced by the FIRST REAL IMPORT (batch f9929a4a, Skyline,
 
 ---
 
+## Investments (Phase 4)
+
+- POSITIONS-AT-COST AGGREGATION WINDOW (Stage 2 → Stage 4, a known transient
+  property, not a bug): each brokerage cash account has a paired POSITION
+  account (type `brokerage` — no `position` enum value exists) whose balance
+  is the open lots' cost basis. A buy is an asset swap (cash −T, positions
+  +T), so sums are conserved — nothing double-counts — but until Stage 4
+  valuation two display distortions exist: (1) holdings are carried AT COST,
+  not market value, so any brokerage total is stale the moment prices move;
+  (2) both accounts are type `brokerage`, so a "cash at broker" view cannot
+  be expressed by type alone — a naive brokerage sum reads position cost as
+  if it were spendable cash. If this proves confusing before Stage 4, the
+  clean fix is a `position` account-type enum value — its own schema unit,
+  needs authorization.
+- TRADE SIZE BOUND, not a bug: the derived 6-dp broker rate reproduces the
+  entered RON within 1 ban only up to ~$20k per trade; above that the
+  amounts-don't-reconcile hard reject fires on legitimate entries. Split the
+  trade, or design a higher-precision rate path if it ever recurs.
+
+---
+
 ## LLM features (Groq) — Phase 3 or later
 
 Shared safety rules for any external LLM call:

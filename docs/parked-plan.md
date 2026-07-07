@@ -118,6 +118,16 @@ Schema/behaviour requirements for the importer (verify before building):
   designed choice, not discover it — options: block form-editing of imported
   transaction kinds, or preserve/rebuild external_ref on posting replacement.
   Pick one when wiring the write path (Stage 4), not before.
+- REFLESS-ROW IDENTITY CONSTRAINT (found in Stage 3 against the real fixture,
+  decide in Stage 4): 11 of 17 rows carry no long bank reference (all POS, all
+  fees, the revenue credit). The refless-row import identity CANNOT be a naive
+  date+amount+description composite: rows 1476 and 1479 are two 0.51 fees on the
+  same day, identical on every content field, distinguishable only by line
+  number (per-statement, resets) and balance-after (position-dependent). So the
+  refless key must be position-aware for fee rows. Available fallback identifiers
+  differ by kind (Stage 3 identity inventory): POS rows have auth code + card
+  date + masked card number; fee rows have NOTHING content-based. Stage 4 must
+  design this from the inventory, per L-0010 (do not assume a specific composite).
 
 ---
 

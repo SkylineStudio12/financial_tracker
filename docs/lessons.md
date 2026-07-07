@@ -34,6 +34,7 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0007 | process | One concern per commit; untangle mixed files before committing |
 | L-0008 | verification | Synthetic pointer events need `pointerType: "mouse"` for Base UI |
 | L-0009 | tooling | Token value changes require `rm -rf .next` — HMR won't pick them up |
+| L-0010 | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
 
 ---
 
@@ -107,3 +108,19 @@ sequence with `pointerId, isPrimary, pointerType: "mouse"`.
 **Apply:** After changing design-token values: `rm -rf .next`, then restart
 the dev server, then re-verify computed styles in the browser.
 **Origin:** shadcn type-scale remap (sizes stuck at old values).
+
+### L-0010 · 2026-07-07 · assumption · ratified
+*(Deliberately exceeds the rule-4 length cap — owner call: the coverage gap
+and the stability caveat are both load-bearing.)*
+**Lesson:** Import dedup was designed to key off the ING long bank reference.
+The first real statement shows that ref is present on only 6 of 17 rows — all
+POS purchases, all fees, and the revenue credit carry no long ref. So the key is
+both unverified for stability AND known-partial in coverage from day one.
+**Apply:** The long-ref unique index and assertBatchExternalRefsUnique remain
+correct but insufficient alone. Stage 4 MUST design an import identity for
+refless rows before any real import — do not ship import relying on the long ref
+as the sole key. If the batch guard ever throws on a genuine statement, stop and
+diagnose whether a ref actually repeats or the parser misread it before changing
+the key; do not assume a specific composite replacement.
+**Origin:** Phase 3 — long-ref dedup settled in Stage 1, coverage gap found
+against the real fixture in Stage 2.

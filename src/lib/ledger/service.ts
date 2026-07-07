@@ -22,8 +22,10 @@ import {
   accounts,
   auditLog,
   categories,
+  lotConsumptions,
   postings,
   taxAccruals,
+  trades,
   transactions,
   transactionTags,
 } from "@/db/schema";
@@ -365,6 +367,49 @@ export async function softDeleteTransaction(id: string): Promise<void> {
   const prior = await snapshotTransaction(id);
   const deletedAt = new Date();
   await db.transaction(async (tx) => {
+    // TRADE INTEGRITY (Phase 4 Stage 2). Lot accounting is append-only:
+    // remaining quantity = buy.quantity − Σ LIVE consumptions, so deleting a
+    // SELL must soft-delete its consumptions (restoring the lots — the same
+    // live-row unwind as L-0011), and deleting a BUY whose lot a live sell
+    // has consumed must be refused (the sell's booked basis would dangle and
+    // the position account would go negative). Lives here, in the single
+    // write path, so no caller can bypass it.
+    const tradeRows = await tx
+      .select()
+      .from(trades)
+      .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)));
+    if (tradeRows.length > 0) {
+      const buyIds = tradeRows.filter((t) => t.kind === "buy").map((t) => t.id);
+      if (buyIds.length > 0) {
+        const [dependent] = await tx
+          .select({ id: lotConsumptions.id })
+          .from(lotConsumptions)
+          .where(
+            and(inArray(lotConsumptions.buyTradeId, buyIds), isNull(lotConsumptions.deletedAt)),
+          )
+          .limit(1);
+        if (dependent) {
+          throw new LedgerValidationError(
+            "Shares from this buy have already been sold — delete the dependent sell(s) first, " +
+              "then this buy",
+          );
+        }
+      }
+      const sellIds = tradeRows.filter((t) => t.kind === "sell").map((t) => t.id);
+      if (sellIds.length > 0) {
+        await tx
+          .update(lotConsumptions)
+          .set({ deletedAt })
+          .where(
+            and(inArray(lotConsumptions.sellTradeId, sellIds), isNull(lotConsumptions.deletedAt)),
+          );
+      }
+      await tx
+        .update(trades)
+        .set({ deletedAt })
+        .where(inArray(trades.id, tradeRows.map((t) => t.id)));
+    }
+
     await tx.update(transactions).set({ deletedAt }).where(eq(transactions.id, id));
     await tx.update(postings).set({ deletedAt }).where(eq(postings.transactionId, id));
     await tx.insert(auditLog).values({

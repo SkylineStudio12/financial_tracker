@@ -12,10 +12,12 @@ import { LedgerValidationError } from "@/lib/ledger";
 import { resolveRonRate } from "@/lib/fx";
 import { getProfile } from "@/lib/profiles";
 import {
+  estimateDividendTaxes,
   executeTrade,
   getOrCreateSecurity,
   previewSell,
   type SellPreview,
+  type TradeInput,
 } from "./service";
 
 /** Validated /p/{slug} base — the same slug↔entity guard the other actions use. */
@@ -30,13 +32,14 @@ function profileBase(profileSlug: string, entityId: string): string {
 export async function recordTradeAction(payload: {
   profileSlug: string;
   entityId: string;
-  kind: "buy" | "sell";
+  kind: "buy" | "sell" | "dividend";
   accountId: string;
   positionAccountId?: string;
   securityId: string;
   date: string;
-  quantity: string;
-  priceMinor: number;
+  /** Required for buy/sell; absent on dividend (net cash event). */
+  quantity?: string;
+  priceMinor?: number;
   totalMinor: number;
   totalRonMinor: number;
   notes?: string;
@@ -44,24 +47,66 @@ export async function recordTradeAction(payload: {
   let base: string;
   try {
     base = profileBase(payload.profileSlug, payload.entityId);
-    await executeTrade({
-      kind: payload.kind,
-      accountId: payload.accountId,
-      positionAccountId: payload.positionAccountId,
-      securityId: payload.securityId,
-      date: payload.date,
-      quantity: payload.quantity,
-      priceMinor: payload.priceMinor,
-      totalMinor: payload.totalMinor,
-      totalRonMinor: payload.totalRonMinor,
-      notes: payload.notes,
-    });
+    let input: TradeInput;
+    if (payload.kind === "dividend") {
+      input = {
+        kind: "dividend",
+        accountId: payload.accountId,
+        securityId: payload.securityId,
+        date: payload.date,
+        totalMinor: payload.totalMinor,
+        totalRonMinor: payload.totalRonMinor,
+        notes: payload.notes,
+      };
+    } else {
+      if (!payload.quantity || payload.priceMinor === undefined) {
+        throw new LedgerValidationError("A buy or sell needs the share quantity and price");
+      }
+      input = {
+        kind: payload.kind,
+        accountId: payload.accountId,
+        positionAccountId: payload.positionAccountId,
+        securityId: payload.securityId,
+        date: payload.date,
+        quantity: payload.quantity,
+        priceMinor: payload.priceMinor,
+        totalMinor: payload.totalMinor,
+        totalRonMinor: payload.totalRonMinor,
+        notes: payload.notes,
+      };
+    }
+    await executeTrade(input);
   } catch (error) {
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;
   }
   revalidatePath(`${base}/investments`);
   redirect(`${base}/transactions`);
+}
+
+/**
+ * DISPLAY-ONLY per-dividend tax indication (nothing is ever booked from
+ * this). Rate AND amount come from the active tax_rules row — never a
+ * literal, so the label percentage self-updates with the config (owner fix
+ * 1). No CASS number is returned AT ALL: CASS on dividends is an
+ * annual-threshold calculation a single dividend cannot determine — a
+ * wrong-shape number is stickier than an absence (owner fix 2), so the UI
+ * renders a note instead.
+ */
+export async function estimateDividendAction(payload: {
+  date: string;
+  dividendRonMinor: number;
+}): Promise<{ dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string }> {
+  try {
+    const estimate = await estimateDividendTaxes(payload.date, payload.dividendRonMinor);
+    return {
+      dividendTaxRonMinor: estimate.dividendTaxRonMinor,
+      dividendTaxRateBps: estimate.dividendTaxRule.rateBps,
+    };
+  } catch (error) {
+    if (error instanceof LedgerValidationError) return { error: error.message };
+    throw error;
+  }
 }
 
 export async function previewSellAction(payload: {

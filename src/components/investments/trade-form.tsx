@@ -15,6 +15,7 @@
  *   inline with the currency locked to the account's.
  */
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -29,6 +30,7 @@ import type { SellPreview } from "@/lib/investments/service";
 import {
   bnrRateHintAction,
   createSecurityAction,
+  estimateDividendAction,
   previewSellAction,
   recordTradeAction,
 } from "@/lib/investments/actions";
@@ -85,7 +87,7 @@ export function TradeForm({
     [accounts],
   );
 
-  const [mode, setMode] = useState<"buy" | "sell">("buy");
+  const [mode, setMode] = useState<"buy" | "sell" | "dividend">("buy");
   const [cashAccountId, setCashAccountId] = useState(cashAccounts[0]?.id ?? "");
   const [positionChoice, setPositionChoice] = useState("");
   const [securities, setSecurities] = useState(initialSecurities);
@@ -104,6 +106,10 @@ export function TradeForm({
     result: SellPreview | { error: string };
   } | null>(null);
   const [bnrState, setBnrState] = useState<{ key: string; rate: string | null } | null>(null);
+  const [estimateState, setEstimateState] = useState<{
+    key: string;
+    value: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string };
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreview] = useTransition();
@@ -142,7 +148,10 @@ export function TradeForm({
     () => holdings.map((h) => ({ id: h.securityId, ticker: h.ticker, name: h.name })),
     [holdings],
   );
-  const securityItems = (mode === "buy" ? buySecurities : sellSecurities).map((s) => ({
+  // Dividends offer ALL currency-matched securities (buy-like): a dividend
+  // can legitimately arrive after a full exit, so holdings-only would block
+  // a real case. The held quantity shows as a hint when there is one.
+  const securityItems = (mode === "sell" ? sellSecurities : buySecurities).map((s) => ({
     value: s.id,
     label: `${s.ticker} — ${s.name}`,
   }));
@@ -207,7 +216,31 @@ export function TradeForm({
   }, [previewKey]);
   const preview = previewState && previewState.key === previewKey ? previewState.result : null;
 
-  function switchMode(next: "buy" | "sell") {
+  // Display-only dividend tax indication — keyed like the BNR hint; rate AND
+  // amount both come from the active tax_rules row via the action (never a
+  // literal, so the label percentage self-updates with the config).
+  const estimateKey =
+    mode === "dividend" &&
+    totalRonMinor !== null &&
+    totalRonMinor > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? `${date}|${totalRonMinor}`
+      : null;
+  useEffect(() => {
+    if (!estimateKey) return;
+    const [estDate, estRon] = estimateKey.split("|");
+    let stale = false;
+    estimateDividendAction({ date: estDate, dividendRonMinor: Number(estRon) }).then((value) => {
+      if (!stale) setEstimateState({ key: estimateKey, value });
+    });
+    return () => {
+      stale = true;
+    };
+  }, [estimateKey]);
+  const estimate =
+    estimateState && estimateState.key === estimateKey ? estimateState.value : null;
+
+  function switchMode(next: "buy" | "sell" | "dividend") {
     setMode(next);
     setSecurityId("");
     setError(null);
@@ -245,11 +278,15 @@ export function TradeForm({
   const canBook =
     !!cash &&
     !!securityId &&
-    quantityValid &&
-    priceMinor !== null &&
-    priceMinor > 0 &&
     amountsOk &&
-    (mode === "buy" ? positionAccountId !== "" : preview !== null && "ok" in preview && preview.ok);
+    (mode === "dividend"
+      ? true
+      : quantityValid &&
+        priceMinor !== null &&
+        priceMinor > 0 &&
+        (mode === "buy"
+          ? positionAccountId !== ""
+          : preview !== null && "ok" in preview && preview.ok));
 
   function submit() {
     setError(null);
@@ -262,8 +299,8 @@ export function TradeForm({
         positionAccountId: mode === "buy" ? positionAccountId : undefined,
         securityId,
         date,
-        quantity: quantity.trim(),
-        priceMinor: priceMinor!,
+        quantity: mode === "dividend" ? undefined : quantity.trim(),
+        priceMinor: mode === "dividend" ? undefined : priceMinor!,
         totalMinor: totalMinor!,
         totalRonMinor: totalRonMinor!,
       });
@@ -303,6 +340,13 @@ export function TradeForm({
           onClick={() => switchMode("sell")}
         >
           Sell
+        </button>
+        <button
+          type="button"
+          className={mode === "dividend" ? toggleOnClass : toggleOffClass}
+          onClick={() => switchMode("dividend")}
+        >
+          Dividend
         </button>
       </div>
 
@@ -436,38 +480,43 @@ export function TradeForm({
             onChange={(e) => setDate(e.target.value)}
           />
         </label>
+        {mode !== "dividend" && (
+          <>
+            <label className={labelClass}>
+              Shares
+              <input
+                className={`${fieldClass} font-numeric`}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="10"
+              />
+            </label>
+            <label className={labelClass}>
+              Price / share ({currency})
+              <input
+                className={`${fieldClass} font-numeric`}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="102.50"
+              />
+            </label>
+          </>
+        )}
         <label className={labelClass}>
-          Shares
-          <input
-            className={`${fieldClass} font-numeric`}
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="10"
-          />
-        </label>
-        <label className={labelClass}>
-          Price / share ({currency})
-          <input
-            className={`${fieldClass} font-numeric`}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="102.50"
-          />
-        </label>
-        <label className={labelClass}>
-          Total ({currency})
+          {mode === "dividend" ? `Net dividend (${currency})` : `Total (${currency})`}
           <input
             className={`${fieldClass} font-numeric`}
             value={totalForeign}
             onChange={(e) => setTotalForeign(e.target.value)}
-            placeholder="1025.00"
+            placeholder={mode === "dividend" ? "12.34" : "1025.00"}
           />
         </label>
       </div>
 
       <div className="grid grid-cols-1 gap-[var(--density-field-gap)] sm:grid-cols-2">
         <label className={labelClass}>
-          Total {mode === "buy" ? "charged" : "received"} (RON) — as the broker printed it
+          {mode === "dividend" ? "Net received" : mode === "buy" ? "Total charged" : "Total received"}{" "}
+          (RON) — as the broker printed it
           <input
             className={`${fieldClass} font-numeric`}
             value={totalRon}
@@ -509,13 +558,74 @@ export function TradeForm({
         />
       )}
 
+      {mode === "dividend" && (
+        <DividendEstimatePanel estimate={estimate} held={heldOfSelected} />
+      )}
+
       {error && <p className={errorClass}>{error}</p>}
       <div>
         <Button type="submit" disabled={!canBook || pending}>
-          {pending ? "Booking…" : mode === "buy" ? "Book buy" : "Book sell"}
+          {pending
+            ? "Booking…"
+            : mode === "buy"
+              ? "Book buy"
+              : mode === "sell"
+                ? "Book sell"
+                : "Book dividend"}
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Display-only tax indication for a dividend (owner-approved treatment):
+ * dashed container (deliberately unlike the sell preview's solid panel —
+ * that one shows real about-to-be-booked figures), warning-tone ESTIMATE
+ * badge, ≈-prefixed caption-muted number (never the ledger money register),
+ * the rate rendered FROM rateBps so it self-updates with tax_rules, and NO
+ * per-dividend CASS number at all — CASS is an annual-threshold calculation
+ * a single dividend cannot determine; a wrong-shape number would anchor
+ * harder than an absence.
+ */
+function DividendEstimatePanel({
+  estimate,
+  held,
+}: {
+  estimate: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string } | null;
+  held: string | undefined;
+}) {
+  if (!estimate) {
+    return (
+      <p className="text-caption text-text-muted">
+        {held
+          ? `You hold ${displayQuantity(held)}. `
+          : ""}
+        Enter the RON amount to see the rough tax indication.
+      </p>
+    );
+  }
+  if ("error" in estimate) return <p className={errorClass}>{estimate.error}</p>;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-input border border-dashed border-border-hairline p-3">
+      <div>
+        <Badge variant="outline">
+          <span className="text-status-warning-text">ESTIMATE — nothing is booked</span>
+        </Badge>
+      </div>
+      <p className="text-caption text-text-muted">
+        Rough indication if this dividend alone were taxed: dividend tax (
+        {estimate.dividendTaxRateBps / 100}%): ≈ {formatMinor(estimate.dividendTaxRonMinor, "RON")}.
+        The rate is a seeded placeholder pending the accountant.
+      </p>
+      <p className="text-caption text-text-muted">
+        CASS on dividends is calculated ANNUALLY against a threshold — a single dividend
+        cannot determine it, so no per-dividend figure is shown; the real calculation
+        belongs to the Phase-5 yearly report. Gross amounts and withholding are also a
+        Phase-5/accountant question — enter the NET amount that landed. Nothing here is
+        written to the ledger.
+      </p>
+    </div>
   );
 }
 

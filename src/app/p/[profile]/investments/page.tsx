@@ -33,9 +33,10 @@ export default async function InvestmentsPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <h1 className="text-title text-text-primary">Record a trade</h1>
       <p className="text-secondary text-text-muted">
-        Enter the trade as Revolut printed it — the {`security's`} total and the RON
-        total; the rate is derived, never typed. A sell previews the exact FIFO
-        lots it will consume before you book it.
+        Enter the trade or dividend as Revolut printed it — the {`security's`} amount
+        and the RON amount; the rate is derived, never typed. A sell previews the
+        exact FIFO lots it will consume before you book it; a dividend shows a
+        display-only tax indication that books nothing.
       </p>
       <TradeForm
         profileSlug={profile.slug}

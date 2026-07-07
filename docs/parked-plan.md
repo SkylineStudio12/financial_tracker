@@ -38,6 +38,14 @@ Revisit an item only when its phase arrives.
 ### Vercel cron
 - Free tier has limited cron invocations. Design FX sync and price snapshots as
   one daily batch job, not frequent polling.
+- BUILT (Phase 4 Stage 4): `POST /api/sync/daily` is that one batch job (BNR
+  latest rates + price snapshots for held securities, pluggable source seam,
+  idempotent upserts). Wire Vercel cron to it here.
+- SYNC_TOKEN IS REQUIRED BEFORE ANY PUBLIC DEPLOYMENT: the endpoint's header
+  guard (`x-sync-token`) only activates when the SYNC_TOKEN env var is set —
+  unset in local dev, so a public deploy without it exposes an unauthenticated
+  write endpoint. Set the env var and configure the cron job's header at
+  deploy; do not ship without it.
 
 ---
 

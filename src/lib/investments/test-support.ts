@@ -33,7 +33,7 @@ export async function setupTradeTestEntity(): Promise<TradeTestEnv> {
     .insert(accounts)
     .values([
       { entityId: entity.id, name: "Test brokerage", type: "brokerage", currency: "USD" },
-      { entityId: entity.id, name: "Test positions", type: "brokerage", currency: "USD" },
+      { entityId: entity.id, name: "Test positions", type: "position", currency: "USD" },
       { entityId: entity.id, name: "Test equity", type: "equity", currency: "RON" },
     ])
     .returning();

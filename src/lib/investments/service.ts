@@ -382,19 +382,15 @@ async function executeBuy(input: BuySellInput, cash: Account, rate: string | nul
     throw new LedgerValidationError("A buy needs the paired position account");
   }
   const position = await loadAccount(input.positionAccountId);
-  // TRANSITIONAL DUAL-ACCEPT (Stage 4 enum two-step): position accounts are
-  // being retyped brokerage → position; both types are valid here until the
-  // retype lands, so NO committed state rejects a legitimate buy. Tightens
-  // to position-only once the live accounts are retyped.
   if (
     position.id === cash.id ||
-    (position.type !== "brokerage" && position.type !== "position") ||
+    position.type !== "position" ||
     position.entityId !== cash.entityId ||
     position.currency !== cash.currency ||
     position.owner !== cash.owner
   ) {
     throw new LedgerValidationError(
-      "The position account must be a distinct position account with the same entity, currency, and owner as the cash account",
+      "The paired account must be a `position` account with the same entity, currency, and owner as the cash account",
     );
   }
   const security = await loadSecurity(input.securityId, cash.currency);
@@ -721,7 +717,9 @@ export async function listBrokerageAccounts(entityId: string, owner?: "greg" | "
       ),
     )
     .orderBy(asc(accounts.name));
-  return owner ? rows.filter((r) => r.owner === owner) : rows;
+  // The WHERE clause restricts to these two types; narrow what tsc can't.
+  const narrowed = rows.map((r) => ({ ...r, type: r.type as "brokerage" | "position" }));
+  return owner ? narrowed.filter((r) => r.owner === owner) : narrowed;
 }
 
 /** All live securities (the buy picker filters by account currency). */

@@ -46,6 +46,7 @@ import {
 interface BrokerageAccount {
   id: string;
   name: string;
+  type: "brokerage" | "position";
   currency: "RON" | "EUR" | "USD";
   owner: "greg" | "andra" | null;
 }
@@ -79,13 +80,9 @@ export function TradeForm({
   holdingsByAccount: Record<string, Holding[]>;
   today: string;
 }) {
-  // Cash pickers exclude position accounts by the naming convention — a
-  // display-level filter only (both are type `brokerage`; see the parked
-  // `position` enum note). The service validates pairing structurally.
-  const cashAccounts = useMemo(
-    () => accounts.filter((a) => !/positions/i.test(a.name)),
-    [accounts],
-  );
+  // Typed at last (Stage 4 enum): cash accounts and position accounts are
+  // distinguished by account_type, not by name.
+  const cashAccounts = useMemo(() => accounts.filter((a) => a.type === "brokerage"), [accounts]);
 
   const [mode, setMode] = useState<"buy" | "sell" | "dividend">("buy");
   const [cashAccountId, setCashAccountId] = useState(cashAccounts[0]?.id ?? "");
@@ -120,7 +117,7 @@ export function TradeForm({
       accounts.filter(
         (a) =>
           cash &&
-          a.id !== cash.id &&
+          a.type === "position" &&
           a.currency === cash.currency &&
           a.owner === cash.owner,
       ),

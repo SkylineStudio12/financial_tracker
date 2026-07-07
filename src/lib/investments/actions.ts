@@ -19,6 +19,7 @@ import {
   type SellPreview,
   type TradeInput,
 } from "./service";
+import { upsertPriceSnapshot } from "./prices";
 
 /** Validated /p/{slug} base — the same slug↔entity guard the other actions use. */
 function profileBase(profileSlug: string, entityId: string): string {
@@ -133,6 +134,28 @@ export async function createSecurityAction(payload: {
 > {
   try {
     return await getOrCreateSecurity(payload);
+  } catch (error) {
+    if (error instanceof LedgerValidationError) return { error: error.message };
+    throw error;
+  }
+}
+
+export async function upsertPriceSnapshotAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  securityId: string;
+  date: string;
+  priceMinor: number;
+}): Promise<{ ok: true } | { error: string }> {
+  try {
+    const base = profileBase(payload.profileSlug, payload.entityId);
+    await upsertPriceSnapshot({
+      securityId: payload.securityId,
+      date: payload.date,
+      priceMinor: payload.priceMinor,
+    });
+    revalidatePath(`${base}/investments`);
+    return { ok: true };
   } catch (error) {
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;

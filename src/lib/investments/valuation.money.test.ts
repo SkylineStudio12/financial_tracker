@@ -9,7 +9,7 @@
  */
 import "dotenv/config";
 import assert from "node:assert/strict";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { priceSnapshots, securities } from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";

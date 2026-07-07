@@ -127,6 +127,9 @@ the key; do not assume a specific composite replacement.
 against the real fixture in Stage 2.
 
 ### L-0011 · 2026-07-07 · db · ratified
+*(Deliberately exceeds the rule-4 length cap — owner call: the
+migration-safety corollary is owner-worded and load-bearing, kept whole
+rather than compressed.)*
 **Lesson:** The `external_ref` partial unique index was created with only
 `WHERE external_ref IS NOT NULL`. On a soft-deleted table that permanently
 blocks legitimate re-creation: a soft-deleted imported posting keeps its ref

@@ -15,7 +15,7 @@ import {
   bookImportRowAction,
   skipImportRowAction,
 } from "@/lib/import/actions";
-import { bookingNeedsCategory } from "@/lib/import/booking";
+import { bookingNeedsCategory } from "@/lib/import/booking-rules";
 import { formatMinor } from "@/lib/format";
 import { errorClass } from "@/components/forms/ui";
 

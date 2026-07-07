@@ -25,19 +25,10 @@ export interface BookingContext {
   statementNumber: string;
 }
 
-/** Kinds whose booking REQUIRES a category on the equity leg. */
-const CATEGORY_REQUIRED = new Set([
-  "revenue",
-  "professional_services",
-  "subscription",
-  "card_purchase",
-  "bank_fee",
-  "unknown",
-]);
-
-export function bookingNeedsCategory(kind: string): boolean {
-  return CATEGORY_REQUIRED.has(kind);
-}
+// Category-requirement rules live in booking-rules.ts (a dependency-free
+// module the client inbox can import without pulling this file's DB-reaching
+// graph into the browser bundle). Re-exported here for server-side callers.
+export { bookingNeedsCategory } from "./booking-rules";
 
 function fxNote(classified: ClassifiedRow): string | null {
   const fx = classified.row.fx;

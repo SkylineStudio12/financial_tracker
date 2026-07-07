@@ -317,8 +317,32 @@ function assertExternalRefsPreserved(
   }
 }
 
+/**
+ * TRADE EDIT GUARD (Phase 4 Stage 3, L-0012 CORRUPTION check): a trade's
+ * postings, trades row, and lot consumptions are ONE structure — the generic
+ * edit path would hard-replace the postings while the trade rows stand,
+ * orphaning booked basis. Editing a trade is therefore refused outright;
+ * the correction path is delete (which cascades + guards, Stage 2) and
+ * re-enter.
+ */
+async function assertNotTradeTransaction(id: string): Promise<void> {
+  const [trade] = await db
+    .select({ id: trades.id })
+    .from(trades)
+    .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)))
+    .limit(1);
+  if (trade) {
+    throw new LedgerValidationError(
+      "This transaction records a trade — its postings, trade row, and lot " +
+        "consumptions are one structure. Delete the trade and re-enter it " +
+        "instead of editing.",
+    );
+  }
+}
+
 export async function updateTransaction(id: string, input: TransactionInput): Promise<void> {
   const prior = await snapshotTransaction(id);
+  await assertNotTradeTransaction(id);
   assertExternalRefsPreserved(prior.postings, input.postings);
   const prepared = await validateAndPrepare(input);
   await db.transaction(async (tx) => {

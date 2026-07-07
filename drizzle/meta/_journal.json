@@ -36,6 +36,13 @@
       "when": 1783432933782,
       "tag": "0004_opposite_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783452519817,
+      "tag": "0005_parallel_daredevil",
+      "breakpoints": true
     }
   ]
 }

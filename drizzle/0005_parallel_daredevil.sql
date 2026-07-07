@@ -1,0 +1,14 @@
+-- Add the `position` account type (Phase 4 Stage 4): holdings-at-cost
+-- accounts paired to brokerage cash accounts become TYPED instead of
+-- name-matched, so the holdings view can find them even when empty.
+--
+-- ROLLBACK IS ONE-WAY (L-0011 class): Postgres cannot drop an enum value.
+-- Once rows use 'position', there is no down migration — treat any attempt
+-- to narrow this enum as unsafe, not routine.
+--
+-- SEQUENCING (hard Postgres constraint): an added enum value cannot be USED
+-- in the transaction that adds it. This migration therefore ONLY adds the
+-- value; retyping the live position accounts happens as a separate step
+-- (seed + mirrored data change), after this migration is applied and
+-- committed, and only after the write-path validation accepts both types.
+ALTER TYPE "public"."account_type" ADD VALUE 'position' BEFORE 'tax_liability';

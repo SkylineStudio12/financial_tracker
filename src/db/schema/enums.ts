@@ -16,6 +16,12 @@ export const accountType = pgEnum("account_type", [
   "bank",
   "cash",
   "brokerage",
+  // Holdings at cost, paired to a brokerage cash account (Phase 4 Stage 4).
+  // Added so position accounts are TYPED, not name-matched — the holdings
+  // view must find them even when empty. NOTE (L-0011 class): Postgres
+  // cannot drop an enum value — this widening is one-way; the down path is
+  // unsafe by design.
+  "position",
   "tax_liability",
   "equity",
 ]);

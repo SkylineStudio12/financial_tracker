@@ -11,6 +11,12 @@ import {
 } from "@/lib/ledger/dashboard";
 import { getProfile } from "@/lib/profiles";
 import { quarterOf, yearOf } from "@/lib/tax/rules";
+import { valueHoldings, type ValuationResult } from "@/lib/investments/valuation";
+import {
+  AllocationCard,
+  InvestmentSummaryCard,
+  OwnerCard,
+} from "@/components/investments/dashboard-cards";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +55,19 @@ export default async function DashboardPage({
   const today = new Date().toISOString().slice(0, 10);
   const currentYear = yearOf(today);
   const currentQuarter = quarterOf(today);
+
+  // Investment cards (Stage 5): presentation over the proven valuation
+  // service — one call, cards render its result verbatim. Failure degrades
+  // to an honest error line, never a silent zero.
+  let valuation: ValuationResult | null = null;
+  let valuationError: string | null = null;
+  if (profile.investments) {
+    try {
+      valuation = await valueHoldings({ entityId, owner, date: today });
+    } catch (error) {
+      valuationError = error instanceof Error ? error.message : "Valuation failed";
+    }
+  }
   const currentQuarterGroups = accrualGroups.filter(
     (g) => g.year === currentYear && g.quarter === currentQuarter,
   );
@@ -103,6 +122,26 @@ export default async function DashboardPage({
           </table>
         </div>
       </section>
+
+      {profile.investments && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-micro uppercase text-text-muted">Investments</h2>
+          {valuation ? (
+            <div className="grid grid-cols-1 gap-[var(--density-section-gap)] sm:grid-cols-2">
+              <InvestmentSummaryCard
+                result={valuation}
+                investmentsHref={`/p/${profile.slug}/investments`}
+              />
+              <AllocationCard result={valuation} />
+              {profile.slug === "household" && <OwnerCard result={valuation} />}
+            </div>
+          ) : (
+            <p className="text-secondary text-status-warning-text">
+              Holdings could not be valued: {valuationError}
+            </p>
+          )}
+        </section>
+      )}
 
       {netCash && (
         <section className="flex flex-col gap-2">

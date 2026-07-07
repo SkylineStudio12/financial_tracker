@@ -20,6 +20,17 @@ import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  AllocationCard,
+  InvestmentSummaryCard,
+  OwnerCard,
+} from "@/components/investments/dashboard-cards";
+import {
+  ALL_UNPRICED,
+  EMPTY,
+  POPULATED_WITH_STALE,
+  SPARSE_ONE_UNPRICED,
+} from "./investment-card-fixtures";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -775,6 +786,54 @@ export function Gallery() {
                     ))}
                   </TableBody>
                 </Table>
+              </Demo>
+            </div>
+          </section>
+
+          {/* -------------------------------------- Investment cards */}
+          {/* Fixture-driven (Stage 5): the permanent visual + regression
+              reference for the three honesty rules — cards never recompute,
+              unpriced is named+counted, stale carries its date, absence is
+              never 0.00 RON. */}
+          <section className="flex flex-col gap-4">
+            <SectionTitle>Investment cards — honesty states (fixtures)</SectionTitle>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Demo label="EMPTY (day one) — invite, no zero; allocation + owner render nothing">
+                <div className="flex flex-col gap-3">
+                  <InvestmentSummaryCard result={EMPTY} investmentsHref="/p/greg/investments" />
+                  <AllocationCard result={EMPTY} />
+                  <OwnerCard result={EMPTY} />
+                </div>
+              </Demo>
+              <Demo label="SPARSE — 2 holdings, 1 unpriced: 100%-of-priced bar + named exclusion">
+                <div className="flex flex-col gap-3">
+                  <InvestmentSummaryCard
+                    result={SPARSE_ONE_UNPRICED}
+                    investmentsHref="/p/greg/investments"
+                  />
+                  <AllocationCard result={SPARSE_ONE_UNPRICED} />
+                  <OwnerCard result={SPARSE_ONE_UNPRICED} />
+                </div>
+              </Demo>
+              <Demo label="POPULATED with a stale price — oldest stale date on the summary, per-row as-of">
+                <div className="flex flex-col gap-3">
+                  <InvestmentSummaryCard
+                    result={POPULATED_WITH_STALE}
+                    investmentsHref="/p/household/investments"
+                  />
+                  <AllocationCard result={POPULATED_WITH_STALE} />
+                  <OwnerCard result={POPULATED_WITH_STALE} />
+                </div>
+              </Demo>
+              <Demo label="ALL UNPRICED — real basis shown, never a clean 0.00 total">
+                <div className="flex flex-col gap-3">
+                  <InvestmentSummaryCard
+                    result={ALL_UNPRICED}
+                    investmentsHref="/p/household/investments"
+                  />
+                  <AllocationCard result={ALL_UNPRICED} />
+                  <OwnerCard result={ALL_UNPRICED} />
+                </div>
               </Demo>
             </div>
           </section>

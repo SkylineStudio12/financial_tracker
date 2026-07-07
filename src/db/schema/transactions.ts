@@ -77,10 +77,13 @@ export const postings = pgTable(
     index("postings_account_id_idx").on(table.accountId),
     index("postings_category_id_idx").on(table.categoryId),
     // Import dedup: the same bank reference may exist at most once per
-    // account. Partial so manual postings (NULL ref) are exempt.
+    // account AMONG LIVE POSTINGS. Partial so manual postings (NULL ref) are
+    // exempt, and scoped to deleted_at IS NULL so soft-deleting a mistaken
+    // import frees the ref for a clean re-import (L-0011); without that
+    // predicate a soft-deleted row blocks re-creation forever.
     uniqueIndex("postings_account_external_ref_uidx")
       .on(table.accountId, table.externalRef)
-      .where(sql`${table.externalRef} IS NOT NULL`),
+      .where(sql`${table.externalRef} IS NOT NULL AND ${table.deletedAt} IS NULL`),
   ],
 );
 

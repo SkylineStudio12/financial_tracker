@@ -46,3 +46,15 @@ export const taxRuleType = pgEnum("tax_rule_type", [
 ]);
 
 export const auditAction = pgEnum("audit_action", ["insert", "update", "delete"]);
+
+/**
+ * Review-inbox lifecycle of one staged statement row. `duplicate` means the
+ * row's external_ref already exists on a live posting (seen at batch
+ * creation or when a booking attempt hit the unique index).
+ */
+export const importRowStatus = pgEnum("import_row_status", [
+  "pending",
+  "booked",
+  "skipped",
+  "duplicate",
+]);

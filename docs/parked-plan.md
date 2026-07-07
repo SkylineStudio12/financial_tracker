@@ -129,6 +129,36 @@ Schema/behaviour requirements for the importer (verify before building):
   date + masked card number; fee rows have NOTHING content-based. Stage 4 must
   design this from the inventory, per L-0010 (do not assume a specific composite).
 
+Known properties surfaced by the FIRST REAL IMPORT (batch f9929a4a, Skyline,
+2026-07-07):
+- REAL DATA NOW IN DEV DB: the dev database holds a real booked import batch
+  (f9929a4a, Skyline, imported 2026-07-07). The "reset via seed script, not
+  destructive delete" rule now has real financial records in scope — a reset
+  would destroy them. Any future dev reset MUST preserve or consciously account
+  for real booked batches; reset is no longer a free action.
+- rawTextHash IS GLOBAL (not entity-scoped) — a standing design property of the
+  batch guard since Stage 4, noted here for findability: the same statement
+  text cannot be imported into two different entities. Acceptable — a statement
+  belongs to one account, and the row-level partial unique index (not the hash)
+  is the load-bearing dedup.
+- Practical consequence: the planned end-of-testing re-import of the same CSV
+  will be rejected by the global rawTextHash guard unless batch f9929a4a is
+  cleared first — and clearing a real booked batch is the dev-reset caution
+  above. Plan the reset deliberately; it is not a single button press.
+- DELETE-OF-BOOKED-IMPORT STALE STATUS (deferred unit, found in real use):
+  softDeleteTransaction does not touch import_rows, so soft-deleting a booked
+  imported transaction leaves its import row still showing "booked" linked to a
+  dead transaction. The LEDGER is correct (deleted tx excluded everywhere) —
+  this is a staging-layer status-staleness gap, the delete-side mirror of the
+  Stage-4 edit guard (which covered edit but not delete). Deferred to its own
+  unit. POLICY DECISION to make first, before any code: on delete of a booked
+  import, should the import row revert to `pending` (re-bookable) or show a
+  distinct "booked → since deleted" status (preserves the fact it was once
+  booked)? Decide the policy, then build. Do NOT hotfix the write/delete path.
+  The stale row in batch f9929a4a (row 5, Grigore Filimon owner transfer,
+  2,695.00 RON) was a deliberate delete-path test on 2026-07-07 — not an error
+  or a lost transfer. It will return on the planned end-of-testing re-import.
+
 ---
 
 ## LLM features (Groq) — Phase 3 or later

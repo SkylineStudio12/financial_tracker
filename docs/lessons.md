@@ -36,6 +36,7 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0009 | tooling | Token value changes require `rm -rf .next` — HMR won't pick them up |
 | L-0010 | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
 | L-0011 | db | Partial unique index on a soft-deleted table must scope to live rows |
+| L-0012 | ledger | Generic ledger mutations must account for dependent structures |
 
 ---
 
@@ -144,3 +145,26 @@ no longer be rebuilt, so a down-migration that widens the predicate can fail on
 real data — treat the widening rollback as unsafe, not routine.
 **Origin:** Phase 3 Stage 4 — found while designing re-import safety; fixed in
 migration 0003 with a delete-then-reimport regression test.
+
+### L-0012 · 2026-07-07 · ledger · ratified
+*(Deliberately exceeds the rule-4 length cap — owner call: the two failure
+modes are owner-worded and load-bearing, kept whole rather than compressed.)*
+**Lesson:** Generic ledger mutations (edit, delete) know nothing about the
+structures other subsystems hang off transactions and postings — and each new
+subsystem silently adds some. Three instances: form edits stripped import
+external_refs (Stage-4 edit guard), soft-deleting a booked import left its
+inbox row falsely "booked" (parked, policy pending), soft-deleting trades
+required consumption cascade + a consumed-buy delete guard.
+**Apply:** When a unit attaches dependent rows or semantics to transactions or
+postings, that SAME unit must decide what every generic mutation path does to
+them. Two failure modes to check for, because they need different fixes:
+CORRUPTION — the mutation breaks integrity (strips a ref, orphans basis, drives
+a balance negative) → add a guard or cascade in the single write service.
+STALENESS — the mutation succeeds but a dependent view now misreports state (an
+inbox row still says "booked" after its transaction is deleted) → propagate the
+status or reconcile, or explicitly park the policy. Never leave the generic path
+free to corrupt or strand the dependent structure silently. At review, ask: "what
+happens when the owner edits or deletes this from the normal UI — does it corrupt,
+or does it go stale?"
+**Origin:** Phase 3 Stage 4 (edit guard); import delete stale-status (parked
+2026-07-07); Phase 4 Stage 2 (lot-consumption delete integrity).

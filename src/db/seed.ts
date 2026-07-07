@@ -58,6 +58,11 @@ async function main() {
       { entityId: household.id, name: "Greg — Revolut brokerage", type: "brokerage", currency: "USD", owner: "greg" as const },
       { entityId: household.id, name: "Andra — bank", type: "bank", currency: "RON", owner: "andra" as const },
       { entityId: household.id, name: "Andra — savings", type: "bank", currency: "RON", owner: "andra" as const },
+      // Two SINGLE-currency brokerage accounts (owner decision, Phase 4
+      // Stage 1) — not one multi-currency account, consistent with the
+      // single-currency + RON-mirror posting model.
+      { entityId: household.id, name: "Andra — Revolut brokerage USD", type: "brokerage", currency: "USD", owner: "andra" as const },
+      { entityId: household.id, name: "Andra — Revolut brokerage EUR", type: "brokerage", currency: "EUR", owner: "andra" as const },
       { entityId: household.id, name: "Opening equity", type: "equity", currency: "RON" },
       ...[companyA, companyB].flatMap((company) => [
         { entityId: company.id, name: "Company bank", type: "bank" as const, currency: "RON" as const },

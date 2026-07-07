@@ -18,6 +18,7 @@ import {
   ChevronsUpDownIcon,
   CoinsIcon,
   HouseIcon,
+  ImportIcon,
   LayoutDashboardIcon,
   ReceiptIcon,
   UserRoundIcon,
@@ -110,6 +111,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
   const flows = [
     { href: `${base}/flows/salary`, label: "New salary", icon: BanknoteIcon },
     { href: `${base}/flows/dividend`, label: "New dividend", icon: CoinsIcon },
+    { href: `${base}/imports`, label: "Import statement", icon: ImportIcon },
   ];
 
   return (

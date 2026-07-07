@@ -32,6 +32,24 @@ export function displayQuantity(quantity: string | bigint): string {
 }
 
 /**
+ * Market value of a holding: price × quantity with a SINGLE round-half-up
+ * at the end (BigInt, positive domain) — the same one-rounding-per-figure
+ * family as the cumulative-floor basis allocation and convertMinorToRon.
+ */
+export function valueAtPrice(priceMinor: number, quantityScaled: bigint): number {
+  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0) {
+    throw new LedgerValidationError(`Invalid price: ${priceMinor}`);
+  }
+  const product = BigInt(priceMinor) * quantityScaled;
+  const rounded = (product + QTY_SCALE / 2n) / QTY_SCALE;
+  const result = Number(rounded);
+  if (!Number.isSafeInteger(result)) {
+    throw new LedgerValidationError("Holding value out of safe integer range");
+  }
+  return result;
+}
+
+/**
  * The broker's applied rate, derived from the entered pair at 6 dp
  * (round half up) — the user never types a rate (Stage-2 rate rule).
  */

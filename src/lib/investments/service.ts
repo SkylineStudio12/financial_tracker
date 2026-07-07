@@ -209,8 +209,10 @@ interface LotState {
  * Live FIFO lots for (cash account, security): buy trades ordered by
  * (date, created_at, id) — the deterministic tiebreaker pick — each with its
  * live consumed state and its position leg (RON basis source).
+ * Exported for the valuation module: open quantity/basis derive from the
+ * SAME lot machinery that books — never a parallel computation.
  */
-async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Promise<LotState[]> {
+export async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Promise<LotState[]> {
   // The trade date lives on the TRANSACTION (trades carry no date of their
   // own); (date, created_at, id) is the deterministic FIFO tiebreaker pick.
   const buyRows = (

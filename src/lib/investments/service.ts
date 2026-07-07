@@ -382,15 +382,19 @@ async function executeBuy(input: BuySellInput, cash: Account, rate: string | nul
     throw new LedgerValidationError("A buy needs the paired position account");
   }
   const position = await loadAccount(input.positionAccountId);
+  // TRANSITIONAL DUAL-ACCEPT (Stage 4 enum two-step): position accounts are
+  // being retyped brokerage → position; both types are valid here until the
+  // retype lands, so NO committed state rejects a legitimate buy. Tightens
+  // to position-only once the live accounts are retyped.
   if (
     position.id === cash.id ||
-    position.type !== "brokerage" ||
+    (position.type !== "brokerage" && position.type !== "position") ||
     position.entityId !== cash.entityId ||
     position.currency !== cash.currency ||
     position.owner !== cash.owner
   ) {
     throw new LedgerValidationError(
-      "The position account must be a distinct brokerage account with the same entity, currency, and owner as the cash account",
+      "The position account must be a distinct position account with the same entity, currency, and owner as the cash account",
     );
   }
   const security = await loadSecurity(input.securityId, cash.currency);
@@ -695,12 +699,15 @@ export async function previewSell(input: {
   };
 }
 
-/** Brokerage accounts of an entity (owner-filtered on personal profiles). */
+/** Brokerage cash + position accounts of an entity (owner-filtered on
+ * personal profiles). Returns the type so callers filter by it — includes
+ * BOTH `brokerage` and `position` through the enum transition. */
 export async function listBrokerageAccounts(entityId: string, owner?: "greg" | "andra") {
   const rows = await db
     .select({
       id: accounts.id,
       name: accounts.name,
+      type: accounts.type,
       currency: accounts.currency,
       owner: accounts.owner,
     })
@@ -708,7 +715,7 @@ export async function listBrokerageAccounts(entityId: string, owner?: "greg" | "
     .where(
       and(
         eq(accounts.entityId, entityId),
-        eq(accounts.type, "brokerage"),
+        inArray(accounts.type, ["brokerage", "position"]),
         eq(accounts.isActive, true),
         isNull(accounts.deletedAt),
       ),

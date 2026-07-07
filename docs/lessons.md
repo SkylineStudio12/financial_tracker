@@ -35,6 +35,7 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0008 | verification | Synthetic pointer events need `pointerType: "mouse"` for Base UI |
 | L-0009 | tooling | Token value changes require `rm -rf .next` — HMR won't pick them up |
 | L-0010 | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
+| L-0011 | db | Partial unique index on a soft-deleted table must scope to live rows |
 
 ---
 
@@ -124,3 +125,19 @@ diagnose whether a ref actually repeats or the parser misread it before changing
 the key; do not assume a specific composite replacement.
 **Origin:** Phase 3 — long-ref dedup settled in Stage 1, coverage gap found
 against the real fixture in Stage 2.
+
+### L-0011 · 2026-07-07 · db · ratified
+**Lesson:** The `external_ref` partial unique index was created with only
+`WHERE external_ref IS NOT NULL`. On a soft-deleted table that permanently
+blocks legitimate re-creation: a soft-deleted imported posting keeps its ref
+reserved, so re-importing that same statement row can never book again.
+**Apply:** A partial unique index on a soft-deleted table MUST include
+`AND deleted_at IS NULL` in its predicate so the constraint binds only live
+rows. When adding any unique index, ask "does a soft-deleted row here need to
+free this key for re-creation?" — if yes, scope the predicate to live rows.
+Migration-safety corollary: this scoping is effectively one-way. Once live and
+deleted rows share a key under the scoped predicate, the un-scoped version can
+no longer be rebuilt, so a down-migration that widens the predicate can fail on
+real data — treat the widening rollback as unsafe, not routine.
+**Origin:** Phase 3 Stage 4 — found while designing re-import safety; fixed in
+migration 0003 with a delete-then-reimport regression test.

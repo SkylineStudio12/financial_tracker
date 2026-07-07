@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -50,6 +51,19 @@ export const trades = pgTable(
     quantity: numeric("quantity", { precision: 20, scale: 8 }).notNull(),
     price: moneyMinor("price").notNull(),
     total: moneyMinor("total").notNull(),
+    /**
+     * The broker's ACTUALLY-APPLIED conversion rate to RON for non-RON
+     * trades (Phase 4 decision: structured, not notes-only like the bank
+     * importer's printed FX facts). Same shape as fx_rates.rate_to_ron.
+     *
+     * SINGLE SOURCE OF TRUTH RULE: this rate is the INPUT and the postings'
+     * amount_ron is the stored OUTPUT — the write service must derive the
+     * trade's RON legs from this rate (via the explicit-amountRon override,
+     * the transfer-mirror pattern), never store two independently-sourced
+     * values. NULL only where no conversion happened (RON-denominated
+     * security); enforcement is service logic, not a DB constraint.
+     */
+    fxRateToRon: numeric("fx_rate_to_ron", { precision: 18, scale: 6 }),
     ...timestamps,
     ...softDelete,
   },
@@ -57,6 +71,61 @@ export const trades = pgTable(
     index("trades_account_id_idx").on(table.accountId),
     index("trades_security_id_idx").on(table.securityId),
     index("trades_transaction_id_idx").on(table.transactionId),
+  ],
+);
+
+/**
+ * FIFO lot tracking (Phase 4 decision: FIFO cost basis, but lots STORED so
+ * specific-lot identification stays possible later without a migration).
+ *
+ * A LOT IS A BUY TRADE — no separate lots table. Manual entry only in Phase
+ * 4 (no transfers-in, no splits, opening positions enter as ordinary buy
+ * trades), so every share a sell can consume originated in exactly one buy
+ * row, and a lots table would duplicate trades 1:1 for no gain.
+ *
+ * Each row records one sell consuming part of one buy lot. Everything is
+ * IMMUTABLE-BY-APPEND: a lot's remaining quantity is DERIVED
+ * (buy.quantity − Σ live consumptions of that buy), never a mutated column —
+ * so soft-deleting a mistaken sell restores its lots automatically (the
+ * same live-row scoping logic as L-0011), and history stays auditable.
+ *
+ * FIFO is WRITE-SERVICE POLICY (consume live lots in buy-date order), not a
+ * schema property: specific-lot later = same table, different lot selection,
+ * zero migration. Over-consumption (Σ consumed > lot quantity among live
+ * rows) is application-enforced by the service, like zero-sum.
+ *
+ * cost_basis_minor is the consumed slice of the buy lot's cost in the
+ * security's currency; cost_basis_ron_minor is that slice's RON value AT
+ * BUY TIME (from the buy trade's postings/rate) — stored at write time so
+ * realized RON gain (sell proceeds in RON − this) never re-derives
+ * historical rates, exactly the amount_ron philosophy. Whether fees
+ * capitalize into basis is a write-path decision (Stage 2), not encoded here.
+ */
+export const lotConsumptions = pgTable(
+  "lot_consumptions",
+  {
+    id,
+    sellTradeId: uuid("sell_trade_id")
+      .notNull()
+      .references(() => trades.id),
+    buyTradeId: uuid("buy_trade_id")
+      .notNull()
+      .references(() => trades.id),
+    quantity: numeric("quantity", { precision: 20, scale: 8 }).notNull(),
+    costBasisMinor: moneyMinor("cost_basis_minor").notNull(),
+    costBasisRonMinor: moneyMinor("cost_basis_ron_minor").notNull(),
+    ...timestamps,
+    ...softDelete,
+  },
+  (table) => [
+    index("lot_consumptions_sell_trade_id_idx").on(table.sellTradeId),
+    index("lot_consumptions_buy_trade_id_idx").on(table.buyTradeId),
+    // One sell consumes a given buy lot at most once AMONG LIVE ROWS —
+    // scoped to deleted_at IS NULL per L-0011 (soft-deleted table: the
+    // constraint must bind only live rows or an unwound sell blocks re-entry).
+    uniqueIndex("lot_consumptions_sell_buy_uidx")
+      .on(table.sellTradeId, table.buyTradeId)
+      .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 

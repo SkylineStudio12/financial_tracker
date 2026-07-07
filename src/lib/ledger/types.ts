@@ -16,6 +16,12 @@ export interface PostingInput {
   amountRon?: number;
   categoryId?: string | null;
   counterparty?: string | null;
+  /**
+   * Stable bank reference for this account movement (statement-line dedup
+   * key). Import-only: manual forms and guided flows never set it, so their
+   * postings write NULL and stay exempt from the per-account unique index.
+   */
+  externalRef?: string | null;
 }
 
 /** Links a posting (by its index in `postings`) to the tax rule applied. */
@@ -33,7 +39,6 @@ export interface TransactionInput {
   description: string;
   kind: TransactionKind;
   notes?: string | null;
-  externalRef?: string | null;
   tagIds?: string[];
   postings: PostingInput[];
   /** Tax accrual links for postings on tax_liability accounts. */

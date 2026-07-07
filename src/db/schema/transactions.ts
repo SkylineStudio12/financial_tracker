@@ -1,9 +1,11 @@
+import { sql } from "drizzle-orm";
 import {
   date,
   index,
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { currency, transactionKind } from "./enums";
@@ -22,9 +24,6 @@ export const transactions = pgTable(
     description: text("description").notNull(),
     kind: transactionKind("kind").notNull().default("standard"),
     notes: text("notes"),
-    /** Stable reference from an external source (bank/broker import), for
-     * future import deduplication. */
-    externalRef: text("external_ref"),
     ...timestamps,
     ...softDelete,
   },
@@ -60,6 +59,16 @@ export const postings = pgTable(
     amountRon: moneyMinor("amount_ron").notNull(),
     categoryId: uuid("category_id").references(() => categories.id),
     counterparty: text("counterparty"),
+    /** Structured counterparty IBAN from bank imports; free-text
+     * counterparty (name) stays separate. NULL for card/POS rows. */
+    counterpartyIban: text("counterparty_iban"),
+    /**
+     * Stable per-statement-line reference from a bank import (ING long
+     * reference), the dedup key for re-imported statements. NULL on all
+     * manual/flow writes. A statement line is one account movement, which
+     * is why this lives on the posting, not the transaction.
+     */
+    externalRef: text("external_ref"),
     ...timestamps,
     ...softDelete,
   },
@@ -67,6 +76,11 @@ export const postings = pgTable(
     index("postings_transaction_id_idx").on(table.transactionId),
     index("postings_account_id_idx").on(table.accountId),
     index("postings_category_id_idx").on(table.categoryId),
+    // Import dedup: the same bank reference may exist at most once per
+    // account. Partial so manual postings (NULL ref) are exempt.
+    uniqueIndex("postings_account_external_ref_uidx")
+      .on(table.accountId, table.externalRef)
+      .where(sql`${table.externalRef} IS NOT NULL`),
   ],
 );
 

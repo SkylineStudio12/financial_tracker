@@ -1,4 +1,5 @@
 export {
+  assertBatchExternalRefsUnique,
   createTransaction,
   updateTransaction,
   softDeleteTransaction,

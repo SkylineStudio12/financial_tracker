@@ -210,6 +210,7 @@ async function insertTransactionRows(
         amountRon: p.amountRon,
         categoryId: p.categoryId ?? null,
         counterparty: p.counterparty ?? null,
+        counterpartyIban: p.counterpartyIban ?? null,
         externalRef: p.externalRef ?? null,
       })),
     )
@@ -263,8 +264,39 @@ export async function createTransaction(input: TransactionInput): Promise<string
   });
 }
 
+/**
+ * IMPORTED-TRANSACTION EDIT GUARD (Stage 4 decision, docs/parked-plan.md):
+ * updateTransaction hard-replaces postings, and the manual forms never carry
+ * external_ref — so a form edit of an imported transaction would silently
+ * strip its statement reference and make the row re-importable as a
+ * duplicate. The guard is the rule "an update may not DROP an existing
+ * external_ref": every (account, external_ref) pair on the prior postings
+ * must survive into the replacement set. This blocks the forms naturally
+ * while leaving importer-driven corrections (which resend the ref) and
+ * soft-delete free. It lives here, in the single write path, so no caller
+ * can bypass it.
+ */
+function assertExternalRefsPreserved(
+  prior: { accountId: string; externalRef: string | null }[],
+  next: PostingInput[],
+): void {
+  const nextRefs = new Set(
+    next.flatMap((p) => (p.externalRef ? [`${p.accountId} ${p.externalRef}`] : [])),
+  );
+  for (const posting of prior) {
+    if (posting.externalRef && !nextRefs.has(`${posting.accountId} ${posting.externalRef}`)) {
+      throw new LedgerValidationError(
+        "This transaction was imported from a bank statement; editing it here would drop " +
+          "its statement reference and break duplicate protection. Correct it from the " +
+          "import inbox, or delete it and re-import.",
+      );
+    }
+  }
+}
+
 export async function updateTransaction(id: string, input: TransactionInput): Promise<void> {
   const prior = await snapshotTransaction(id);
+  assertExternalRefsPreserved(prior.postings, input.postings);
   const prepared = await validateAndPrepare(input);
   await db.transaction(async (tx) => {
     // Hard-replace postings: the prior state lives in audit_log, and

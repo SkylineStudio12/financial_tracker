@@ -16,6 +16,9 @@ export interface PostingInput {
   amountRon?: number;
   categoryId?: string | null;
   counterparty?: string | null;
+  /** Structured counterparty IBAN from bank imports (transfer rows print
+   * it); NULL on manual writes and card/POS rows. */
+  counterpartyIban?: string | null;
   /**
    * Stable bank reference for this account movement (statement-line dedup
    * key). Import-only: manual forms and guided flows never set it, so their

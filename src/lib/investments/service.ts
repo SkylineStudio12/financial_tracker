@@ -54,8 +54,7 @@ import {
   type PostingInput,
 } from "@/lib/ledger";
 
-/** numeric(20,8) share quantities as integers of 1e-8 shares. */
-const QTY_SCALE = 100_000_000n;
+import { deriveRateToRon, formatQuantity, parseQuantity } from "./trade-rules";
 
 export interface BuySellInput {
   kind: "buy" | "sell";
@@ -101,26 +100,9 @@ export interface TradeResult {
   realizedGainRonMinor?: number;
 }
 
-export function parseQuantity(text: string): bigint {
-  const m = text.trim().match(/^(\d+)(?:\.(\d{1,8}))?$/);
-  if (!m) throw new LedgerValidationError(`Invalid share quantity: "${text}"`);
-  const scaled = BigInt(m[1]) * QTY_SCALE + BigInt((m[2] ?? "").padEnd(8, "0"));
-  if (scaled <= 0n) throw new LedgerValidationError("Share quantity must be positive");
-  return scaled;
-}
-
-export function formatQuantity(scaled: bigint): string {
-  return `${scaled / QTY_SCALE}.${(scaled % QTY_SCALE).toString().padStart(8, "0")}`;
-}
-
-/**
- * The broker's applied rate, derived from the entered pair at 6 dp
- * (round half up) — the user never types a rate.
- */
-export function deriveRateToRon(totalRonMinor: number, totalMinor: number): string {
-  const scaled = (2n * BigInt(totalRonMinor) * 1_000_000n + BigInt(totalMinor)) / (2n * BigInt(totalMinor));
-  return `${scaled / 1_000_000n}.${(scaled % 1_000_000n).toString().padStart(6, "0")}`;
-}
+// Pure quantity/rate helpers live in ./trade-rules (client-safe, no DB
+// graph); re-exported so server callers keep one import site.
+export { deriveRateToRon, formatQuantity, parseQuantity } from "./trade-rules";
 
 function assertPositiveMinor(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -212,6 +194,8 @@ async function findEquityAccount(entityId: string) {
 interface LotState {
   tradeId: string;
   transactionId: string;
+  /** The buy's transaction date — FIFO order key and preview display. */
+  buyDate: string;
   quantity: bigint;
   totalMinor: bigint;
   totalRonMinor: bigint;
@@ -231,7 +215,7 @@ async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Pr
   // own); (date, created_at, id) is the deterministic FIFO tiebreaker pick.
   const buyRows = (
     await tx
-      .select({ trade: trades })
+      .select({ trade: trades, date: transactions.date })
       .from(trades)
       .innerJoin(transactions, eq(trades.transactionId, transactions.id))
       .where(
@@ -243,7 +227,7 @@ async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Pr
         ),
       )
       .orderBy(asc(transactions.date), asc(trades.createdAt), asc(trades.id))
-  ).map((r) => r.trade);
+  ).map((r) => ({ ...r.trade, buyDate: r.date }));
   if (buyRows.length === 0) return [];
 
   const consumed = await tx
@@ -299,6 +283,7 @@ async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Pr
     return {
       tradeId: buy.id,
       transactionId: buy.transactionId,
+      buyDate: buy.buyDate,
       quantity: parseQuantity(buy.quantity),
       totalMinor: BigInt(buy.total),
       totalRonMinor: BigInt(positionLeg.amountRon),
@@ -611,6 +596,223 @@ async function executeCashEvent(
 
 function trimQty(scaled: bigint): string {
   return formatQuantity(scaled).replace(/\.?0+$/, "");
+}
+
+export interface SellPreviewLot {
+  buyDate: string;
+  lotQuantity: string;
+  previouslyConsumed: string;
+  consuming: string;
+  costBasisMinor: number;
+  costBasisRonMinor: number;
+}
+
+export type SellPreview =
+  | {
+      ok: true;
+      heldQuantity: string;
+      lots: SellPreviewLot[];
+      basisMinor: number;
+      basisRonMinor: number;
+      /** Null until both totals are entered. */
+      gainMinor: number | null;
+      gainRonMinor: number | null;
+      gainCategoryName: "Investment gains" | "Investment losses" | null;
+    }
+  | { ok: false; heldQuantity: string; requestedQuantity: string };
+
+/**
+ * READ-ONLY dry run of the sell (Stage-3 preview surface): the SAME loadLots
+ * + planFifoConsumption the booking path runs, with the writes replaced by a
+ * structured result — there is no parallel preview math to diverge (the
+ * parity test pins this). Over-consumption comes back as { ok: false } with
+ * the held quantity instead of a thrown error, so the form can say "you hold
+ * 12.5, cannot sell 15" before anyone presses Book. Booking re-runs the walk
+ * authoritatively inside its own transaction; the preview is advisory.
+ */
+export async function previewSell(input: {
+  accountId: string;
+  securityId: string;
+  quantity: string;
+  totalMinor?: number | null;
+  totalRonMinor?: number | null;
+}): Promise<SellPreview> {
+  const cash = await loadAccount(input.accountId);
+  if (cash.type !== "brokerage") {
+    throw new LedgerValidationError("Trades book against a brokerage cash account");
+  }
+  const security = await loadSecurity(input.securityId, cash.currency);
+  const quantity = parseQuantity(input.quantity);
+  const lots = await db.transaction((tx) => loadLots(tx, cash.id, security.id));
+  const held = lots.reduce((s, l) => s + (l.quantity - l.consumedQuantity), 0n);
+
+  let specs: ReturnType<typeof planFifoConsumption>;
+  try {
+    specs = planFifoConsumption(lots, quantity, `${security.ticker} in ${cash.name}`);
+  } catch (error) {
+    if (error instanceof LedgerValidationError) {
+      return {
+        ok: false,
+        heldQuantity: formatQuantity(held),
+        requestedQuantity: formatQuantity(quantity),
+      };
+    }
+    throw error;
+  }
+
+  const byId = new Map(lots.map((l) => [l.tradeId, l]));
+  const previewLots = specs.map((s) => {
+    const lot = byId.get(s.buyTradeId)!;
+    return {
+      buyDate: lot.buyDate,
+      lotQuantity: formatQuantity(lot.quantity),
+      previouslyConsumed: formatQuantity(lot.consumedQuantity),
+      consuming: formatQuantity(s.quantity),
+      costBasisMinor: Number(s.costBasisMinor),
+      costBasisRonMinor: Number(s.costBasisRonMinor),
+    };
+  });
+  const basisMinor = previewLots.reduce((s, l) => s + l.costBasisMinor, 0);
+  const basisRonMinor = previewLots.reduce((s, l) => s + l.costBasisRonMinor, 0);
+  const gainMinor = input.totalMinor != null ? input.totalMinor - basisMinor : null;
+  const gainRonMinor = input.totalRonMinor != null ? input.totalRonMinor - basisRonMinor : null;
+  const gainCategoryName =
+    gainMinor === null || gainRonMinor === null || (gainMinor === 0 && gainRonMinor === 0)
+      ? null
+      : (gainMinor !== 0 ? gainMinor > 0 : gainRonMinor > 0)
+        ? ("Investment gains" as const)
+        : ("Investment losses" as const);
+
+  return {
+    ok: true,
+    heldQuantity: formatQuantity(held),
+    lots: previewLots,
+    basisMinor,
+    basisRonMinor,
+    gainMinor,
+    gainRonMinor,
+    gainCategoryName,
+  };
+}
+
+/** Brokerage accounts of an entity (owner-filtered on personal profiles). */
+export async function listBrokerageAccounts(entityId: string, owner?: "greg" | "andra") {
+  const rows = await db
+    .select({
+      id: accounts.id,
+      name: accounts.name,
+      currency: accounts.currency,
+      owner: accounts.owner,
+    })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.entityId, entityId),
+        eq(accounts.type, "brokerage"),
+        eq(accounts.isActive, true),
+        isNull(accounts.deletedAt),
+      ),
+    )
+    .orderBy(asc(accounts.name));
+  return owner ? rows.filter((r) => r.owner === owner) : rows;
+}
+
+/** All live securities (the buy picker filters by account currency). */
+export async function listSecurities() {
+  return db
+    .select({
+      id: securities.id,
+      ticker: securities.ticker,
+      name: securities.name,
+      currency: securities.currency,
+    })
+    .from(securities)
+    .where(isNull(securities.deletedAt))
+    .orderBy(asc(securities.ticker));
+}
+
+/** Open holdings of one brokerage cash account (remaining > 0 across live
+ * lots) — feeds the sell picker so unheld securities aren't offered. */
+export async function listHoldings(accountId: string) {
+  const buys = await db
+    .select({
+      tradeId: trades.id,
+      securityId: trades.securityId,
+      ticker: securities.ticker,
+      name: securities.name,
+      quantity: trades.quantity,
+    })
+    .from(trades)
+    .innerJoin(securities, eq(trades.securityId, securities.id))
+    .where(
+      and(eq(trades.accountId, accountId), eq(trades.kind, "buy"), isNull(trades.deletedAt)),
+    );
+  if (buys.length === 0) return [];
+  const consumed = await db
+    .select({
+      buyTradeId: lotConsumptions.buyTradeId,
+      quantity: sql<string>`coalesce(sum(${lotConsumptions.quantity}), 0)`,
+    })
+    .from(lotConsumptions)
+    .where(
+      and(
+        inArray(
+          lotConsumptions.buyTradeId,
+          buys.map((b) => b.tradeId),
+        ),
+        isNull(lotConsumptions.deletedAt),
+      ),
+    )
+    .groupBy(lotConsumptions.buyTradeId);
+  const consumedByLot = new Map(consumed.map((c) => [c.buyTradeId, parseQuantity(c.quantity)]));
+
+  const bySecurity = new Map<string, { ticker: string; name: string; held: bigint }>();
+  for (const buy of buys) {
+    const entry = bySecurity.get(buy.securityId) ?? { ticker: buy.ticker, name: buy.name, held: 0n };
+    entry.held += parseQuantity(buy.quantity) - (consumedByLot.get(buy.tradeId) ?? 0n);
+    bySecurity.set(buy.securityId, entry);
+  }
+  return [...bySecurity.entries()]
+    .filter(([, e]) => e.held > 0n)
+    .map(([securityId, e]) => ({
+      securityId,
+      ticker: e.ticker,
+      name: e.name,
+      heldQuantity: formatQuantity(e.held),
+    }))
+    .sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
+
+/** Inline security creation for the buy form: ticker is normalized and
+ * unique; currency is LOCKED to the account's currency by the caller. */
+export async function getOrCreateSecurity(input: {
+  ticker: string;
+  name: string;
+  currency: "RON" | "EUR" | "USD";
+}) {
+  const ticker = input.ticker.trim().toUpperCase();
+  const name = input.name.trim();
+  if (!/^[A-Z0-9.]{1,12}$/.test(ticker)) {
+    throw new LedgerValidationError("Ticker must be 1-12 letters/digits (e.g. VUAA, AAPL)");
+  }
+  if (!name) throw new LedgerValidationError("Security name is required");
+  const [existing] = await db
+    .select()
+    .from(securities)
+    .where(and(eq(securities.ticker, ticker), isNull(securities.deletedAt)));
+  if (existing) {
+    if (existing.currency !== input.currency) {
+      throw new LedgerValidationError(
+        `${ticker} already exists in ${existing.currency} — one security, one currency`,
+      );
+    }
+    return { id: existing.id, ticker: existing.ticker, name: existing.name, currency: existing.currency };
+  }
+  const [created] = await db
+    .insert(securities)
+    .values({ ticker, name, currency: input.currency })
+    .returning();
+  return { id: created.id, ticker: created.ticker, name: created.name, currency: created.currency };
 }
 
 export interface DividendTaxEstimate {

@@ -34,6 +34,9 @@ export interface Profile {
   owner?: AccountOwner;
   /** Company-only features (salary/dividend flows, micro-tax behavior). */
   companyFlows: boolean;
+  /** Brokerage trade entry (Phase 4) — the profiles whose accounts include
+   * the household Revolut brokerages; false for the SRLs. */
+  investments: boolean;
 }
 
 /** Sidebar order fixed by owner decision: each person's personal + company together. */
@@ -44,6 +47,7 @@ export const PROFILES: readonly Profile[] = [
     subtitle: "Shared",
     entityId: ENTITY_IDS.household,
     companyFlows: false,
+    investments: true,
   },
   {
     slug: "greg",
@@ -52,6 +56,7 @@ export const PROFILES: readonly Profile[] = [
     entityId: ENTITY_IDS.household,
     owner: "greg",
     companyFlows: false,
+    investments: true,
   },
   {
     slug: "skyline",
@@ -59,6 +64,7 @@ export const PROFILES: readonly Profile[] = [
     subtitle: "SRL",
     entityId: ENTITY_IDS.skyline,
     companyFlows: true,
+    investments: false,
   },
   {
     slug: "andra",
@@ -67,6 +73,7 @@ export const PROFILES: readonly Profile[] = [
     entityId: ENTITY_IDS.household,
     owner: "andra",
     companyFlows: false,
+    investments: true,
   },
   {
     slug: "drmx",
@@ -74,6 +81,7 @@ export const PROFILES: readonly Profile[] = [
     subtitle: "SRL",
     entityId: ENTITY_IDS.drmx,
     companyFlows: true,
+    investments: false,
   },
 ] as const;
 

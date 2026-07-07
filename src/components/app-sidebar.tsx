@@ -21,6 +21,7 @@ import {
   ImportIcon,
   LayoutDashboardIcon,
   ReceiptIcon,
+  TrendingUpIcon,
   UserRoundIcon,
 } from "lucide-react";
 import { DrmxLogo, SkylineLogo } from "@/components/brand-logos";
@@ -113,6 +114,9 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
     { href: `${base}/flows/dividend`, label: "New dividend", icon: CoinsIcon },
     { href: `${base}/imports`, label: "Import statement", icon: ImportIcon },
   ];
+  const investments = [
+    { href: `${base}/investments`, label: "Record trade", icon: TrendingUpIcon },
+  ];
 
   return (
     <Sidebar>
@@ -150,6 +154,27 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
             <SidebarGroupContent>
               <SidebarMenu>
                 {flows.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      isActive={pathname.startsWith(item.href)}
+                      render={<Link href={item.href} />}
+                    >
+                      <item.icon {...ICON_PROPS} />
+                      {item.label}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {activeProfile.investments && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Investments</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {investments.map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       isActive={pathname.startsWith(item.href)}

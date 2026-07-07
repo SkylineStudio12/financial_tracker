@@ -84,7 +84,11 @@ export function ImportPasteForm({
     >
       <label className={labelClass}>
         Statement account
-        <Select value={bankAccountId} onValueChange={(v) => setBankAccountId((v as string) ?? "")}>
+        <Select
+          items={bankAccounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency})` }))}
+          value={bankAccountId}
+          onValueChange={(v) => setBankAccountId((v as string) ?? "")}
+        >
           <SelectTrigger className={fieldClass}>
             <SelectValue />
           </SelectTrigger>

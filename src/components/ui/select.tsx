@@ -13,7 +13,17 @@ import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
  * density-driven height); the popup is a raised surface with shadow-raised.
  * Item highlight is the quiet surface-inactive, not the black accent.
  */
-const Select = SelectPrimitive.Root
+/**
+ * `items` is REQUIRED (Phase 4 Stage 3): Base UI's SelectValue renders the
+ * raw VALUE when no items map is provided — for id-valued selects that means
+ * a raw UUID in the closed trigger (the Phase-3 dropdown bug). Requiring the
+ * label map at the type level makes that unshippable. For selects whose
+ * value IS the label, pass `items={values.map((v) => ({ value: v, label: v }))}`.
+ */
+type SelectRootProps = SelectPrimitive.Root.Props<string>
+function Select({ items, ...props }: SelectRootProps & { items: NonNullable<SelectRootProps["items"]> }) {
+  return <SelectPrimitive.Root items={items} {...props} />
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

@@ -137,7 +137,11 @@ function InboxRowItem({
       {row.status === "pending" ? (
         <div className="flex flex-wrap items-center gap-2">
           {needsCategory && (
-            <Select value={categoryId} onValueChange={(v) => setCategoryId((v as string) ?? "")}>
+            <Select
+              items={categories.map((c) => ({ value: c.id, label: `${c.name} · ${c.kind}` }))}
+              value={categoryId}
+              onValueChange={(v) => setCategoryId((v as string) ?? "")}
+            >
               <SelectTrigger className="h-8 w-56 rounded-input border border-border-input bg-surface px-3 text-secondary text-text-primary outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
                 <SelectValue placeholder="Pick a category…" />
               </SelectTrigger>

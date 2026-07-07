@@ -32,6 +32,9 @@ import { LedgerValidationError, type PostingInput, type TransactionInput } from 
 
 type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** An open Drizzle transaction handle (never the bare pool). */
+export type LedgerTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 interface PreparedPosting extends PostingInput {
   currency: "RON" | "EUR" | "USD";
   amountRon: number;
@@ -112,10 +115,16 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
     }
   }
 
-  // RON conversion — resolve each non-RON currency once for the date.
+  // RON conversion — resolve each non-RON currency once for the date, but
+  // ONLY for postings that actually need conversion. A leg with an explicit
+  // amountRon (transfer mirrors, trade legs converted at the broker's own
+  // rate) never uses the BNR rate — and resolveRonRate fetches from BNR on a
+  // cache miss, so resolving eagerly would make such writes depend on the
+  // network for a value that is then discarded.
   const currencies = [
     ...new Set(
       input.postings
+        .filter((p) => p.amountRon === undefined)
         .map((p) => accountById.get(p.accountId)!.currency)
         .filter((c) => c !== "RON"),
     ),
@@ -250,18 +259,30 @@ async function snapshotTransaction(id: string) {
   return { transaction, postings: postingRows, tagIds: tagRows.map((t) => t.tagId) };
 }
 
-export async function createTransaction(input: TransactionInput): Promise<string> {
+/**
+ * Create a transaction. Optionally composes inside a caller-owned DB
+ * transaction (`tx`): validation, inserts, and the audit row then run in the
+ * caller's scope, so a caller that must write sibling rows atomically with
+ * the ledger write (the trade path: trade row + lot consumptions) gets
+ * all-or-nothing semantics WITHOUT a second write path — this is still the
+ * single entry point. With `tx` absent, behavior is byte-identical to before
+ * the parameter existed (own transaction), proven by the characterization
+ * test. A rollback of the caller's transaction fully unwinds everything
+ * written here.
+ */
+export async function createTransaction(input: TransactionInput, tx?: LedgerTx): Promise<string> {
   const prepared = await validateAndPrepare(input);
-  return db.transaction(async (tx) => {
-    const id = await insertTransactionRows(tx, input, prepared);
-    await tx.insert(auditLog).values({
+  const write = async (t: DbOrTx) => {
+    const id = await insertTransactionRows(t, input, prepared);
+    await t.insert(auditLog).values({
       tableName: "transactions",
       rowId: id,
       action: "insert",
       previousValues: null,
     });
     return id;
-  });
+  };
+  return tx ? write(tx) : db.transaction(write);
 }
 
 /**

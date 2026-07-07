@@ -3,6 +3,7 @@ export {
   createTransaction,
   updateTransaction,
   softDeleteTransaction,
+  type LedgerTx,
 } from "./service";
 export {
   LedgerValidationError,

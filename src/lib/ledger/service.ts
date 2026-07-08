@@ -271,6 +271,11 @@ async function snapshotTransaction(id: string) {
  * the parameter existed (own transaction), proven by the characterization
  * test. A rollback of the caller's transaction fully unwinds everything
  * written here.
+ *
+ * NOTE: account/category validation reads via the POOL, not the passed `tx`,
+ * so referenced accounts must already exist and be COMMITTED before the call —
+ * a composed transaction cannot create-and-immediately-reference an account
+ * (the constraint the opening-balance seed hit; it books after commit).
  */
 export async function createTransaction(input: TransactionInput, tx?: LedgerTx): Promise<string> {
   const prepared = await validateAndPrepare(input);

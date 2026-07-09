@@ -12,6 +12,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import {
   BanknoteIcon,
   CheckIcon,
@@ -40,7 +41,10 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { setLocaleAction } from "@/i18n/actions";
+import { LOCALES } from "@/i18n/config";
 import { getProfile, PROFILES, type Profile } from "@/lib/profiles";
+import { cn } from "@/lib/utils";
 
 const ICON_PROPS = { absoluteStrokeWidth: true, strokeWidth: 1.5 } as const;
 
@@ -55,11 +59,12 @@ function ProfileIcon({ profile, className }: { profile: Profile; className?: str
 function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
   const [open, setOpen] = React.useState(false);
   const router = useRouter();
+  const t = useTranslations("sidebar");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={<SidebarMenuButton size="lg" aria-label="Switch profile" />}
+        render={<SidebarMenuButton size="lg" aria-label={t("switchProfile")} />}
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-badge bg-accent text-accent-foreground">
           <ProfileIcon profile={activeProfile} className="size-4" />
@@ -100,22 +105,63 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
   );
 }
 
+/**
+ * EN/RO segmented toggle (i18n Stage 1). Persists the choice via a
+ * cookie-setting server action, then refreshes so server components
+ * re-render in the new locale.
+ */
+function LocaleToggle() {
+  const locale = useLocale();
+  const router = useRouter();
+  const t = useTranslations("sidebar");
+  const [isPending, startTransition] = React.useTransition();
+
+  return (
+    <div role="group" aria-label={t("language")} className="ml-auto flex shrink-0 gap-1">
+      {LOCALES.map((code) => (
+        <button
+          key={code}
+          type="button"
+          disabled={isPending}
+          aria-pressed={code === locale}
+          className={cn(
+            "rounded-badge px-1.5 py-1 text-caption uppercase outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
+            code === locale
+              ? "bg-accent text-accent-foreground"
+              : "text-text-muted hover:bg-surface-inactive",
+          )}
+          onClick={() => {
+            if (code === locale) return;
+            startTransition(async () => {
+              await setLocaleAction(code);
+              router.refresh();
+            });
+          }}
+        >
+          {code}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string }) {
   const pathname = usePathname();
+  const t = useTranslations("sidebar");
   const activeProfile = getProfile(activeProfileSlug) ?? PROFILES[0];
   const base = `/p/${activeProfile.slug}`;
 
   const views = [
-    { href: `${base}/transactions`, label: "Transactions", icon: ReceiptIcon },
-    { href: `${base}/dashboard`, label: "Dashboard", icon: LayoutDashboardIcon },
+    { href: `${base}/transactions`, label: t("transactions"), icon: ReceiptIcon },
+    { href: `${base}/dashboard`, label: t("dashboard"), icon: LayoutDashboardIcon },
   ];
   const flows = [
-    { href: `${base}/flows/salary`, label: "New salary", icon: BanknoteIcon },
-    { href: `${base}/flows/dividend`, label: "New dividend", icon: CoinsIcon },
-    { href: `${base}/imports`, label: "Import statement", icon: ImportIcon },
+    { href: `${base}/flows/salary`, label: t("newSalary"), icon: BanknoteIcon },
+    { href: `${base}/flows/dividend`, label: t("newDividend"), icon: CoinsIcon },
+    { href: `${base}/imports`, label: t("importStatement"), icon: ImportIcon },
   ];
   const investments = [
-    { href: `${base}/investments`, label: "Record trade", icon: TrendingUpIcon },
+    { href: `${base}/investments`, label: t("recordTrade"), icon: TrendingUpIcon },
   ];
 
   return (
@@ -130,7 +176,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Views</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("views")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {views.map((item) => (
@@ -150,7 +196,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
 
         {activeProfile.companyFlows && (
           <SidebarGroup>
-            <SidebarGroupLabel>Flows</SidebarGroupLabel>
+            <SidebarGroupLabel>{t("flows")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {flows.map((item) => (
@@ -171,7 +217,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
 
         {activeProfile.investments && (
           <SidebarGroup>
-            <SidebarGroupLabel>Investments</SidebarGroupLabel>
+            <SidebarGroupLabel>{t("investments")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {investments.map((item) => (
@@ -198,8 +244,9 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
           </Avatar>
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-secondary text-text-primary">Greg</span>
-            <span className="text-caption text-text-muted">Financial tracker</span>
+            <span className="text-caption text-text-muted">{t("appName")}</span>
           </span>
+          <LocaleToggle />
         </div>
       </SidebarFooter>
       <SidebarRail />

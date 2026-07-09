@@ -1,0 +1,16 @@
+{
+  "sidebar": {
+    "switchProfile": "Schimbă profilul",
+    "views": "Vizualizări",
+    "transactions": "Tranzacții",
+    "dashboard": "Panou de bord",
+    "flows": "Fluxuri",
+    "newSalary": "Salariu nou",
+    "newDividend": "Dividend nou",
+    "importStatement": "Importă extras",
+    "investments": "Investiții",
+    "recordTrade": "Înregistrează ordin",
+    "appName": "Evidență financiară",
+    "language": "Limbă"
+  }
+}

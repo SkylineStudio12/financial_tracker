@@ -1,0 +1,16 @@
+{
+  "sidebar": {
+    "switchProfile": "Switch profile",
+    "views": "Views",
+    "transactions": "Transactions",
+    "dashboard": "Dashboard",
+    "flows": "Flows",
+    "newSalary": "New salary",
+    "newDividend": "New dividend",
+    "importStatement": "Import statement",
+    "investments": "Investments",
+    "recordTrade": "Record trade",
+    "appName": "Financial tracker",
+    "language": "Language"
+  }
+}

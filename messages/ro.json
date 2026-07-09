@@ -172,6 +172,76 @@
     "confirmSave": "Confirmă și salvează",
     "previewBreakdown": "Previzualizează calculul"
   },
+  "imports": {
+    "title": "Importă extras",
+    "statementAccount": "Contul extrasului",
+    "statementCsvExport": "Export CSV extras",
+    "csvHelp": "Încarcă exportul CSV de istoric cont ING (Home’Bank → istoric cont → CSV). Rândurile ajung în inboxul de revizuire — nu se înregistrează nimic până când confirmi fiecare rând.",
+    "csvHelpLoaded": "Încarcă exportul CSV de istoric cont ING (Home’Bank → istoric cont → CSV). Încărcat: {fileName}. Rândurile ajung în inboxul de revizuire — nu se înregistrează nimic până când confirmi fiecare rând.",
+    "pasteTextInstead": "Lipește textul extrasului în schimb",
+    "statementText": "Text extras",
+    "statementTextPlaceholder": "Lipește textul extras dintr-un extras ING…",
+    "pasteHelp": "Variantă de rezervă când nu există export CSV: lipește textul extras dintr-un singur extras ING în RON. Rândurile ajung în inboxul de revizuire — nu se înregistrează nimic până când confirmi fiecare rând.",
+    "uploadCsvInstead": "Încarcă un CSV în schimb (recomandat)",
+    "parsing": "Se parsează…",
+    "parseIntoInbox": "Parsează în inbox",
+    "noActiveBankAccount": "Această entitate nu are un cont bancar activ în care să importe un extras.",
+    "recentImports": "Importuri recente",
+    "noStatements": "Niciun extras importat încă.",
+    "pendingOfTotal": "{pending} din {total} în așteptare",
+    "allImports": "← Toate importurile",
+    "batchSummary": "{account} · {start}–{end} · sold inițial {opening} → sold final {closing} (net {sign}{net})",
+    "pendingReviewSummary": "{pending} din {total} în așteptare. Confirmarea în masă înregistrează doar rândurile cu încredere ridicată — cele cu încredere scăzută, suprapuneri și fără categorie rămân pentru revizuire.",
+    "confirmAllHighConfidence": "Confirmă toate cu încredere ridicată",
+    "syntheticKey": "cheie sintetică",
+    "bankRef": "ref. bancară",
+    "overlapTitle": "Rând fără referință într-o perioadă suprapusă — confirmă individual",
+    "overlapConfirm": "suprapunere — confirmă",
+    "pickCategory": "Alege o categorie…",
+    "book": "Înregistrează",
+    "skip": "Omite",
+    "categoryRequired": "categorie obligatorie",
+    "alreadyInLedgerSuffix": "— deja în registru",
+    "done": "Gata",
+    "bookedCount": "înregistrate {count}",
+    "duplicateCount": "{count} duplicat",
+    "leftForReviewCount": "{count} rămase pentru revizuire",
+    "kind": {
+      "revenue": "venit",
+      "statePayment": "plată_stat",
+      "ownerTransfer": "transfer_proprietar",
+      "professionalServices": "servicii_profesionale",
+      "subscription": "abonament",
+      "cardPurchase": "plată_card",
+      "bankFee": "comision_bancar",
+      "unknown": "necunoscut"
+    },
+    "confidence": {
+      "high": "ridicată",
+      "low": "scăzută"
+    },
+    "categoryKind": {
+      "income": "venit",
+      "expense": "cheltuială"
+    },
+    "status": {
+      "booked": "înregistrat",
+      "duplicate": "duplicat",
+      "skipped": "omis"
+    },
+    "reason": {
+      "bankFeeNoCounterparty": "rând de comision bancar fără contrapartidă",
+      "incomingFundsCredit": "credit cu marcajul „Incoming funds”",
+      "treasuryIban": "IBAN-ul contrapartidei este un cont de trezorerie (RO..TREZ)",
+      "knownRecurringMerchant": "comerciant recurent cunoscut: {merchant}",
+      "unrecognizedPos": "plată POS la un comerciant nerecunoscut — scop neverificat, confirmă la revizuire",
+      "ownerNameMatch": "contrapartida corespunde numelui proprietarului: {counterparty}",
+      "professionalMarker": "contrapartida conține un marcaj de servicii profesionale: {counterparty}",
+      "businessTransferNoMarker": "transfer de business către o companie, fără marcaj de servicii profesionale",
+      "creditNoIncomingMarker": "credit fără un marcaj recunoscut de fonduri încasate",
+      "noClassificationRule": "nicio regulă de clasificare nu s-a potrivit cu forma rândului"
+    }
+  },
   "investments": {
     "holdings": "Dețineri",
     "recordTrade": "Înregistrează un ordin",

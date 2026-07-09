@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { classifyStatementRows, type ImportKind } from "./classify";
+import { classifyStatementRows, type ClassifyReason, type ImportKind } from "./classify";
 import { parseIngStatement } from "./parse";
 
 const fixture = readFileSync(
@@ -22,11 +22,17 @@ function ok(name: string, fn: () => void) {
   checks += 1;
   console.log(`  ✓ ${name}`);
 }
-function expectKind(lineNo: string, kind: ImportKind, confidence: "high" | "low") {
+function expectKind(
+  lineNo: string,
+  kind: ImportKind,
+  confidence: "high" | "low",
+  reasonCode?: ClassifyReason["code"],
+) {
   const c = byLineNo.get(lineNo);
   assert.ok(c, `row ${lineNo} missing`);
-  assert.equal(c.kind, kind, `row ${lineNo}: expected ${kind}, got ${c.kind} (${c.reason})`);
-  assert.equal(c.confidence, confidence, `row ${lineNo}: confidence ${c.confidence}, reason: ${c.reason}`);
+  assert.equal(c.kind, kind, `row ${lineNo}: expected ${kind}, got ${c.kind} (${c.reason.code})`);
+  assert.equal(c.confidence, confidence, `row ${lineNo}: confidence ${c.confidence}, reason: ${c.reason.code}`);
+  if (reasonCode) assert.equal(c.reason.code, reasonCode, `row ${lineNo}: reason code`);
 }
 
 /* ------------------------------------------------- every row, kind by kind */
@@ -34,37 +40,39 @@ ok("all 17 rows classified — nothing falls through", () => {
   assert.equal(classified.length, 17);
   for (const c of classified) {
     assert.notEqual(c.kind, undefined);
-    assert.ok(c.reason.length > 0, `row ${c.row.lineNo} has no reason`);
+    assert.ok(c.reason.code.length > 0, `row ${c.row.lineNo} has no reason code`);
   }
 });
 ok("no row in the fixture is unknown (loud fallback unused here)", () => {
   assert.equal(classified.filter((c) => c.kind === "unknown").length, 0);
 });
-ok("revenue: HolyCode incoming credit", () => expectKind("1482", "revenue", "high"));
+ok("revenue: HolyCode incoming credit", () => expectKind("1482", "revenue", "high", "incomingFundsCredit"));
 ok("state payments: Trezorerie + CAM via treasury IBANs", () => {
-  expectKind("1475", "state_payment", "high");
-  expectKind("1478", "state_payment", "high");
+  expectKind("1475", "state_payment", "high", "treasuryIban");
+  expectKind("1478", "state_payment", "high", "treasuryIban");
 });
 ok("owner transfer: Grigore Filimon (context-supplied owner name)", () =>
-  expectKind("1465", "owner_transfer", "high"));
+  expectKind("1465", "owner_transfer", "high", "ownerNameMatch"));
 ok("professional services, marked: Expert Contabil + AUDIT-EXPERT", () => {
-  expectKind("1462", "professional_services", "high");
-  expectKind("1466", "professional_services", "high");
+  expectKind("1462", "professional_services", "high", "professionalMarker");
+  expectKind("1466", "professional_services", "high", "professionalMarker");
 });
 ok("AMBIGUOUS by design — Coman Aktiv Serv SRL: professional_services at LOW", () =>
-  expectKind("1464", "professional_services", "low"));
+  expectKind("1464", "professional_services", "low", "businessTransferNoMarker"));
 ok("subscriptions: OpenAI, Anthropic, Figma, Orange", () => {
-  expectKind("1471", "subscription", "high");
-  expectKind("1486", "subscription", "high");
-  expectKind("1489", "subscription", "high");
-  expectKind("1473", "subscription", "high");
+  expectKind("1471", "subscription", "high", "knownRecurringMerchant");
+  expectKind("1486", "subscription", "high", "knownRecurringMerchant");
+  expectKind("1489", "subscription", "high", "knownRecurringMerchant");
+  expectKind("1473", "subscription", "high", "knownRecurringMerchant");
 });
 ok("card purchases: Rompetrol high-signal POS, ORCT flagged LOW (state fee by card)", () => {
-  expectKind("1461", "card_purchase", "low");
-  expectKind("1481", "card_purchase", "low");
+  expectKind("1461", "card_purchase", "low", "unrecognizedPos");
+  expectKind("1481", "card_purchase", "low", "unrecognizedPos");
 });
 ok("bank fees: all four Service Fee rows", () => {
-  for (const lineNo of ["1463", "1476", "1479", "1491"]) expectKind(lineNo, "bank_fee", "high");
+  for (const lineNo of ["1463", "1476", "1479", "1491"]) {
+    expectKind(lineNo, "bank_fee", "high", "bankFeeNoCounterparty");
+  }
 });
 ok("FX is a field, not a kind: subscriptions carry row.fx where foreign", () => {
   assert.ok(byLineNo.get("1471")!.row.fx); // OpenAI USD->EUR

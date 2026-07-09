@@ -17,7 +17,9 @@ import {
   skipImportRow,
 } from "./service";
 
-type ActionResult = { error: string } | { ok: true; message?: string };
+type ActionResult =
+  | { error: string }
+  | { ok: true; status?: "duplicate"; summary?: { booked: number; duplicates: number; left: number } };
 
 /** Validated /p/{slug}/imports base for redirects and revalidation. */
 function importsPath(profileSlug: string, entityId: string): string {
@@ -66,10 +68,7 @@ export async function bookImportRowAction(payload: {
     revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
     return {
       ok: true,
-      message:
-        result.status === "duplicate"
-          ? "Already in the ledger — linked the existing transaction instead of booking twice"
-          : undefined,
+      status: result.status === "duplicate" ? "duplicate" : undefined,
     };
   } catch (error) {
     if (error instanceof LedgerValidationError) return { error: error.message };
@@ -85,11 +84,15 @@ export async function bookHighConfidenceAction(payload: {
   try {
     const result = await bookHighConfidenceRows(payload.batchId);
     revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
-    const parts = [`booked ${result.booked}`];
-    if (result.duplicates) parts.push(`${result.duplicates} duplicate`);
-    if (result.left) parts.push(`${result.left} left for review`);
     if (result.errors.length) return { error: result.errors.join(" · ") };
-    return { ok: true, message: parts.join(", ") };
+    return {
+      ok: true,
+      summary: {
+        booked: result.booked,
+        duplicates: result.duplicates,
+        left: result.left,
+      },
+    };
   } catch (error) {
     if (error instanceof LedgerValidationError) return { error: error.message };
     throw error;

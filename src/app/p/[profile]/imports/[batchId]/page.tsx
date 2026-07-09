@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor } from "@/lib/format";
 import { getImportBatch } from "@/lib/import/queries";
-import type { ClassifiedRow } from "@/lib/import/ing/classify";
+import {
+  parseStoredClassifyReason,
+  type ClassifiedRow,
+  type ClassifyReason,
+  type Confidence,
+  type ImportKind,
+} from "@/lib/import/ing/classify";
 import { ImportInbox } from "@/components/import/import-inbox";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +25,7 @@ export default async function ImportBatchPage({
   if (!profile || !profile.companyFlows) notFound();
 
   const locale = await getLocale();
+  const t = await getTranslations("imports");
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
   const { batch, rows, categories } = data;
@@ -28,9 +35,12 @@ export default async function ImportBatchPage({
     return {
       id: r.id,
       lineNo: r.lineNo,
-      kind: r.kind,
-      confidence: r.confidence,
-      reason: r.reason,
+      kind: r.kind as ImportKind,
+      confidence: r.confidence as Confidence,
+      reason:
+        parseStoredClassifyReason(r.reason) ??
+        parseStoredClassifyReason(classified.reason) ??
+        ({ code: "noClassificationRule" } satisfies ClassifyReason),
       status: r.status,
       overlapSuspect: r.overlapSuspect,
       resolvedExternalRef: r.resolvedExternalRef,
@@ -52,15 +62,19 @@ export default async function ImportBatchPage({
           href={`/p/${profile.slug}/imports`}
           className="w-fit text-caption text-text-muted outline-none hover:text-accent focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
-          ← All imports
+          {t("allImports")}
         </Link>
         <h1 className="text-title text-text-primary">{batch.statementNumber}</h1>
         <p className="text-caption text-text-muted">
-          {batch.accountName} · {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·
-          opening {formatMinor(batch.openingBalanceMinor, "RON", locale)} → closing{" "}
-          {formatMinor(batch.closingBalanceMinor, "RON", locale)} (net{" "}
-          {movement >= 0 ? "+" : "−"}
-          {formatMinor(Math.abs(movement), "RON", locale)})
+          {t("batchSummary", {
+            account: batch.accountName,
+            start: formatDate(batch.periodStart, locale),
+            end: formatDate(batch.periodEnd, locale),
+            opening: formatMinor(batch.openingBalanceMinor, "RON", locale),
+            closing: formatMinor(batch.closingBalanceMinor, "RON", locale),
+            sign: movement >= 0 ? "+" : "−",
+            net: formatMinor(Math.abs(movement), "RON", locale),
+          })}
         </p>
       </div>
 

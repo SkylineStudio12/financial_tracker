@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import { formatDate } from "@/lib/format";
 import { getImportFormOptions, listImportBatches } from "@/lib/import/queries";
@@ -19,12 +19,13 @@ export default async function ImportsPage({
   if (!profile || !profile.companyFlows) notFound();
 
   const locale = await getLocale();
+  const t = await getTranslations("imports");
   const { bankAccounts } = await getImportFormOptions(profile.entityId);
   const batches = await listImportBatches(profile.entityId);
 
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
-      <h1 className="text-title text-text-primary">Import statement</h1>
+      <h1 className="text-title text-text-primary">{t("title")}</h1>
 
       <ImportPasteForm
         profileSlug={profile.slug}
@@ -33,9 +34,9 @@ export default async function ImportsPage({
       />
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-card-title text-text-primary">Recent imports</h2>
+        <h2 className="text-card-title text-text-primary">{t("recentImports")}</h2>
         {batches.length === 0 ? (
-          <p className="text-secondary text-text-muted">No statements imported yet.</p>
+          <p className="text-secondary text-text-muted">{t("noStatements")}</p>
         ) : (
           <ul className="flex flex-col">
             {batches.map((batch) => (
@@ -49,7 +50,7 @@ export default async function ImportsPage({
                   </span>
                   <span className="text-caption text-text-muted">
                     {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·{" "}
-                    {batch.pendingCount} of {batch.rowCount} pending
+                    {t("pendingOfTotal", { pending: batch.pendingCount, total: batch.rowCount })}
                   </span>
                 </Link>
               </li>

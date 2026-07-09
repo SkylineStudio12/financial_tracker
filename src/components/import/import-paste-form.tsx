@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,6 +24,7 @@ export function ImportPasteForm({
   entityId: string;
   bankAccounts: { id: string; name: string; currency: string }[];
 }) {
+  const t = useTranslations("imports");
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   // CSV upload is the DEFAULT input (Stage 4 amendment); pasted statement
   // text stays as the fallback. Both feed the same server action — format
@@ -69,7 +71,7 @@ export function ImportPasteForm({
   if (bankAccounts.length === 0) {
     return (
       <p className="text-secondary text-text-muted">
-        This entity has no active bank account to import a statement into.
+        {t("noActiveBankAccount")}
       </p>
     );
   }
@@ -83,7 +85,7 @@ export function ImportPasteForm({
       }}
     >
       <label className={labelClass}>
-        Statement account
+        {t("statementAccount")}
         <Select
           items={bankAccounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency})` }))}
           value={bankAccountId}
@@ -105,7 +107,7 @@ export function ImportPasteForm({
       {mode === "csv" ? (
         <>
           <label className={labelClass}>
-            Statement CSV export
+            {t("statementCsvExport")}
             <input
               ref={fileRef}
               type="file"
@@ -115,32 +117,28 @@ export function ImportPasteForm({
             />
           </label>
           <p className="text-caption text-text-muted">
-            Upload the ING account-history CSV export (Home’Bank → account history →
-            CSV). {fileName ? `Loaded: ${fileName}.` : ""} Rows land in the review
-            inbox — nothing is booked until you confirm each one.
+            {fileName ? t("csvHelpLoaded", { fileName }) : t("csvHelp")}
           </p>
           <button type="button" className={ghostButtonClass} onClick={() => switchMode("paste")}>
-            Paste statement text instead
+            {t("pasteTextInstead")}
           </button>
         </>
       ) : (
         <>
           <label className={labelClass}>
-            Statement text
+            {t("statementText")}
             <textarea
               className={`${fieldClass} h-64 resize-y py-2 font-numeric`}
-              placeholder="Paste the extracted text of one ING statement…"
+              placeholder={t("statementTextPlaceholder")}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
           </label>
           <p className="text-caption text-text-muted">
-            Fallback for when no CSV export is available: paste the extracted text of
-            a single ING RON statement. Rows land in the review inbox — nothing is
-            booked until you confirm each one.
+            {t("pasteHelp")}
           </p>
           <button type="button" className={ghostButtonClass} onClick={() => switchMode("csv")}>
-            Upload a CSV instead (recommended)
+            {t("uploadCsvInstead")}
           </button>
         </>
       )}
@@ -148,7 +146,7 @@ export function ImportPasteForm({
       {error && <p className={errorClass}>{error}</p>}
       <div>
         <Button type="submit" disabled={pending || !text.trim()}>
-          {pending ? "Parsing…" : "Parse into inbox"}
+          {pending ? t("parsing") : t("parseIntoInbox")}
         </Button>
       </div>
     </form>

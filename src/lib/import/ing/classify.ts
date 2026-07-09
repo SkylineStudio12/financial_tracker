@@ -7,7 +7,7 @@
  *
  * Two design rules from the brief:
  * 1. CLASSIFICATION IS SIGNAL, NOT TRUTH. Every row carries a confidence and
- *    a human-readable reason; low confidence is fine (a human confirms in the
+ *    a locale-free reason code; low confidence is fine (a human confirms in the
  *    Stage-4 review inbox), a certain-looking silent guess is not.
  * 2. The per-row IDENTITY INVENTORY is the L-0010 raw material: which stable
  *    identifiers each row actually has, so Stage 4 designs the refless-row
@@ -44,6 +44,18 @@ export type ImportKind =
 
 export type Confidence = "high" | "low";
 
+export type ClassifyReason =
+  | { code: "bankFeeNoCounterparty" }
+  | { code: "incomingFundsCredit" }
+  | { code: "treasuryIban" }
+  | { code: "knownRecurringMerchant"; merchant: string }
+  | { code: "unrecognizedPos" }
+  | { code: "ownerNameMatch"; counterparty: string }
+  | { code: "professionalMarker"; counterparty: string }
+  | { code: "businessTransferNoMarker" }
+  | { code: "creditNoIncomingMarker" }
+  | { code: "noClassificationRule" };
+
 /**
  * Which identity fields a row ACTUALLY has (L-0010 material). Stage 4 designs
  * the dedup key from this inventory; nothing here decides anything.
@@ -68,8 +80,8 @@ export interface ClassifiedRow {
   row: IngStatementRow;
   kind: ImportKind;
   confidence: Confidence;
-  /** Always present: WHY this kind — the rule that fired, or what was weak. */
-  reason: string;
+  /** Always present: WHY this kind — locale-free, translated at the UI edge. */
+  reason: ClassifyReason;
   identity: IdentityInventory;
 }
 
@@ -123,6 +135,43 @@ function extractIdentity(row: IngStatementRow): IdentityInventory {
   };
 }
 
+export function serializeClassifyReason(reason: ClassifyReason): string {
+  return JSON.stringify(reason);
+}
+
+function isReasonCode(code: unknown): code is ClassifyReason["code"] {
+  return (
+    code === "bankFeeNoCounterparty" ||
+    code === "incomingFundsCredit" ||
+    code === "treasuryIban" ||
+    code === "knownRecurringMerchant" ||
+    code === "unrecognizedPos" ||
+    code === "ownerNameMatch" ||
+    code === "professionalMarker" ||
+    code === "businessTransferNoMarker" ||
+    code === "creditNoIncomingMarker" ||
+    code === "noClassificationRule"
+  );
+}
+
+export function parseStoredClassifyReason(value: unknown): ClassifyReason | null {
+  if (typeof value === "object" && value !== null && isReasonCode((value as { code?: unknown }).code)) {
+    return value as ClassifyReason;
+  }
+  if (typeof value !== "string") return null;
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (typeof parsed === "object" && parsed !== null && isReasonCode((parsed as { code?: unknown }).code)) {
+      return parsed as ClassifyReason;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function classifyRow(row: IngStatementRow, ctx: ClassifyContext): ClassifiedRow {
   const identity = extractIdentity(row);
   const raw = row.rawLines.join(" ");
@@ -132,7 +181,11 @@ function classifyRow(row: IngStatementRow, ctx: ClassifyContext): ClassifiedRow 
     ...SUBSCRIPTION_MERCHANTS,
     ...(ctx.extraSubscriptionMerchants ?? []),
   ];
-  const done = (kind: ImportKind, confidence: Confidence, reason: string): ClassifiedRow => ({
+  const done = (
+    kind: ImportKind,
+    confidence: Confidence,
+    reason: ClassifyReason,
+  ): ClassifiedRow => ({
     row,
     kind,
     confidence,
@@ -142,56 +195,62 @@ function classifyRow(row: IngStatementRow, ctx: ClassifyContext): ClassifiedRow 
 
   // Bank fee: no counterparty, the statement's own "Service Fee" rows.
   if (row.counterpartyName === null && /Service Fee/.test(raw)) {
-    return done("bank_fee", "high", "Service Fee row with no counterparty");
+    return done("bank_fee", "high", { code: "bankFeeNoCounterparty" });
   }
 
   // Revenue: credit direction + the "Incoming funds" marker.
   if (row.direction === "credit") {
     if (row.rawLines.includes("Incoming funds")) {
-      return done("revenue", "high", 'credit with "Incoming funds" marker');
+      return done("revenue", "high", { code: "incomingFundsCredit" });
     }
-    return done("unknown", "low", "credit without a recognized incoming-funds marker");
+    return done("unknown", "low", { code: "creditNoIncomingMarker" });
   }
 
   // State payment: any transfer to a treasury IBAN.
   if (row.counterpartyIban && TREASURY_IBAN.test(row.counterpartyIban)) {
-    return done("state_payment", "high", "counterparty IBAN is a treasury account (RO..TREZ)");
+    return done("state_payment", "high", { code: "treasuryIban" });
   }
 
   if (isPos) {
     const merchant = row.counterpartyName ?? "";
     if (subscriptionMatchers.some((m) => m.test(merchant))) {
-      return done("subscription", "high", `known recurring merchant: ${row.counterpartyName}`);
+      return done("subscription", "high", {
+        code: "knownRecurringMerchant",
+        merchant: row.counterpartyName ?? "",
+      });
     }
     // Kind is structurally certain (card purchase); purpose may not be —
     // e.g. a state fee paid by card looks identical to a shop purchase.
     return done(
       "card_purchase",
       "low",
-      "POS purchase at an unrecognized merchant — purpose unverified, confirm in review",
+      { code: "unrecognizedPos" },
     );
   }
 
   if (isTransfer && row.counterpartyName) {
     const counterparty = normalizeName(row.counterpartyName);
     if (ctx.ownerNames.some((n) => normalizeName(n) === counterparty)) {
-      return done("owner_transfer", "high", `counterparty matches owner name: ${row.counterpartyName}`);
+      return done("owner_transfer", "high", {
+        code: "ownerNameMatch",
+        counterparty: row.counterpartyName,
+      });
     }
     if (PROFESSIONAL_MARKERS.test(row.counterpartyName)) {
       return done(
         "professional_services",
         "high",
-        `counterparty carries a professional-services marker: ${row.counterpartyName}`,
+        { code: "professionalMarker", counterparty: row.counterpartyName },
       );
     }
     return done(
       "professional_services",
       "low",
-      "outgoing business transfer to a company counterparty without a professional-services marker",
+      { code: "businessTransferNoMarker" },
     );
   }
 
-  return done("unknown", "low", "no classification rule matched this row shape");
+  return done("unknown", "low", { code: "noClassificationRule" });
 }
 
 /** Classify every row — total function, nothing falls through silently. */

@@ -16,7 +16,11 @@ import {
 } from "@/lib/ledger";
 import { buildImportTransactionInput, bookingNeedsCategory } from "./booking";
 import { OWNER_BANK_NAMES, SUGGESTED_CATEGORY_BY_KIND } from "./config";
-import { classifyStatementRows, type ClassifiedRow } from "./ing/classify";
+import {
+  classifyStatementRows,
+  serializeClassifyReason,
+  type ClassifiedRow,
+} from "./ing/classify";
 import { normalizeStatementNumber, parseStatementPeriod, resolveExternalRef } from "./ing/identity";
 import { parseIngStatement } from "./ing/parse";
 import { isIngCsv, parseIngCsvStatement } from "./ing/parse-csv";
@@ -184,7 +188,7 @@ export async function createImportBatch(params: {
           resolvedExternalRef: ref,
           kind: c.kind,
           confidence: c.confidence,
-          reason: c.reason,
+          reason: serializeClassifyReason(c.reason),
           payload: c,
           suggestedCategoryId: suggestFor(c.kind),
           overlapSuspect,

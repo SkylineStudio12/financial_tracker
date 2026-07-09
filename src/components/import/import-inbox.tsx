@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,13 +19,14 @@ import {
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
 import { formatDate, formatMinor } from "@/lib/format";
 import { errorClass } from "@/components/forms/ui";
+import type { ClassifyReason, Confidence, ImportKind } from "@/lib/import/ing/classify";
 
 interface InboxRow {
   id: string;
   lineNo: string;
-  kind: string;
-  confidence: string;
-  reason: string;
+  kind: ImportKind;
+  confidence: Confidence;
+  reason: ClassifyReason;
   status: string;
   overlapSuspect: boolean;
   resolvedExternalRef: string;
@@ -50,12 +51,82 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 function RefBadge({ externalRef }: { externalRef: string }) {
+  const t = useTranslations("imports");
   const synthetic = externalRef.startsWith("ING:");
   return (
     <Badge variant={synthetic ? "outline" : "secondary"} title={externalRef}>
-      {synthetic ? "synthetic key" : "bank ref"}
+      {synthetic ? t("syntheticKey") : t("bankRef")}
     </Badge>
   );
+}
+
+function useImportLabels() {
+  const t = useTranslations("imports");
+
+  return {
+    kind(kind: ImportKind) {
+      switch (kind) {
+        case "revenue":
+          return t("kind.revenue");
+        case "state_payment":
+          return t("kind.statePayment");
+        case "owner_transfer":
+          return t("kind.ownerTransfer");
+        case "professional_services":
+          return t("kind.professionalServices");
+        case "subscription":
+          return t("kind.subscription");
+        case "card_purchase":
+          return t("kind.cardPurchase");
+        case "bank_fee":
+          return t("kind.bankFee");
+        case "unknown":
+          return t("kind.unknown");
+      }
+    },
+    confidence(confidence: Confidence) {
+      return confidence === "high" ? t("confidence.high") : t("confidence.low");
+    },
+    categoryKind(kind: CategoryOption["kind"]) {
+      return kind === "income" ? t("categoryKind.income") : t("categoryKind.expense");
+    },
+    reason(reason: ClassifyReason) {
+      switch (reason.code) {
+        case "bankFeeNoCounterparty":
+          return t("reason.bankFeeNoCounterparty");
+        case "incomingFundsCredit":
+          return t("reason.incomingFundsCredit");
+        case "treasuryIban":
+          return t("reason.treasuryIban");
+        case "knownRecurringMerchant":
+          return t("reason.knownRecurringMerchant", { merchant: reason.merchant });
+        case "unrecognizedPos":
+          return t("reason.unrecognizedPos");
+        case "ownerNameMatch":
+          return t("reason.ownerNameMatch", { counterparty: reason.counterparty });
+        case "professionalMarker":
+          return t("reason.professionalMarker", { counterparty: reason.counterparty });
+        case "businessTransferNoMarker":
+          return t("reason.businessTransferNoMarker");
+        case "creditNoIncomingMarker":
+          return t("reason.creditNoIncomingMarker");
+        case "noClassificationRule":
+          return t("reason.noClassificationRule");
+      }
+    },
+    status(status: string) {
+      switch (status) {
+        case "booked":
+          return t("status.booked");
+        case "duplicate":
+          return t("status.duplicate");
+        case "skipped":
+          return t("status.skipped");
+        default:
+          return status;
+      }
+    },
+  };
 }
 
 function InboxRowItem({
@@ -72,6 +143,8 @@ function InboxRowItem({
   batchId: string;
 }) {
   const [categoryId, setCategoryId] = useState(row.suggestedCategoryId ?? "");
+  const t = useTranslations("imports");
+  const labels = useImportLabels();
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -123,53 +196,56 @@ function InboxRowItem({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{row.kind}</Badge>
+        <Badge variant="secondary">{labels.kind(row.kind)}</Badge>
         <Badge variant={row.confidence === "high" ? "outline" : "destructive"}>
-          {row.confidence}
+          {labels.confidence(row.confidence)}
         </Badge>
         <RefBadge externalRef={row.resolvedExternalRef} />
         {row.overlapSuspect && (
-          <Badge variant="destructive" title="Refless row inside a period overlap — confirm individually">
-            overlap — confirm
+          <Badge variant="destructive" title={t("overlapTitle")}>
+            {t("overlapConfirm")}
           </Badge>
         )}
-        <span className="text-caption text-text-muted">{row.reason}</span>
+        <span className="text-caption text-text-muted">{labels.reason(row.reason)}</span>
       </div>
 
       {row.status === "pending" ? (
         <div className="flex flex-wrap items-center gap-2">
           {needsCategory && (
             <Select
-              items={categories.map((c) => ({ value: c.id, label: `${c.name} · ${c.kind}` }))}
+              items={categories.map((c) => ({
+                value: c.id,
+                label: `${c.name} · ${labels.categoryKind(c.kind)}`,
+              }))}
               value={categoryId}
               onValueChange={(v) => setCategoryId((v as string) ?? "")}
             >
               <SelectTrigger className="h-8 w-56 rounded-input border border-border-input bg-surface px-3 text-secondary text-text-primary outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
-                <SelectValue placeholder="Pick a category…" />
+                <SelectValue placeholder={t("pickCategory")} />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name} · {c.kind}
+                    {c.name} · {labels.categoryKind(c.kind)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
           <Button size="sm" onClick={book} disabled={!canBook || pending}>
-            Book
+            {t("book")}
           </Button>
           <Button size="sm" variant="ghost" onClick={skip} disabled={pending}>
-            Skip
+            {t("skip")}
           </Button>
           {needsCategory && categoryId === "" && (
-            <span className="text-caption text-text-muted">category required</span>
+            <span className="text-caption text-text-muted">{t("categoryRequired")}</span>
           )}
         </div>
       ) : (
         <span className={`text-caption ${STATUS_TONE[row.status] ?? "text-text-muted"}`}>
-          {row.status}
-          {row.status === "duplicate" && " — already in the ledger"}
+          {labels.status(row.status)}
+          {row.status === "duplicate" && ` ${t("alreadyInLedgerSuffix")}`}
         </span>
       )}
       {error && <p className={errorClass}>{error}</p>}
@@ -191,6 +267,7 @@ export function ImportInbox({
   categories: CategoryOption[];
 }) {
   const [message, setMessage] = useState<string | null>(null);
+  const t = useTranslations("imports");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const pendingCount = rows.filter((r) => r.status === "pending").length;
@@ -201,7 +278,16 @@ export function ImportInbox({
     startTransition(async () => {
       const result = await bookHighConfidenceAction({ profileSlug, entityId, batchId });
       if ("error" in result) setError(result.error);
-      else setMessage(result.message ?? "Done");
+      else if (result.summary) {
+        const parts = [t("bookedCount", { count: result.summary.booked })];
+        if (result.summary.duplicates) {
+          parts.push(t("duplicateCount", { count: result.summary.duplicates }));
+        }
+        if (result.summary.left) {
+          parts.push(t("leftForReviewCount", { count: result.summary.left }));
+        }
+        setMessage(parts.join(", "));
+      } else setMessage(t("done"));
     });
   }
 
@@ -209,11 +295,10 @@ export function ImportInbox({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-caption text-text-muted">
-          {pendingCount} pending of {rows.length}. Confirm-all books high-confidence
-          rows only — low-confidence, overlap, and category-less rows stay for review.
+          {t("pendingReviewSummary", { pending: pendingCount, total: rows.length })}
         </p>
         <Button size="sm" variant="secondary" onClick={bookAll} disabled={pending || pendingCount === 0}>
-          Confirm all high-confidence
+          {t("confirmAllHighConfidence")}
         </Button>
       </div>
       {message && <p className="text-caption text-status-positive-text">{message}</p>}

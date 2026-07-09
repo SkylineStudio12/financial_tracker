@@ -172,6 +172,76 @@
     "confirmSave": "Confirm and save",
     "previewBreakdown": "Preview breakdown"
   },
+  "imports": {
+    "title": "Import statement",
+    "statementAccount": "Statement account",
+    "statementCsvExport": "Statement CSV export",
+    "csvHelp": "Upload the ING account-history CSV export (Home’Bank → account history → CSV). Rows land in the review inbox — nothing is booked until you confirm each one.",
+    "csvHelpLoaded": "Upload the ING account-history CSV export (Home’Bank → account history → CSV). Loaded: {fileName}. Rows land in the review inbox — nothing is booked until you confirm each one.",
+    "pasteTextInstead": "Paste statement text instead",
+    "statementText": "Statement text",
+    "statementTextPlaceholder": "Paste the extracted text of one ING statement…",
+    "pasteHelp": "Fallback for when no CSV export is available: paste the extracted text of a single ING RON statement. Rows land in the review inbox — nothing is booked until you confirm each one.",
+    "uploadCsvInstead": "Upload a CSV instead (recommended)",
+    "parsing": "Parsing…",
+    "parseIntoInbox": "Parse into inbox",
+    "noActiveBankAccount": "This entity has no active bank account to import a statement into.",
+    "recentImports": "Recent imports",
+    "noStatements": "No statements imported yet.",
+    "pendingOfTotal": "{pending} of {total} pending",
+    "allImports": "← All imports",
+    "batchSummary": "{account} · {start}–{end} · opening {opening} → closing {closing} (net {sign}{net})",
+    "pendingReviewSummary": "{pending} pending of {total}. Confirm-all books high-confidence rows only — low-confidence, overlap, and category-less rows stay for review.",
+    "confirmAllHighConfidence": "Confirm all high-confidence",
+    "syntheticKey": "synthetic key",
+    "bankRef": "bank ref",
+    "overlapTitle": "Refless row inside a period overlap — confirm individually",
+    "overlapConfirm": "overlap — confirm",
+    "pickCategory": "Pick a category…",
+    "book": "Book",
+    "skip": "Skip",
+    "categoryRequired": "category required",
+    "alreadyInLedgerSuffix": "— already in the ledger",
+    "done": "Done",
+    "bookedCount": "booked {count}",
+    "duplicateCount": "{count} duplicate",
+    "leftForReviewCount": "{count} left for review",
+    "kind": {
+      "revenue": "revenue",
+      "statePayment": "state_payment",
+      "ownerTransfer": "owner_transfer",
+      "professionalServices": "professional_services",
+      "subscription": "subscription",
+      "cardPurchase": "card_purchase",
+      "bankFee": "bank_fee",
+      "unknown": "unknown"
+    },
+    "confidence": {
+      "high": "high",
+      "low": "low"
+    },
+    "categoryKind": {
+      "income": "income",
+      "expense": "expense"
+    },
+    "status": {
+      "booked": "booked",
+      "duplicate": "duplicate",
+      "skipped": "skipped"
+    },
+    "reason": {
+      "bankFeeNoCounterparty": "Service Fee row with no counterparty",
+      "incomingFundsCredit": "credit with \"Incoming funds\" marker",
+      "treasuryIban": "counterparty IBAN is a treasury account (RO..TREZ)",
+      "knownRecurringMerchant": "known recurring merchant: {merchant}",
+      "unrecognizedPos": "POS purchase at an unrecognized merchant — purpose unverified, confirm in review",
+      "ownerNameMatch": "counterparty matches owner name: {counterparty}",
+      "professionalMarker": "counterparty carries a professional-services marker: {counterparty}",
+      "businessTransferNoMarker": "outgoing business transfer to a company counterparty without a professional-services marker",
+      "creditNoIncomingMarker": "credit without a recognized incoming-funds marker",
+      "noClassificationRule": "no classification rule matched this row shape"
+    }
+  },
   "investments": {
     "holdings": "Holdings",
     "recordTrade": "Record a trade",

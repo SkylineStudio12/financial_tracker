@@ -32,8 +32,11 @@ export interface TransactionListRow {
   date: string;
   description: string;
   kind: TransactionKind;
-  /** Single category name, or "Split (n)" when legs differ, or null. */
+  /** Single category name when all legs share one; null otherwise. */
   category: string | null;
+  /** Distinct leg-category count when legs differ (≥2); null otherwise —
+   * the page renders the localized "Split (n)" label, not the query. */
+  splitCount: number | null;
   tagNames: string[];
   /** Display leg: the real-account posting with the largest |RON| value. */
   amount: number;
@@ -175,12 +178,8 @@ export async function listTransactions(
       date: transaction.date,
       description: transaction.description,
       kind: transaction.kind,
-      category:
-        categoryNames.length === 0
-          ? null
-          : categoryNames.length === 1
-            ? categoryNames[0]
-            : `Split (${categoryNames.length})`,
+      category: categoryNames.length === 1 ? categoryNames[0] : null,
+      splitCount: categoryNames.length > 1 ? categoryNames.length : null,
       tagNames: tagRows.filter((t) => t.transactionId === transaction.id).map((t) => t.name),
       amount: display?.amount ?? 0,
       currency: display?.currency ?? "RON",

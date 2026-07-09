@@ -51,6 +51,7 @@ export default async function DashboardPage({
   const locale = await getLocale();
   const t = await getTranslations("dashboard");
   const tCommon = await getTranslations("common");
+  const tEnums = await getTranslations("enums");
   const balances = await getAccountBalances(entityId, owner);
   // The all-entities net cash consolidation belongs to the SHARED household
   // view only; personal profiles show just that person's balances.
@@ -114,7 +115,7 @@ export default async function DashboardPage({
               {balances.map((account) => (
                 <tr key={account.accountId} className="border-t border-border-hairline">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">{account.name}</td>
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{account.type}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{tEnums(`accountType.${account.type}`)}</td>
                   <td className={amountClass(account.balance)}>
                     {formatMinor(account.balance, account.currency, locale)}
                   </td>
@@ -210,7 +211,7 @@ export default async function DashboardPage({
                 {currentQuarterGroups.map((group) => (
                   <tr key={group.ruleType} className="border-t border-border-hairline first:border-t-0">
                     <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
-                      {group.ruleType}
+                      {tEnums(`taxRuleType.${group.ruleType}`)}
                       {ESTIMATE_RULES.includes(group.ruleType) && (
                         <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                           {tCommon("estimate")}
@@ -246,8 +247,8 @@ export default async function DashboardPage({
                   >
                     <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                       {period.quarter === null
-                        ? t("periodAnnual", { year: period.year })
-                        : t("periodQuarter", { year: period.year, quarter: period.quarter })}
+                        ? tCommon("periodAnnual", { year: period.year })
+                        : tCommon("periodQuarter", { year: period.year, quarter: period.quarter })}
                       {period.hasEstimate && (
                         <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
                           {t("includesEstimates")}

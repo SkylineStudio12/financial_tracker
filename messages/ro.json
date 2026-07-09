@@ -3,7 +3,36 @@
     "appName": "Evidență financiară",
     "appDescription": "Finanțe personale și de firmă",
     "investments": "Investiții",
-    "estimate": "ESTIMARE"
+    "estimate": "ESTIMARE",
+    "periodAnnual": "{year} anual",
+    "periodQuarter": "{year} T{quarter}"
+  },
+  "enums": {
+    "transactionKind": {
+      "standard": "Standard",
+      "transfer": "Transfer",
+      "salary": "Salariu",
+      "dividend": "Dividend",
+      "trade": "Ordin bursier",
+      "opening_balance": "Sold inițial"
+    },
+    "accountType": {
+      "bank": "Bancă",
+      "cash": "Numerar",
+      "brokerage": "Brokeraj",
+      "position": "Poziții",
+      "tax_liability": "Datorie fiscală",
+      "equity": "Capital propriu"
+    },
+    "taxRuleType": {
+      "micro_revenue_tax": "Impozit micro pe venit",
+      "dividend_tax": "Impozit pe dividende",
+      "cass_dividend": "CASS dividende",
+      "salary_income_tax": "Impozit pe salariu",
+      "salary_cas": "CAS salariu",
+      "salary_cass": "CASS salariu",
+      "cam": "CAM"
+    }
   },
   "sidebar": {
     "switchProfile": "Schimbă profilul",
@@ -39,8 +68,45 @@
     "nothingAccrued": "Nimic acumulat în acest trimestru.",
     "accrualsByPeriod": "Acumulări pe perioade",
     "noAccruals": "Nicio acumulare încă.",
-    "periodAnnual": "{year} anual",
-    "periodQuarter": "{year} T{quarter}",
     "includesEstimates": "include estimări"
+  },
+  "transactions": {
+    "title": "Tranzacții",
+    "filterFrom": "De la",
+    "filterTo": "Până la",
+    "filterAccount": "Cont",
+    "filterCategory": "Categorie",
+    "filterKind": "Tip",
+    "filterTag": "Etichetă",
+    "filterSearch": "Căutare",
+    "all": "Toate",
+    "searchPlaceholder": "Descriere…",
+    "apply": "Aplică",
+    "reset": "Resetează",
+    "colDate": "Dată",
+    "colDescription": "Descriere",
+    "colCategory": "Categorie",
+    "colTags": "Etichete",
+    "colAccount": "Cont",
+    "colAmount": "Sumă",
+    "noMatch": "Nicio tranzacție nu corespunde.",
+    "split": "Împărțit ({count})",
+    "pagination": "{total, plural, one {# tranzacție} few {# tranzacții} other {# de tranzacții}} · pagina {page} din {pageCount}",
+    "newer": "← Mai noi",
+    "older": "Mai vechi →",
+    "backToList": "← Tranzacții",
+    "edit": "Editează",
+    "delete": "Șterge",
+    "deleting": "Se șterge…",
+    "confirmDelete": "Ștergi această tranzacție (soft-delete)?",
+    "detailTags": "etichete: {names}",
+    "appliedRates": "{count, plural, one {Curs valutar aplicat:} other {Cursuri valutare aplicate:}}",
+    "bnrRate": "1 {currency} = {rate} RON (BNR {date})",
+    "postings": "Înregistrări",
+    "colCounterparty": "Contrapartidă",
+    "colRate": "Curs",
+    "taxAccruals": "Acumulări fiscale",
+    "colRule": "Regulă",
+    "colPeriod": "Perioadă"
   }
 }

@@ -7,14 +7,25 @@
  */
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, entities, postings, taxAccruals, taxRules, transactions } from "@/db/schema";
+import {
+  accounts,
+  accountType,
+  entities,
+  postings,
+  taxAccruals,
+  taxRules,
+  transactions,
+} from "@/db/schema";
 import type { AccountOwner } from "@/lib/profiles";
 import type { TaxRuleType } from "@/lib/tax/rules";
+
+export type AccountType = (typeof accountType.enumValues)[number];
 
 export interface AccountBalance {
   accountId: string;
   name: string;
-  type: string;
+  /** Typed to the enum so display layers can prove label completeness. */
+  type: AccountType;
   currency: string;
   balance: number;
   balanceRon: number;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { transactionKind } from "@/db/schema";
 import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor, formatMinorNumber } from "@/lib/format";
@@ -68,6 +68,8 @@ export default async function TransactionsPage({
   if (!profile) notFound();
   const { entityId, owner } = profile;
   const locale = await getLocale();
+  const t = await getTranslations("transactions");
+  const tEnums = await getTranslations("enums");
   const query = await searchParams;
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
@@ -92,23 +94,23 @@ export default async function TransactionsPage({
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <div className="flex items-center justify-between">
-        <h1 className="text-title text-text-primary">Transactions</h1>
+        <h1 className="text-title text-text-primary">{t("title")}</h1>
         <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
       </div>
 
       <form method="get" className="flex flex-wrap items-center gap-2">
         <label className={pill(Boolean(filters.from))}>
-          From
+          {t("filterFrom")}
           <input type="date" name="from" defaultValue={filters.from} className={pillControl} />
         </label>
         <label className={pill(Boolean(filters.to))}>
-          To
+          {t("filterTo")}
           <input type="date" name="to" defaultValue={filters.to} className={pillControl} />
         </label>
         <label className={pill(Boolean(filters.accountId))}>
-          Account
+          {t("filterAccount")}
           <select name="account" defaultValue={filters.accountId ?? ""} className={pillControl}>
-            <option value="">All</option>
+            <option value="">{t("all")}</option>
             {options.accounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.name}
@@ -117,9 +119,9 @@ export default async function TransactionsPage({
           </select>
         </label>
         <label className={pill(Boolean(filters.categoryId))}>
-          Category
+          {t("filterCategory")}
           <select name="category" defaultValue={filters.categoryId ?? ""} className={pillControl}>
-            <option value="">All</option>
+            <option value="">{t("all")}</option>
             {options.categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -128,20 +130,20 @@ export default async function TransactionsPage({
           </select>
         </label>
         <label className={pill(Boolean(filters.kind))}>
-          Kind
+          {t("filterKind")}
           <select name="kind" defaultValue={filters.kind ?? ""} className={pillControl}>
-            <option value="">All</option>
+            <option value="">{t("all")}</option>
             {transactionKind.enumValues.map((kind) => (
               <option key={kind} value={kind}>
-                {kind}
+                {tEnums(`transactionKind.${kind}`)}
               </option>
             ))}
           </select>
         </label>
         <label className={pill(Boolean(filters.tagId))}>
-          Tag
+          {t("filterTag")}
           <select name="tag" defaultValue={filters.tagId ?? ""} className={pillControl}>
-            <option value="">All</option>
+            <option value="">{t("all")}</option>
             {options.tags.map((tag) => (
               <option key={tag.id} value={tag.id}>
                 {tag.name}
@@ -150,12 +152,12 @@ export default async function TransactionsPage({
           </select>
         </label>
         <label className={pill(Boolean(filters.search))}>
-          Search
+          {t("filterSearch")}
           <input
             type="text"
             name="q"
             defaultValue={filters.search}
-            placeholder="Description…"
+            placeholder={t("searchPlaceholder")}
             className={`${pillControl} w-24 transition-[width] duration-200 focus:w-48`}
           />
         </label>
@@ -163,13 +165,13 @@ export default async function TransactionsPage({
           type="submit"
           className="rounded-pill bg-accent text-accent-foreground px-4 h-[var(--density-control-height)] text-secondary hover:bg-accent-hover"
         >
-          Apply
+          {t("apply")}
         </button>
         <Link
           href="?"
           className="inline-flex items-center px-2 h-[var(--density-control-height)] text-secondary text-text-muted hover:text-text-primary"
         >
-          Reset
+          {t("reset")}
         </Link>
       </form>
 
@@ -177,12 +179,12 @@ export default async function TransactionsPage({
         <table className="w-full text-secondary">
           <thead>
             <tr className="text-left text-micro uppercase text-text-muted">
-              <th className={`${cellClass} font-normal`}>Date</th>
-              <th className={`${cellClass} font-normal`}>Description</th>
-              <th className={`${cellClass} font-normal`}>Category</th>
-              <th className={`${cellClass} font-normal`}>Tags</th>
-              <th className={`${cellClass} font-normal`}>Account</th>
-              <th className={`${cellClass} font-normal text-right`}>Amount</th>
+              <th className={`${cellClass} font-normal`}>{t("colDate")}</th>
+              <th className={`${cellClass} font-normal`}>{t("colDescription")}</th>
+              <th className={`${cellClass} font-normal`}>{t("colCategory")}</th>
+              <th className={`${cellClass} font-normal`}>{t("colTags")}</th>
+              <th className={`${cellClass} font-normal`}>{t("colAccount")}</th>
+              <th className={`${cellClass} font-normal text-right`}>{t("colAmount")}</th>
               <th className={`${cellClass} font-normal text-right`}>RON</th>
             </tr>
           </thead>
@@ -190,7 +192,7 @@ export default async function TransactionsPage({
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className={`${cellClass} py-8 text-center text-text-muted`}>
-                  No transactions match.
+                  {t("noMatch")}
                 </td>
               </tr>
             )}
@@ -206,7 +208,9 @@ export default async function TransactionsPage({
                   {formatDate(row.date, locale)}
                 </td>
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
-                <td className={`${cellClass} text-text-muted`}>{row.category ?? "—"}</td>
+                <td className={`${cellClass} text-text-muted`}>
+                  {row.splitCount ? t("split", { count: row.splitCount }) : (row.category ?? "—")}
+                </td>
                 <td className={`${cellClass} text-text-muted`}>
                   {row.tagNames.join(", ") || "—"}
                 </td>
@@ -230,16 +234,16 @@ export default async function TransactionsPage({
 
       <div className="flex items-center gap-3 text-secondary text-text-muted">
         <span>
-          {total} transaction{total === 1 ? "" : "s"} · page {page} of {pageCount}
+          {t("pagination", { total, page, pageCount })}
         </span>
         {page > 1 && (
           <Link href={pageHref(query, page - 1)} className="text-accent hover:underline">
-            ← Newer
+            {t("newer")}
           </Link>
         )}
         {page < pageCount && (
           <Link href={pageHref(query, page + 1)} className="text-accent hover:underline">
-            Older →
+            {t("older")}
           </Link>
         )}
       </div>

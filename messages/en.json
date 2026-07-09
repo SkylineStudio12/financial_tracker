@@ -3,7 +3,36 @@
     "appName": "Financial tracker",
     "appDescription": "Household and company finances",
     "investments": "Investments",
-    "estimate": "ESTIMATE"
+    "estimate": "ESTIMATE",
+    "periodAnnual": "{year} annual",
+    "periodQuarter": "{year} Q{quarter}"
+  },
+  "enums": {
+    "transactionKind": {
+      "standard": "Standard",
+      "transfer": "Transfer",
+      "salary": "Salary",
+      "dividend": "Dividend",
+      "trade": "Trade",
+      "opening_balance": "Opening balance"
+    },
+    "accountType": {
+      "bank": "Bank",
+      "cash": "Cash",
+      "brokerage": "Brokerage",
+      "position": "Positions",
+      "tax_liability": "Tax liability",
+      "equity": "Equity"
+    },
+    "taxRuleType": {
+      "micro_revenue_tax": "Micro revenue tax",
+      "dividend_tax": "Dividend tax",
+      "cass_dividend": "CASS on dividends",
+      "salary_income_tax": "Salary income tax",
+      "salary_cas": "Salary CAS",
+      "salary_cass": "Salary CASS",
+      "cam": "CAM"
+    }
   },
   "sidebar": {
     "switchProfile": "Switch profile",
@@ -39,8 +68,45 @@
     "nothingAccrued": "Nothing accrued this quarter.",
     "accrualsByPeriod": "Accruals by period",
     "noAccruals": "No accruals yet.",
-    "periodAnnual": "{year} annual",
-    "periodQuarter": "{year} Q{quarter}",
     "includesEstimates": "includes estimates"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "filterFrom": "From",
+    "filterTo": "To",
+    "filterAccount": "Account",
+    "filterCategory": "Category",
+    "filterKind": "Kind",
+    "filterTag": "Tag",
+    "filterSearch": "Search",
+    "all": "All",
+    "searchPlaceholder": "Description…",
+    "apply": "Apply",
+    "reset": "Reset",
+    "colDate": "Date",
+    "colDescription": "Description",
+    "colCategory": "Category",
+    "colTags": "Tags",
+    "colAccount": "Account",
+    "colAmount": "Amount",
+    "noMatch": "No transactions match.",
+    "split": "Split ({count})",
+    "pagination": "{total, plural, one {# transaction} other {# transactions}} · page {page} of {pageCount}",
+    "newer": "← Newer",
+    "older": "Older →",
+    "backToList": "← Transactions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "confirmDelete": "Soft-delete this transaction?",
+    "detailTags": "tags: {names}",
+    "appliedRates": "{count, plural, one {Applied FX rate:} other {Applied FX rates:}}",
+    "bnrRate": "1 {currency} = {rate} RON (BNR {date})",
+    "postings": "Postings",
+    "colCounterparty": "Counterparty",
+    "colRate": "Rate",
+    "taxAccruals": "Tax accruals",
+    "colRule": "Rule",
+    "colPeriod": "Period"
   }
 }

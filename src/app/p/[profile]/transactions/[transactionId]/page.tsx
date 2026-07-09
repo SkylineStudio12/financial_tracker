@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 import { formatBpsPercent, formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
@@ -23,6 +23,9 @@ export default async function TransactionDetailPage({
     notFound();
   }
   const locale = await getLocale();
+  const t = await getTranslations("transactions");
+  const tEnums = await getTranslations("enums");
+  const tCommon = await getTranslations("common");
   const detail = await getTransactionDetail(transactionId);
   // Guard the transaction to the profile's entity (cross-entity ids 404).
   if (!detail || detail.transaction.entityId !== profile.entityId) notFound();
@@ -46,7 +49,7 @@ export default async function TransactionDetailPage({
           href={`/p/${profile.slug}/transactions`}
           className="text-secondary text-accent hover:underline"
         >
-          ← Transactions
+          {t("backToList")}
         </Link>
         <div className="flex items-center gap-2">
           {(transaction.kind === "standard" || transaction.kind === "transfer") && (
@@ -54,7 +57,7 @@ export default async function TransactionDetailPage({
               href={`/p/${profile.slug}/transactions/${transaction.id}/edit`}
               className="inline-flex items-center rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-text-primary hover:border-accent"
             >
-              Edit
+              {t("edit")}
             </Link>
           )}
           <DeleteTransactionButton transactionId={transaction.id} entityId={profile.entityId} profileSlug={profile.slug} />
@@ -64,15 +67,17 @@ export default async function TransactionDetailPage({
       <div className="flex flex-col gap-1">
         <h1 className="text-card-title text-text-primary">{transaction.description}</h1>
         <div className="text-secondary text-text-muted">
-          {formatDate(transaction.date, locale)} · {transaction.kind}
-          {tagNames.length > 0 && <> · tags: {tagNames.join(", ")}</>}
+          {formatDate(transaction.date, locale)} · {tEnums(`transactionKind.${transaction.kind}`)}
+          {tagNames.length > 0 && <> · {t("detailTags", { names: tagNames.join(", ") })}</>}
         </div>
         {transaction.notes && <p className="text-secondary text-text-muted">{transaction.notes}</p>}
         {appliedRates.length > 0 && (
           <div className="text-secondary text-text-muted">
-            Applied FX rate{appliedRates.length > 1 ? "s" : ""}:{" "}
+            {t("appliedRates", { count: appliedRates.length })}{" "}
             {appliedRates
-              .map((r) => `1 ${r.currency} = ${r.rate} RON (BNR ${formatDate(r.rateDate, locale)})`)
+              .map((r) =>
+                t("bnrRate", { currency: r.currency, rate: r.rate, date: formatDate(r.rateDate, locale) }),
+              )
               .join(" · ")}
           </div>
         )}
@@ -80,18 +85,18 @@ export default async function TransactionDetailPage({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-micro uppercase text-text-muted">
-          Postings
+          {t("postings")}
         </h2>
         <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
           <table className="w-full text-secondary">
             <thead>
               <tr className="text-left text-micro uppercase text-text-muted">
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Account</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Category</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Counterparty</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Amount</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colAccount")}</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colCategory")}</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colCounterparty")}</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">{t("colAmount")}</th>
                 <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">RON</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Rate</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">{t("colRate")}</th>
               </tr>
             </thead>
             <tbody>
@@ -125,16 +130,16 @@ export default async function TransactionDetailPage({
       {accruals.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-micro uppercase text-text-muted">
-            Tax accruals
+            {t("taxAccruals")}
           </h2>
           <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
             <table className="w-full text-secondary">
               <thead>
                 <tr className="text-left text-micro uppercase text-text-muted">
-                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Rule</th>
-                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Rate</th>
-                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Period</th>
-                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Amount</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colRule")}</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colRate")}</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colPeriod")}</th>
+                  <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">{t("colAmount")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,10 +148,10 @@ export default async function TransactionDetailPage({
                   return (
                     <tr key={accrual.id} className="border-t border-border-hairline">
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
-                        {accrual.ruleType}
+                        {tEnums(`taxRuleType.${accrual.ruleType}`)}
                         {accrual.ruleType === "cass_dividend" && (
                           <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
-                            ESTIMATE
+                            {tCommon("estimate")}
                           </span>
                         )}
                       </td>
@@ -154,8 +159,9 @@ export default async function TransactionDetailPage({
                         {formatBpsPercent(accrual.rateBps, locale, { minFractionDigits: 2 })}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
-                        {accrual.year}
-                        {accrual.quarter ? ` Q${accrual.quarter}` : ""}
+                        {accrual.quarter
+                          ? tCommon("periodQuarter", { year: accrual.year, quarter: accrual.quarter })
+                          : accrual.year}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
                         {posting ? formatMinor(posting.amountRon, "RON", locale) : "—"}

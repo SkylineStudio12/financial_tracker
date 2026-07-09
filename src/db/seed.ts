@@ -9,6 +9,7 @@
 import "dotenv/config";
 import { db, pool } from "./index";
 import { accounts, entities, categories, taxRules } from "./schema";
+import { bookSkylineOpeningBalance } from "./opening-balances";
 
 const PLACEHOLDER_NOTE =
   "PLACEHOLDER — rate must be confirmed against current Romanian legislation before any tax calculation is trusted.";
@@ -168,6 +169,13 @@ async function main() {
       },
     ].map((rule) => ({ ...rule, validFrom: "2026-01-01" })));
   });
+
+  // --- Opening balances (after commit) ------------------------------------
+  // Booked through createTransaction, which validates accounts via the POOL,
+  // not the seed's tx handle — so the accounts must already be committed. Hence
+  // this runs here, outside the transaction above, not inside it.
+  const openingBalanceTxId = await bookSkylineOpeningBalance();
+  console.log(`Booked Skyline opening balance: transaction ${openingBalanceTxId}.`);
 
   const summary = await Promise.all([
     db.$count(entities),

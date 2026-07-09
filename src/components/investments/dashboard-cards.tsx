@@ -1,7 +1,8 @@
 /**
  * Investment dashboard cards (Phase 4 Stage 5) — PRESENTATION ONLY over a
- * ValuationResult. Hook-free and pure so the same components render on the
- * server dashboard and in the gallery's fixture demos.
+ * ValuationResult. Pure over props except next-intl's useTranslations (works
+ * in both render contexts), so the same components render on the server
+ * dashboard and in the gallery's fixture demos.
  *
  * THE THREE HONESTY RULES (acceptance bar — presentation must never undo
  * Stage 4's care):
@@ -13,6 +14,7 @@
  *    ("no holdings", an invite, an em-dash) — NEVER as "0.00 RON".
  */
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/config";
 import { formatDate, formatMinor } from "@/lib/format";
 import type { ValuationResult } from "@/lib/investments/valuation";
@@ -35,20 +37,23 @@ function oldestStaleDate(result: ValuationResult): string | null {
 }
 
 function HonestyLines({ result, locale }: { result: ValuationResult; locale: Locale }) {
+  const t = useTranslations("investments");
   const stale = oldestStaleDate(result);
   const excludedBasis = result.totals.basisRonMinor - result.totals.valuedBasisRonMinor;
   return (
     <>
       {result.totals.unpricedCount > 0 && (
         <p className="text-caption text-status-warning-text">
-          Excludes {result.totals.unpricedCount} unpriced holding
-          {result.totals.unpricedCount > 1 ? "s" : ""} (basis{" "}
-          <span className={num}>{formatMinor(excludedBasis, "RON", locale)}</span>).
+          {t.rich("excludesUnpricedBasis", {
+            count: result.totals.unpricedCount,
+            basis: formatMinor(excludedBasis, "RON", locale),
+            n: (chunks) => <span className={num}>{chunks}</span>,
+          })}
         </p>
       )}
       {stale && (
         <p className="text-caption text-status-warning-text">
-          Includes prices as old as {formatDate(stale, locale)}.
+          {t("pricesAsOldAs", { date: formatDate(stale, locale) })}
         </p>
       )}
     </>
@@ -65,20 +70,20 @@ export function InvestmentSummaryCard({
   investmentsHref: string;
   locale: Locale;
 }) {
+  const t = useTranslations("investments");
   // Day one: no holdings at all — an honest invite, never a zero.
   if (result.holdings.length === 0) {
     return (
       <div className={card}>
-        <h3 className={cardTitle}>Portfolio value</h3>
+        <h3 className={cardTitle}>{t("portfolioValue")}</h3>
         <p className="text-secondary text-text-muted">
-          No holdings yet. Record your first trade and portfolio value, unrealized
-          gain, and allocation appear here.
+          {t("noHoldingsInvite")}
         </p>
         <Link
           href={investmentsHref}
           className="self-start text-secondary text-text-primary underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
-          Record a trade
+          {t("recordTrade")}
         </Link>
       </div>
     );
@@ -90,14 +95,16 @@ export function InvestmentSummaryCard({
   if (priced.length === 0) {
     return (
       <div className={card}>
-        <h3 className={cardTitle}>Portfolio value</h3>
+        <h3 className={cardTitle}>{t("portfolioValue")}</h3>
         <p className="text-secondary text-text-primary">
-          {result.holdings.length} holding{result.holdings.length > 1 ? "s" : ""}, none
-          priced yet — cost basis{" "}
-          <span className={num}>{formatMinor(result.totals.basisRonMinor, "RON", locale)}</span>.
+          {t.rich("nonePricedBasis", {
+            count: result.holdings.length,
+            basis: formatMinor(result.totals.basisRonMinor, "RON", locale),
+            n: (chunks) => <span className={num}>{chunks}</span>,
+          })}
         </p>
         <p className="text-caption text-text-muted">
-          Add a price snapshot on the investments page to value them.
+          {t("addSnapshotHint")}
         </p>
       </div>
     );
@@ -111,7 +118,7 @@ export function InvestmentSummaryCard({
 
   return (
     <div className={card}>
-      <h3 className={cardTitle}>Portfolio value</h3>
+      <h3 className={cardTitle}>{t("portfolioValue")}</h3>
       <p className={`text-number-lg text-text-primary ${num}`}>
         {formatMinor(result.totals.valueRonMinor, "RON", locale)}
       </p>
@@ -120,16 +127,17 @@ export function InvestmentSummaryCard({
           {signed(result.totals.unrealizedRonMinor, "RON", locale)}
         </span>{" "}
         <span className="text-text-muted">
-          unrealized on{" "}
-          <span className={num}>{formatMinor(result.totals.valuedBasisRonMinor, "RON", locale)}</span>{" "}
-          basis
+          {t.rich("unrealizedOn", {
+            basis: formatMinor(result.totals.valuedBasisRonMinor, "RON", locale),
+            n: (chunks) => <span className={num}>{chunks}</span>,
+          })}
         </span>
       </p>
       <p className="text-caption text-text-muted">
         {[...byCurrency.entries()]
           .map(([currency, value]) => `${formatMinor(value, currency, locale)}`)
           .join(" · ")}{" "}
-        — valued {formatDate(result.date, locale)}
+        — {t("valuedOn", { date: formatDate(result.date, locale) })}
       </p>
       <HonestyLines result={result} locale={locale} />
     </div>
@@ -140,6 +148,7 @@ export function InvestmentSummaryCard({
  * holdings never get a bar (a bar implies a share of a total they aren't
  * in) — they are named beneath. */
 export function AllocationCard({ result, locale }: { result: ValuationResult; locale: Locale }) {
+  const t = useTranslations("investments");
   if (result.holdings.length === 0) return null;
   const priced = result.holdings.filter((h) => h.valueRonMinor !== null);
   const unpriced = result.holdings.filter((h) => h.valueRonMinor === null);
@@ -147,10 +156,10 @@ export function AllocationCard({ result, locale }: { result: ValuationResult; lo
 
   return (
     <div className={card}>
-      <h3 className={cardTitle}>Allocation</h3>
+      <h3 className={cardTitle}>{t("allocation")}</h3>
       {priced.length === 0 ? (
         <p className="text-secondary text-text-muted">
-          Nothing priced yet — allocation appears once holdings have prices.
+          {t("nothingPricedAllocation")}
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -164,7 +173,7 @@ export function AllocationCard({ result, locale }: { result: ValuationResult; lo
                     {h.price?.stale && (
                       <span className="text-caption text-status-warning-text">
                         {" "}
-                        as of {formatDate(h.price.priceDate, locale)}
+                        {t("asOfDate", { date: formatDate(h.price.priceDate, locale) })}
                       </span>
                     )}
                   </span>
@@ -185,7 +194,9 @@ export function AllocationCard({ result, locale }: { result: ValuationResult; lo
       )}
       {unpriced.length > 0 && (
         <p className="text-caption text-status-warning-text">
-          Not valued: {unpriced.map((h) => `${h.ticker} (no price)`).join(", ")}.
+          {t("notValuedList", {
+            list: unpriced.map((h) => t("noPriceTag", { ticker: h.ticker })).join(", "),
+          })}
         </p>
       )}
     </div>
@@ -195,13 +206,14 @@ export function AllocationCard({ result, locale }: { result: ValuationResult; lo
 /** Card 3 — by owner (household profile only). An owner with no holdings
  * reads "no holdings" — never 0.00 RON. */
 export function OwnerCard({ result, locale }: { result: ValuationResult; locale: Locale }) {
+  const t = useTranslations("investments");
   if (result.holdings.length === 0) return null;
   const owners = ["greg", "andra"] as const;
   const label: Record<(typeof owners)[number], string> = { greg: "Greg", andra: "Andra" };
 
   return (
     <div className={card}>
-      <h3 className={cardTitle}>By owner</h3>
+      <h3 className={cardTitle}>{t("byOwner")}</h3>
       <ul className="flex flex-col gap-1.5">
         {owners.map((owner) => {
           const theirs = result.holdings.filter((h) => h.owner === owner);
@@ -212,10 +224,10 @@ export function OwnerCard({ result, locale }: { result: ValuationResult; locale:
             <li key={owner} className="flex items-baseline justify-between gap-2 text-secondary">
               <span className="text-text-primary">{label[owner]}</span>
               {theirs.length === 0 ? (
-                <span className="text-text-muted">no holdings</span>
+                <span className="text-text-muted">{t("ownerNoHoldings")}</span>
               ) : priced.length === 0 ? (
                 <span className="text-text-muted">
-                  {theirs.length} holding{theirs.length > 1 ? "s" : ""}, unpriced
+                  {t("ownerHoldingsUnpriced", { count: theirs.length })}
                 </span>
               ) : (
                 <span className={num}>
@@ -224,7 +236,7 @@ export function OwnerCard({ result, locale }: { result: ValuationResult; locale:
                   {priced.length < theirs.length && (
                     <span className="text-caption text-status-warning-text">
                       {" "}
-                      +{theirs.length - priced.length} unpriced
+                      {t("plusUnpriced", { count: theirs.length - priced.length })}
                     </span>
                   )}
                 </span>

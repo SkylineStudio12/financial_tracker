@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import {
   listBrokerageAccounts,
@@ -26,6 +26,9 @@ export default async function InvestmentsPage({
   if (!profile || !profile.investments) notFound();
 
   const locale = await getLocale();
+  const t = await getTranslations("investments");
+  const tCommon = await getTranslations("common");
+  const tDashboard = await getTranslations("dashboard");
   const accounts = await listBrokerageAccounts(profile.entityId, profile.owner);
   const securities = await listSecurities();
   const cashAccounts = accounts.filter((a) => a.type === "brokerage");
@@ -53,26 +56,23 @@ export default async function InvestmentsPage({
 
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
-      <h1 className="text-title text-text-primary">Investments</h1>
+      <h1 className="text-title text-text-primary">{tCommon("investments")}</h1>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-card-title text-text-primary">Holdings</h2>
+        <h2 className="text-card-title text-text-primary">{t("holdings")}</h2>
         {valuation ? (
           <HoldingsTable result={valuation} locale={locale} />
         ) : (
           <p className="text-secondary text-status-warning-text">
-            Holdings could not be valued: {valuationError}
+            {tDashboard("valuationFailed", { error: valuationError ?? "" })}
           </p>
         )}
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-card-title text-text-primary">Record a trade</h2>
+        <h2 className="text-card-title text-text-primary">{t("recordTrade")}</h2>
         <p className="text-secondary text-text-muted">
-          Enter the trade or dividend as Revolut printed it — the {`security's`} amount
-          and the RON amount; the rate is derived, never typed. A sell previews the
-          exact FIFO lots it will consume before you book it; a dividend shows a
-          display-only tax indication that books nothing.
+          {t("tradeIntro")}
         </p>
         <TradeForm
           profileSlug={profile.slug}
@@ -85,10 +85,9 @@ export default async function InvestmentsPage({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-card-title text-text-primary">Price snapshots</h2>
+        <h2 className="text-card-title text-text-primary">{t("priceSnapshots")}</h2>
         <p className="text-caption text-text-muted">
-          Manual entry is the price source for now (the daily sync endpoint exists;
-          an API source gets picked once real tickers prove coverage).
+          {t("priceSnapshotsNote")}
         </p>
         <PriceSnapshotForm
           profileSlug={profile.slug}

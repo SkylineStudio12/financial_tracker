@@ -4,6 +4,7 @@
  * Unpriced holdings show "no price" (never zero) and the totals row names
  * how many were excluded; stale prices carry their real date.
  */
+import { useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/config";
 import { formatDate, formatMinor } from "@/lib/format";
 import { displayQuantity } from "@/lib/investments/trade-rules";
@@ -13,10 +14,11 @@ const num = "text-right font-numeric tabular-nums";
 const cell = "px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)]";
 
 export function HoldingsTable({ result, locale }: { result: ValuationResult; locale: Locale }) {
+  const t = useTranslations("investments");
   if (result.holdings.length === 0) {
     return (
       <p className="text-secondary text-text-muted">
-        No open holdings yet — book a buy and it appears here.
+        {t("noOpenHoldings")}
       </p>
     );
   }
@@ -25,12 +27,12 @@ export function HoldingsTable({ result, locale }: { result: ValuationResult; loc
       <table className="w-full text-secondary">
         <thead>
           <tr className="border-b border-border-hairline text-caption text-text-muted">
-            <th className={`${cell} text-left font-normal`}>Holding</th>
-            <th className={`${cell} text-right font-normal`}>Qty</th>
-            <th className={`${cell} text-right font-normal`}>Cost basis</th>
-            <th className={`${cell} text-right font-normal`}>Price</th>
-            <th className={`${cell} text-right font-normal`}>Value</th>
-            <th className={`${cell} text-right font-normal`}>Unrealized</th>
+            <th className={`${cell} text-left font-normal`}>{t("colHolding")}</th>
+            <th className={`${cell} text-right font-normal`}>{t("colQty")}</th>
+            <th className={`${cell} text-right font-normal`}>{t("colCostBasis")}</th>
+            <th className={`${cell} text-right font-normal`}>{t("colPrice")}</th>
+            <th className={`${cell} text-right font-normal`}>{t("colValue")}</th>
+            <th className={`${cell} text-right font-normal`}>{t("colUnrealized")}</th>
           </tr>
         </thead>
         <tbody>
@@ -59,12 +61,12 @@ export function HoldingsTable({ result, locale }: { result: ValuationResult; loc
                       }`}
                     >
                       {h.price.stale
-                        ? `stale — as of ${formatDate(h.price.priceDate, locale)}`
+                        ? t("staleAsOf", { date: formatDate(h.price.priceDate, locale) })
                         : formatDate(h.price.priceDate, locale)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-status-warning-text">no price — not valued</span>
+                  <span className="text-status-warning-text">{t("noPriceNotValued")}</span>
                 )}
               </td>
               <td className={`${cell} ${num}`}>
@@ -104,7 +106,7 @@ export function HoldingsTable({ result, locale }: { result: ValuationResult; loc
         </tbody>
         <tfoot>
           <tr className="text-text-primary">
-            <td className={cell}>Total (RON, priced holdings)</td>
+            <td className={cell}>{t("totalPricedRow")}</td>
             <td className={cell} />
             <td className={`${cell} ${num}`}>{formatMinor(result.totals.valuedBasisRonMinor, "RON", locale)}</td>
             <td className={cell} />
@@ -125,16 +127,18 @@ export function HoldingsTable({ result, locale }: { result: ValuationResult; loc
         </tfoot>
       </table>
       <p className="text-caption text-text-muted">
-        Valued {formatDate(result.date, locale)}
+        {t("valued", { date: formatDate(result.date, locale) })}
         {result.totals.unpricedCount > 0 &&
-          ` — excludes ${result.totals.unpricedCount} unpriced holding${
-            result.totals.unpricedCount > 1 ? "s" : ""
-          } (basis ${formatMinor(
-            result.totals.basisRonMinor - result.totals.valuedBasisRonMinor,
-            "RON",
-            locale,
-          )})`}
-        . Prices are manual snapshots for now; positions are shown at market where priced.
+          ` — ${t("excludesUnpriced", {
+            count: result.totals.unpricedCount,
+            basis: formatMinor(
+              result.totals.basisRonMinor - result.totals.valuedBasisRonMinor,
+              "RON",
+              locale,
+            ),
+          })}`}
+        {". "}
+        {t("pricesManualNote")}
       </p>
     </div>
   );

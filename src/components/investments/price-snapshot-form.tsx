@@ -7,7 +7,7 @@
  * duplicates.
  */
 import { useState, useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -43,6 +43,8 @@ export function PriceSnapshotForm({
   const [date, setDate] = useState(today);
   const [price, setPrice] = useState("");
   const locale = useLocale();
+  const t = useTranslations("investments");
+  const tForms = useTranslations("forms");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -63,14 +65,14 @@ export function PriceSnapshotForm({
         priceMinor: priceMinor!,
       });
       if ("error" in result) setError(result.error);
-      else setSaved(`Saved ${selected?.ticker ?? ""} @ ${price} for ${date}.`);
+      else setSaved(t("savedSnapshot", { ticker: selected?.ticker ?? "", price, date }));
     });
   }
 
   if (securities.length === 0) {
     return (
       <p className="text-secondary text-text-muted">
-        No securities yet — record a first buy and its security appears here.
+        {t("noSecurities")}
       </p>
     );
   }
@@ -85,14 +87,14 @@ export function PriceSnapshotForm({
     >
       <div className="grid grid-cols-1 gap-[var(--density-field-gap)] sm:grid-cols-3">
         <label className={labelClass}>
-          Security
+          {t("security")}
           <Select
             items={securities.map((s) => ({ value: s.id, label: `${s.ticker} (${s.currency})` }))}
             value={securityId}
             onValueChange={(v) => setSecurityId(v ?? "")}
           >
             <SelectTrigger className={fieldClass}>
-              <SelectValue placeholder="Pick…" />
+              <SelectValue placeholder={tForms("pickPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
               {securities.map((s) => (
@@ -104,7 +106,7 @@ export function PriceSnapshotForm({
           </Select>
         </label>
         <label className={labelClass}>
-          Date
+          {tForms("date")}
           <input
             type="date"
             className={fieldClass}
@@ -113,26 +115,28 @@ export function PriceSnapshotForm({
           />
         </label>
         <label className={labelClass}>
-          Closing price {selected ? `(${selected.currency})` : ""}
+          {t("closingPrice")} {selected ? `(${selected.currency})` : ""}
           <input
             className={`${fieldClass} font-numeric`}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            placeholder="102.50"
+            placeholder={t("pricePlaceholder")}
           />
         </label>
       </div>
       {selected?.latest && (
         <p className="text-caption text-text-muted">
-          Latest stored: {formatMinor(selected.latest.priceMinor, selected.currency, locale)} on{" "}
-          {formatDate(selected.latest.date, locale)}. Re-entering a date replaces its snapshot.
+          {t("latestStored", {
+            price: formatMinor(selected.latest.priceMinor, selected.currency, locale),
+            date: formatDate(selected.latest.date, locale),
+          })}
         </p>
       )}
       {error && <p className={errorClass}>{error}</p>}
       {saved && <p className="text-caption text-status-positive-text">{saved}</p>}
       <div>
         <Button type="submit" size="sm" disabled={!canSave || pending}>
-          {pending ? "Saving…" : "Save price"}
+          {pending ? tForms("saving") : t("savePrice")}
         </Button>
       </div>
     </form>

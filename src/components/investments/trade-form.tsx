@@ -15,7 +15,7 @@
  *   inline with the currency locked to the account's.
  */
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,6 +81,8 @@ export function TradeForm({
   holdingsByAccount: Record<string, Holding[]>;
   today: string;
 }) {
+  const t = useTranslations("investments");
+  const tForms = useTranslations("forms");
   // Typed at last (Stage 4 enum): cash accounts and position accounts are
   // distinguished by account_type, not by name.
   const cashAccounts = useMemo(() => accounts.filter((a) => a.type === "brokerage"), [accounts]);
@@ -309,7 +311,7 @@ export function TradeForm({
   if (cashAccounts.length === 0) {
     return (
       <p className="text-secondary text-text-muted">
-        This profile has no brokerage account to trade from.
+        {t("noBrokerage")}
       </p>
     );
   }
@@ -330,27 +332,27 @@ export function TradeForm({
           className={mode === "buy" ? toggleOnClass : toggleOffClass}
           onClick={() => switchMode("buy")}
         >
-          Buy
+          {t("modeBuy")}
         </button>
         <button
           type="button"
           className={mode === "sell" ? toggleOnClass : toggleOffClass}
           onClick={() => switchMode("sell")}
         >
-          Sell
+          {t("modeSell")}
         </button>
         <button
           type="button"
           className={mode === "dividend" ? toggleOnClass : toggleOffClass}
           onClick={() => switchMode("dividend")}
         >
-          Dividend
+          {t("modeDividend")}
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-[var(--density-field-gap)] sm:grid-cols-2">
         <label className={labelClass}>
-          Brokerage account
+          {t("brokerageAccount")}
           <Select
             items={cashAccounts.map((a) => ({ value: a.id, label: `${a.name} (${a.currency})` }))}
             value={cashAccountId}
@@ -374,14 +376,14 @@ export function TradeForm({
 
         {mode === "buy" && (
           <label className={labelClass}>
-            Position account
+            {t("positionAccount")}
             <Select
               items={positionCandidates.map((a) => ({ value: a.id, label: a.name }))}
               value={positionAccountId}
               onValueChange={(v) => setPositionChoice(v ?? "")}
             >
               <SelectTrigger className={fieldClass}>
-                <SelectValue placeholder="Pick the paired positions account…" />
+                <SelectValue placeholder={t("positionPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
                 {positionCandidates.map((a) => (
@@ -396,7 +398,7 @@ export function TradeForm({
       </div>
 
       <label className={labelClass}>
-        Security
+        {t("security")}
         <Select
           items={securityItems}
           value={securityId}
@@ -406,8 +408,8 @@ export function TradeForm({
             <SelectValue
               placeholder={
                 mode === "sell" && securityItems.length === 0
-                  ? "Nothing held in this account"
-                  : "Pick a security…"
+                  ? t("nothingHeld")
+                  : t("pickSecurity")
               }
             />
           </SelectTrigger>
@@ -426,35 +428,34 @@ export function TradeForm({
           <div className="flex flex-col gap-2 rounded-input border border-border-hairline p-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className={labelClass}>
-                Ticker
+                {t("ticker")}
                 <input
                   className={fieldClass}
                   value={newTicker}
                   onChange={(e) => setNewTicker(e.target.value)}
-                  placeholder="VUAA"
+                  placeholder={t("tickerPlaceholder")}
                 />
               </label>
               <label className={labelClass}>
-                Name
+                {t("securityName")}
                 <input
                   className={fieldClass}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Vanguard S&P 500 UCITS"
+                  placeholder={t("namePlaceholder")}
                 />
               </label>
             </div>
             <p className="text-caption text-text-muted">
-              Currency: {currency} — locked to the account, so a mismatched trade is
-              impossible by construction.
+              {t("currencyLocked", { currency })}
             </p>
             {newSecError && <p className={errorClass}>{newSecError}</p>}
             <div className="flex gap-2">
               <Button type="button" size="sm" onClick={createSecurity}>
-                Create security
+                {t("createSecurity")}
               </Button>
               <button type="button" className={ghostButtonClass} onClick={() => setNewSecOpen(false)}>
-                Cancel
+                {tForms("cancel")}
               </button>
             </div>
           </div>
@@ -464,13 +465,13 @@ export function TradeForm({
             className={`${ghostButtonClass} self-start`}
             onClick={() => setNewSecOpen(true)}
           >
-            + New security ({currency})
+            {t("newSecurity", { currency })}
           </button>
         ))}
 
       <div className="grid grid-cols-2 gap-[var(--density-field-gap)] sm:grid-cols-4">
         <label className={labelClass}>
-          Date
+          {tForms("date")}
           <input
             type="date"
             className={fieldClass}
@@ -481,60 +482,59 @@ export function TradeForm({
         {mode !== "dividend" && (
           <>
             <label className={labelClass}>
-              Shares
+              {t("shares")}
               <input
                 className={`${fieldClass} font-numeric`}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="10"
+                placeholder={t("sharesPlaceholder")}
               />
             </label>
             <label className={labelClass}>
-              Price / share ({currency})
+              {t("pricePerShare", { currency })}
               <input
                 className={`${fieldClass} font-numeric`}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="102.50"
+                placeholder={t("pricePlaceholder")}
               />
             </label>
           </>
         )}
         <label className={labelClass}>
-          {mode === "dividend" ? `Net dividend (${currency})` : `Total (${currency})`}
+          {mode === "dividend" ? t("netDividend", { currency }) : t("totalForeign", { currency })}
           <input
             className={`${fieldClass} font-numeric`}
             value={totalForeign}
             onChange={(e) => setTotalForeign(e.target.value)}
-            placeholder={mode === "dividend" ? "12.34" : "1025.00"}
+            placeholder={mode === "dividend" ? t("dividendPlaceholder") : t("totalPlaceholder")}
           />
         </label>
       </div>
 
       <div className="grid grid-cols-1 gap-[var(--density-field-gap)] sm:grid-cols-2">
         <label className={labelClass}>
-          {mode === "dividend" ? "Net received" : mode === "buy" ? "Total charged" : "Total received"}{" "}
-          (RON) — as the broker printed it
+          {mode === "dividend" ? t("ronDividend") : mode === "buy" ? t("ronBuy") : t("ronSell")}
           <input
             className={`${fieldClass} font-numeric`}
             value={totalRon}
             onChange={(e) => setTotalRon(e.target.value)}
-            placeholder="4715.00"
+            placeholder={t("ronPlaceholder")}
           />
         </label>
         {!isRonAccount && (
           <div className={labelClass}>
-            Implied broker rate (derived — you never enter a rate)
+            {t("impliedRate")}
             <p className="flex h-[var(--density-control-height)] items-center gap-2 font-numeric text-secondary text-text-primary">
               {rate ? (
                 <>
-                  <span>1 {currency} = {rate.rate} RON</span>
+                  <span>{t("rateValue", { currency, rate: rate.rate })}</span>
                   {bnrHint && (
-                    <span className="text-caption text-text-muted">BNR that day: {bnrHint}</span>
+                    <span className="text-caption text-text-muted">{t("bnrThatDay", { rate: bnrHint })}</span>
                   )}
                 </>
               ) : (
-                <span className="text-text-muted">enter both totals</span>
+                <span className="text-text-muted">{t("enterBothTotals")}</span>
               )}
             </p>
           </div>
@@ -543,7 +543,7 @@ export function TradeForm({
 
       {rate && !rate.reconciles && (
         <p className={errorClass}>
-          These amounts don&apos;t reconcile — check for a typo in one of the two totals.
+          {t("reconcileError")}
         </p>
       )}
 
@@ -564,12 +564,12 @@ export function TradeForm({
       <div>
         <Button type="submit" disabled={!canBook || pending}>
           {pending
-            ? "Booking…"
+            ? t("booking")
             : mode === "buy"
-              ? "Book buy"
+              ? t("bookBuy")
               : mode === "sell"
-                ? "Book sell"
-                : "Book dividend"}
+                ? t("bookSell")
+                : t("bookDividend")}
         </Button>
       </div>
     </form>
@@ -594,13 +594,14 @@ function DividendEstimatePanel({
   held: string | undefined;
 }) {
   const locale = useLocale();
+  const t = useTranslations("investments");
   if (!estimate) {
     return (
       <p className="text-caption text-text-muted">
         {held
-          ? `You hold ${displayQuantity(held)}. `
+          ? `${t("youHold", { quantity: displayQuantity(held) })} `
           : ""}
-        Enter the RON amount to see the rough tax indication.
+        {t("enterRonHint")}
       </p>
     );
   }
@@ -609,20 +610,17 @@ function DividendEstimatePanel({
     <div className="flex flex-col gap-1.5 rounded-input border border-dashed border-border-hairline p-3">
       <div>
         <Badge variant="outline">
-          <span className="text-status-warning-text">ESTIMATE — nothing is booked</span>
+          <span className="text-status-warning-text">{t("estimateNothingBooked")}</span>
         </Badge>
       </div>
       <p className="text-caption text-text-muted">
-        Rough indication if this dividend alone were taxed: dividend tax (
-        {formatBpsPercent(estimate.dividendTaxRateBps, locale)}): ≈ {formatMinor(estimate.dividendTaxRonMinor, "RON", locale)}.
-        The rate is a seeded placeholder pending the accountant.
+        {t("roughIndication", {
+          rate: formatBpsPercent(estimate.dividendTaxRateBps, locale),
+          amount: formatMinor(estimate.dividendTaxRonMinor, "RON", locale),
+        })}
       </p>
       <p className="text-caption text-text-muted">
-        CASS on dividends is calculated ANNUALLY against a threshold — a single dividend
-        cannot determine it, so no per-dividend figure is shown; the real calculation
-        belongs to the Phase-5 yearly report. Gross amounts and withholding are also a
-        Phase-5/accountant question — enter the NET amount that landed. Nothing here is
-        written to the ledger.
+        {t("cassAnnualNote")}
       </p>
     </div>
   );
@@ -640,35 +638,38 @@ function SellPreviewPanel({
   held: string | undefined;
 }) {
   const locale = useLocale();
+  const t = useTranslations("investments");
   if (pending) {
-    return <p className="text-caption text-text-muted">Previewing the FIFO consumption…</p>;
+    return <p className="text-caption text-text-muted">{t("previewingFifo")}</p>;
   }
   if (!preview) {
     return held ? (
-      <p className="text-caption text-text-muted">You hold {displayQuantity(held)}.</p>
+      <p className="text-caption text-text-muted">{t("youHold", { quantity: displayQuantity(held) })}</p>
     ) : null;
   }
   if ("error" in preview) return <p className={errorClass}>{preview.error}</p>;
   if (!preview.ok) {
     return (
       <p className={errorClass}>
-        You hold {displayQuantity(preview.heldQuantity)} — cannot sell{" "}
-        {displayQuantity(preview.requestedQuantity)}.
+        {t("cannotSell", {
+          held: displayQuantity(preview.heldQuantity),
+          requested: displayQuantity(preview.requestedQuantity),
+        })}
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-2 rounded-input border border-border-hairline p-3">
       <p className="text-caption text-text-muted">
-        FIFO consumption — what booking will do (same walk, previewed read-only):
+        {t("fifoIntro")}
       </p>
       <table className="w-full text-secondary">
         <thead>
           <tr className="text-caption text-text-muted">
-            <th className="pb-1 text-left font-normal">Lot (bought)</th>
-            <th className="pb-1 text-right font-normal">Consuming</th>
-            <th className="pb-1 text-right font-normal">Basis ({currency})</th>
-            <th className="pb-1 text-right font-normal">Basis (RON)</th>
+            <th className="pb-1 text-left font-normal">{t("colLotBought")}</th>
+            <th className="pb-1 text-right font-normal">{t("colConsuming")}</th>
+            <th className="pb-1 text-right font-normal">{t("colBasis", { currency })}</th>
+            <th className="pb-1 text-right font-normal">{t("colBasis", { currency: "RON" })}</th>
           </tr>
         </thead>
         <tbody>
@@ -676,7 +677,10 @@ function SellPreviewPanel({
             <tr key={i} className="border-t border-border-hairline">
               <td className="py-1 text-text-primary">{lot.buyDate}</td>
               <td className="py-1 text-right font-numeric tabular-nums">
-                {displayQuantity(lot.consuming)} of {displayQuantity(lot.lotQuantity)}
+                {t("consumingOf", {
+                  consuming: displayQuantity(lot.consuming),
+                  lotQuantity: displayQuantity(lot.lotQuantity),
+                })}
               </td>
               <td className="py-1 text-right font-numeric tabular-nums">
                 {formatMinor(lot.costBasisMinor, currency, locale)}
@@ -687,7 +691,7 @@ function SellPreviewPanel({
             </tr>
           ))}
           <tr className="border-t border-border-hairline text-text-primary">
-            <td className="py-1">Consumed basis</td>
+            <td className="py-1">{t("consumedBasis")}</td>
             <td />
             <td className="py-1 text-right font-numeric tabular-nums">
               {formatMinor(preview.basisMinor, currency, locale)}
@@ -700,28 +704,30 @@ function SellPreviewPanel({
       </table>
       {preview.gainMinor !== null && preview.gainRonMinor !== null ? (
         <p className="text-secondary">
-          Realized{" "}
-          <span
-            className={
-              preview.gainRonMinor >= 0 ? "text-status-positive-text" : "text-status-negative-text"
-            }
-          >
-            {preview.gainMinor >= 0 ? "gain" : "loss"} of{" "}
-            <span className="font-numeric tabular-nums">
-              {formatMinor(Math.abs(preview.gainMinor), currency, locale)}
-            </span>{" "}
-            /{" "}
-            <span className="font-numeric tabular-nums">
-              {formatMinor(Math.abs(preview.gainRonMinor), "RON", locale)}
-            </span>
-          </span>
+          {t.rich(preview.gainMinor >= 0 ? "realizedGain" : "realizedLoss", {
+            amount: formatMinor(Math.abs(preview.gainMinor), currency, locale),
+            amountRon: formatMinor(Math.abs(preview.gainRonMinor), "RON", locale),
+            s: (chunks) => (
+              <span
+                className={
+                  preview.gainRonMinor! >= 0
+                    ? "text-status-positive-text"
+                    : "text-status-negative-text"
+                }
+              >
+                {chunks}
+              </span>
+            ),
+            a: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
+            r: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
+          })}
           {preview.gainCategoryName && (
-            <span className="text-text-muted"> → books to {preview.gainCategoryName}</span>
+            <span className="text-text-muted"> {t("booksTo", { category: preview.gainCategoryName })}</span>
           )}
         </p>
       ) : (
         <p className="text-caption text-text-muted">
-          Enter both totals to see the realized gain in {currency} and RON.
+          {t("enterTotalsGain", { currency })}
         </p>
       )}
     </div>

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -42,6 +43,7 @@ export function NewTransactionDialog({
   profileSlug?: string;
   options: FormOptions;
 }) {
+  const t = useTranslations("forms");
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"standard" | "transfer">("standard");
   // Token-styled discard prompt (replaces window.confirm): an intercepted
@@ -95,16 +97,16 @@ export function NewTransactionDialog({
   };
 
   const cancelSlot = (
-    <DialogClose render={<Button variant="secondary" />}>Cancel</DialogClose>
+    <DialogClose render={<Button variant="secondary" />}>{t("cancel")}</DialogClose>
   );
 
   return (
     <>
     <Dialog open={open} onOpenChange={handleOpenChange} onOpenChangeComplete={handleOpenChangeComplete}>
-      <DialogTrigger render={<Button />}>New transaction</DialogTrigger>
+      <DialogTrigger render={<Button />}>{t("newTransaction")}</DialogTrigger>
       <DialogContent className="density-compact sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>New transaction</DialogTitle>
+          <DialogTitle>{t("newTransaction")}</DialogTitle>
         </DialogHeader>
         <div className="flex gap-2">
           <Button
@@ -112,14 +114,14 @@ export function NewTransactionDialog({
             variant={type === "standard" ? "default" : "secondary"}
             onClick={() => setType("standard")}
           >
-            Expense / Income
+            {t("typeStandard")}
           </Button>
           <Button
             type="button"
             variant={type === "transfer" ? "default" : "secondary"}
             onClick={() => setType("transfer")}
           >
-            Transfer
+            {t("typeTransfer")}
           </Button>
         </div>
         {type === "standard" ? (
@@ -148,14 +150,14 @@ export function NewTransactionDialog({
     <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Discard this transaction?</AlertDialogTitle>
+          <AlertDialogTitle>{t("discardTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            The details you entered will be lost.
+            {t("discardBody")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Keep editing</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDiscard}>Discard</AlertDialogAction>
+          <AlertDialogCancel>{t("keepEditing")}</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDiscard}>{t("discard")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

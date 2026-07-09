@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, postings } from "@/db/schema";
@@ -32,6 +33,7 @@ export default async function EditTransactionPage({
   const detail = await getTransactionDetail(transactionId);
   if (!detail || detail.transaction.entityId !== entityId) notFound();
   const { transaction, tagNames } = detail;
+  const t = await getTranslations("transactions");
 
   const options = await getFormOptions(entityId, owner);
 
@@ -54,7 +56,7 @@ export default async function EditTransactionPage({
       href={`/p/${profile.slug}/transactions/${transactionId}`}
       className="text-secondary text-accent hover:underline"
     >
-      ← Back to detail
+      {t("backToDetail")}
     </Link>
   );
 
@@ -74,7 +76,7 @@ export default async function EditTransactionPage({
     return (
       <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
         {back}
-        <h1 className="text-title text-text-primary">Edit transfer</h1>
+        <h1 className="text-title text-text-primary">{t("editTransfer")}</h1>
         <TransferForm entityId={entityId} profileSlug={profile.slug} options={options} initial={initial} />
       </div>
     );
@@ -87,8 +89,7 @@ export default async function EditTransactionPage({
       <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
         {back}
         <p className="text-secondary text-text-muted">
-          This transaction&apos;s posting shape (guided flow or auto tax accrual) cannot be
-          edited with the standard form. Delete and re-create it instead.
+          {t("cannotEdit")}
         </p>
       </div>
     );
@@ -127,7 +128,7 @@ export default async function EditTransactionPage({
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       {back}
-      <h1 className="text-title text-text-primary">Edit transaction</h1>
+      <h1 className="text-title text-text-primary">{t("editTransaction")}</h1>
       <StandardForm entityId={entityId} profileSlug={profile.slug} options={options} initial={initial} />
     </div>
   );

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useLocale } from "next-intl";
-import { formatMinor, parseAmountToMinor } from "@/lib/format";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDate, formatMinor, parseAmountToMinor } from "@/lib/format";
 import {
   previewSalary,
   saveSalary,
@@ -25,6 +25,8 @@ export function SalaryFlow({
   const [gross, setGross] = useState("");
   const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
   const locale = useLocale();
+  const t = useTranslations("flows");
+  const tForms = useTranslations("forms");
   const [preview, setPreview] = useState<SalaryPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -70,16 +72,18 @@ export function SalaryFlow({
     });
   };
 
-  const rows: [string, number][] = preview
+  // [stable row id, label, amount] — the id keys the row (labels translate,
+  // keys never do; same split as periodKey/periodLabel).
+  const rows: [string, string, number][] = preview
     ? [
-        ["Gross", preview.gross],
-        ["CAS (pension)", -preview.cas],
-        ["CASS (health)", -preview.cass],
-        ["Income tax", -preview.incomeTax],
-        ["Net to employee", preview.net],
-        ["CAM (employer)", preview.cam],
-        ["Employer cost", preview.employerCost],
-        ["Total accrued to tax liability", preview.totalAccrued],
+        ["gross", t("rowGross"), preview.gross],
+        ["cas", t("rowCas"), -preview.cas],
+        ["cass", t("rowCass"), -preview.cass],
+        ["incomeTax", t("rowIncomeTax"), -preview.incomeTax],
+        ["net", t("rowNet"), preview.net],
+        ["cam", t("rowCam"), preview.cam],
+        ["employerCost", t("rowEmployerCost"), preview.employerCost],
+        ["totalAccrued", t("rowTotalAccrued"), preview.totalAccrued],
       ]
     : [];
 
@@ -94,7 +98,7 @@ export function SalaryFlow({
     >
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Employee name
+          {t("employeeName")}
           <input
             className={fieldClass}
             value={employeeName}
@@ -105,7 +109,7 @@ export function SalaryFlow({
           />
         </label>
         <label className={labelClass}>
-          Month
+          {t("month")}
           <input
             type="month"
             className={fieldClass}
@@ -120,11 +124,11 @@ export function SalaryFlow({
 
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Gross salary (RON)
+          {t("grossSalary")}
           <input
             ref={grossRef}
             inputMode="decimal"
-            placeholder="0,00"
+            placeholder={tForms("amountPlaceholder")}
             className={fieldClass}
             value={gross}
             onChange={(e) => {
@@ -134,7 +138,7 @@ export function SalaryFlow({
           />
         </label>
         <label className={labelClass}>
-          Personal account (receives net)
+          {t("personalAccount")}
           <select
             className={fieldClass}
             value={personalAccountId}
@@ -156,8 +160,8 @@ export function SalaryFlow({
         <div className="rounded-card border border-border-hairline bg-surface">
           <table className="w-full text-secondary">
             <tbody>
-              {rows.map(([label, amount]) => (
-                <tr key={label} className="border-t border-border-hairline first:border-t-0">
+              {rows.map(([id, label, amount]) => (
+                <tr key={id} className="border-t border-border-hairline first:border-t-0">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{label}</td>
                   <td
                     className={`px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums ${
@@ -170,7 +174,7 @@ export function SalaryFlow({
               ))}
               <tr className="border-t border-border-hairline">
                 <td colSpan={2} className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-caption text-status-warning-text">
-                  {preview.rateNote} · transaction date {preview.date}
+                  {preview.rateNote} · {t("transactionDate", { date: formatDate(preview.date, locale) })}
                 </td>
               </tr>
             </tbody>
@@ -182,7 +186,7 @@ export function SalaryFlow({
 
       <div className="flex gap-2">
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>
-          {pending ? "Working…" : preview ? "Confirm and save" : "Preview breakdown"}
+          {pending ? t("working") : preview ? t("confirmSave") : t("previewBreakdown")}
         </button>
       </div>
     </form>

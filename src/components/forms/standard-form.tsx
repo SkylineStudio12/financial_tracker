@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import { saveStandardTransaction, type StandardPayload } from "@/lib/ledger/actions";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ export function StandardForm({
   const categoryItems = options.categories.map((c) => ({ value: c.id, label: c.name }));
 
   const locale = useLocale();
+  const t = useTranslations("forms");
   const [direction, setDirection] = useState<"expense" | "income">(
     initial?.direction ?? "expense",
   );
@@ -171,20 +172,20 @@ export function StandardForm({
           variant={direction === "expense" ? "default" : "secondary"}
           onClick={() => setDirection("expense")}
         >
-          Expense
+          {t("expense")}
         </Button>
         <Button
           type="button"
           variant={direction === "income" ? "default" : "secondary"}
           onClick={() => setDirection("income")}
         >
-          Income
+          {t("income")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Account
+          {t("account")}
           <Select
             items={accountItems}
             value={accountId}
@@ -203,7 +204,7 @@ export function StandardForm({
           </Select>
         </label>
         <label className={labelClass}>
-          Date
+          {t("date")}
           <input
             type="date"
             className={fieldClass}
@@ -214,11 +215,11 @@ export function StandardForm({
       </div>
 
       <label className={labelClass}>
-        Amount ({currency})
+        {t("amount", { currency })}
         <input
           ref={amountRef}
           inputMode="decimal"
-          placeholder="0,00"
+          placeholder={t("amountPlaceholder")}
           className={fieldClass}
           value={total}
           onChange={(e) => setTotal(e.target.value)}
@@ -226,7 +227,7 @@ export function StandardForm({
       </label>
 
       <label className={labelClass}>
-        Description
+        {t("description")}
         <input
           className={fieldClass}
           value={description}
@@ -238,7 +239,7 @@ export function StandardForm({
         {splits.map((split, index) => (
           <div key={index} className="flex items-end gap-2">
             <div className={`${labelClass} flex-1`}>
-              {index === 0 ? "Category" : ""}
+              {index === 0 ? t("category") : ""}
               <Select
                 items={categoryItems}
                 value={split.categoryId === "" ? null : split.categoryId}
@@ -251,7 +252,7 @@ export function StandardForm({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick…" />
+                  <SelectValue placeholder={t("pickPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {categoryItems.map((item) => (
@@ -264,10 +265,10 @@ export function StandardForm({
             </div>
             {isSplit && (
               <label className={`${labelClass} w-32`}>
-                {index === 0 ? `Amount (${currency})` : ""}
+                {index === 0 ? t("amount", { currency }) : ""}
                 <input
                   inputMode="decimal"
-                  placeholder="0,00"
+                  placeholder={t("amountPlaceholder")}
                   className={fieldClass}
                   value={split.amount}
                   onChange={(e) =>
@@ -293,11 +294,14 @@ export function StandardForm({
             className={ghostButtonClass}
             onClick={() => setSplits([...splits, { categoryId: "", amount: "" }])}
           >
-            + Add split
+            {t("addSplit")}
           </button>
           {splitMismatch && totalMinor !== null && splitSum !== null && (
             <span className={errorClass}>
-              Splits {formatMinor(splitSum, currency, locale)} ≠ total {formatMinor(totalMinor, currency, locale)}
+              {t("splitMismatch", {
+                sum: formatMinor(splitSum, currency, locale),
+                total: formatMinor(totalMinor, currency, locale),
+              })}
             </span>
           )}
         </div>
@@ -305,7 +309,7 @@ export function StandardForm({
 
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Counterparty (optional)
+          {t("counterpartyOptional")}
           <input
             className={fieldClass}
             value={counterparty}
@@ -313,7 +317,7 @@ export function StandardForm({
           />
         </label>
         <label className={labelClass}>
-          Tags (comma-separated, optional)
+          {t("tagsOptional")}
           <input
             className={fieldClass}
             list="tag-suggestions"
@@ -332,7 +336,7 @@ export function StandardForm({
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={!valid || pending}>
-          {pending ? "Saving…" : initial ? "Save changes" : "Save transaction"}
+          {pending ? t("saving") : initial ? t("saveChanges") : t("saveTransaction")}
         </Button>
         {cancelSlot}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import {
   previewDividend,
@@ -24,6 +24,9 @@ export function DividendFlow({
   const [gross, setGross] = useState("");
   const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
   const locale = useLocale();
+  const t = useTranslations("flows");
+  const tForms = useTranslations("forms");
+  const tCommon = useTranslations("common");
   const [preview, setPreview] = useState<DividendPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -68,7 +71,7 @@ export function DividendFlow({
     >
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Date
+          {tForms("date")}
           <input
             type="date"
             className={fieldClass}
@@ -80,11 +83,11 @@ export function DividendFlow({
           />
         </label>
         <label className={labelClass}>
-          Gross dividend (RON)
+          {t("grossDividend")}
           <input
             ref={grossRef}
             inputMode="decimal"
-            placeholder="0,00"
+            placeholder={tForms("amountPlaceholder")}
             className={fieldClass}
             value={gross}
             onChange={(e) => {
@@ -96,7 +99,7 @@ export function DividendFlow({
       </div>
 
       <label className={labelClass}>
-        Personal account (receives net)
+        {t("personalAccount")}
         <select
           className={fieldClass}
           value={personalAccountId}
@@ -118,24 +121,24 @@ export function DividendFlow({
           <table className="w-full text-secondary">
             <tbody>
               <tr>
-                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Gross dividend</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("rowGrossDividend")}</td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.gross, "RON", locale)}</td>
               </tr>
               <tr className="border-t border-border-hairline">
-                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Dividend tax (withheld)</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("rowDividendTax")}</td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-negative-text">
                   {formatMinor(-preview.withholdingTax, "RON", locale)}
                 </td>
               </tr>
               <tr className="border-t border-border-hairline">
-                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Net to shareholder</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("rowNetShareholder")}</td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.net, "RON", locale)}</td>
               </tr>
               <tr className="border-t border-border-hairline">
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
-                  <span className="text-text-secondary">CASS accrual</span>{" "}
+                  <span className="text-text-secondary">{t("rowCassAccrual")}</span>{" "}
                   <span className="rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
-                    ESTIMATE
+                    {tCommon("estimate")}
                   </span>
                 </td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-warning-text">
@@ -156,7 +159,7 @@ export function DividendFlow({
 
       <div className="flex gap-2">
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>
-          {pending ? "Working…" : preview ? "Confirm and save" : "Preview breakdown"}
+          {pending ? t("working") : preview ? t("confirmSave") : t("previewBreakdown")}
         </button>
       </div>
     </form>

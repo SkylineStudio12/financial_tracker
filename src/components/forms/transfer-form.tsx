@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { parseAmountToMinor } from "@/lib/format";
 import { saveTransferTransaction, type TransferPayload } from "@/lib/ledger/actions";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export function TransferForm({
     label: `${a.name} (${a.currency})`,
   }));
 
+  const t = useTranslations("forms");
   const [fromAccountId, setFromAccountId] = useState(
     initial?.fromAccountId ?? transferable[0]?.id ?? "",
   );
@@ -137,7 +139,7 @@ export function TransferForm({
       onValueChange={(next) => onChange((next as string) ?? "")}
     >
       <SelectTrigger>
-        <SelectValue placeholder="Pick…" />
+        <SelectValue placeholder={t("pickPlaceholder")} />
       </SelectTrigger>
       <SelectContent>
         {accountItems.map((item) => (
@@ -159,18 +161,18 @@ export function TransferForm({
     >
       <div className="grid grid-cols-2 gap-3">
         <div className={labelClass}>
-          From account
+          {t("fromAccount")}
           {accountSelect(fromAccountId, setFromAccountId)}
         </div>
         <div className={labelClass}>
-          To account
+          {t("toAccount")}
           {accountSelect(toAccountId, setToAccountId)}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
-          Date
+          {t("date")}
           <input
             type="date"
             className={fieldClass}
@@ -179,11 +181,11 @@ export function TransferForm({
           />
         </label>
         <label className={labelClass}>
-          Amount ({fromCurrency})
+          {t("amount", { currency: fromCurrency })}
           <input
             ref={amountRef}
             inputMode="decimal"
-            placeholder="0,00"
+            placeholder={t("amountPlaceholder")}
             className={fieldClass}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -193,10 +195,10 @@ export function TransferForm({
 
       {crossCurrency && (
         <label className={labelClass}>
-          Received amount ({toCurrency}) — accounts use different currencies
+          {t("receivedAmount", { currency: toCurrency })}
           <input
             inputMode="decimal"
-            placeholder="0,00"
+            placeholder={t("amountPlaceholder")}
             className={fieldClass}
             value={received}
             onChange={(e) => setReceived(e.target.value)}
@@ -205,18 +207,18 @@ export function TransferForm({
       )}
 
       <label className={labelClass}>
-        Note (optional)
+        {t("noteOptional")}
         <input className={fieldClass} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
 
       {fromAccountId === toAccountId && (
-        <p className={errorClass}>Pick two different accounts.</p>
+        <p className={errorClass}>{t("pickTwoDifferent")}</p>
       )}
       {error && <p className={errorClass}>{error}</p>}
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={!valid || pending}>
-          {pending ? "Saving…" : initial ? "Save changes" : "Save transfer"}
+          {pending ? t("saving") : initial ? t("saveChanges") : t("saveTransfer")}
         </Button>
         {cancelSlot}
       </div>

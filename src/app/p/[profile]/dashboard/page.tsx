@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { entities } from "@/db/schema";
@@ -28,8 +28,9 @@ const amountClass = (value: number) =>
     value < 0 ? "text-status-negative-text" : "text-text-primary"
   }`;
 
-function periodLabel(group: Pick<AccrualGroup, "year" | "quarter">): string {
-  return group.quarter === null ? `${group.year} annual` : `${group.year} Q${group.quarter}`;
+/** Stable React key for a period — display labels are catalog messages. */
+function periodKey(group: Pick<AccrualGroup, "year" | "quarter">): string {
+  return `${group.year}-${group.quarter ?? "annual"}`;
 }
 
 export default async function DashboardPage({
@@ -48,6 +49,8 @@ export default async function DashboardPage({
   if (!entity) notFound();
 
   const locale = await getLocale();
+  const t = await getTranslations("dashboard");
+  const tCommon = await getTranslations("common");
   const balances = await getAccountBalances(entityId, owner);
   // The all-entities net cash consolidation belongs to the SHARED household
   // view only; personal profiles show just that person's balances.
@@ -91,19 +94,19 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
-      <h1 className="text-title text-text-primary">Dashboard — {profile.label}</h1>
+      <h1 className="text-title text-text-primary">{t("title", { name: profile.label })}</h1>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-micro uppercase text-text-muted">
-          Account balances
+          {t("accountBalances")}
         </h2>
         <div className="overflow-x-auto rounded-card border border-border-hairline bg-surface">
           <table className="w-full text-secondary">
             <thead>
               <tr className="text-left text-micro uppercase text-text-muted">
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Account</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">Type</th>
-                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">Balance</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colAccount")}</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal">{t("colType")}</th>
+                <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">{t("colBalance")}</th>
                 <th className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] font-normal text-right">RON</th>
               </tr>
             </thead>
@@ -127,7 +130,7 @@ export default async function DashboardPage({
 
       {profile.investments && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-micro uppercase text-text-muted">Investments</h2>
+          <h2 className="text-micro uppercase text-text-muted">{tCommon("investments")}</h2>
           {valuation ? (
             <div className="grid grid-cols-1 gap-[var(--density-section-gap)] sm:grid-cols-2">
               <InvestmentSummaryCard
@@ -140,7 +143,7 @@ export default async function DashboardPage({
             </div>
           ) : (
             <p className="text-secondary text-status-warning-text">
-              Holdings could not be valued: {valuationError}
+              {t("valuationFailed", { error: valuationError ?? "" })}
             </p>
           )}
         </section>
@@ -149,33 +152,33 @@ export default async function DashboardPage({
       {netCash && (
         <section className="flex flex-col gap-2">
           <h2 className="text-micro uppercase text-text-muted">
-            Net cash position (all entities)
+            {t("netCashPosition")}
           </h2>
           <div className="rounded-card border border-border-hairline bg-surface">
             <table className="w-full text-secondary">
               <tbody>
                 {netCash.cashByEntity.map((row) => (
                   <tr key={row.entityName} className="border-t border-border-hairline first:border-t-0">
-                    <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Cash — {row.entityName}</td>
+                    <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("cashEntity", { name: row.entityName })}</td>
                     <td className={amountClass(row.cashRon)}>
                       {formatMinor(row.cashRon, "RON", locale)}
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t border-border-hairline">
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Total cash</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("totalCash")}</td>
                   <td className={amountClass(netCash.totalCashRon)}>
                     {formatMinor(netCash.totalCashRon, "RON", locale)}
                   </td>
                 </tr>
                 <tr className="border-t border-border-hairline">
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Accrued tax liabilities</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{t("accruedTaxLiabilities")}</td>
                   <td className={amountClass(netCash.accruedTaxRon)}>
                     {formatMinor(netCash.accruedTaxRon, "RON", locale)}
                   </td>
                 </tr>
                 <tr className="border-t border-border-hairline">
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-body text-text-primary">Net cash</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-body text-text-primary">{t("netCash")}</td>
                   <td className={`${amountClass(netCash.netRon)} text-body`}>
                     {formatMinor(netCash.netRon, "RON", locale)}
                   </td>
@@ -184,8 +187,7 @@ export default async function DashboardPage({
             </table>
           </div>
           <p className="text-caption text-text-muted">
-            Bank and cash accounts only; brokerage balances excluded. RON values are
-            historical-cost sums at transaction-date BNR rates.
+            {t("netCashNote")}
           </p>
         </section>
       )}
@@ -193,7 +195,7 @@ export default async function DashboardPage({
       {entity.type === "company" && (
         <section className="flex flex-col gap-2">
           <h2 className="text-micro uppercase text-text-muted">
-            Tax panel — accrued {currentYear} Q{currentQuarter}
+            {t("taxPanel", { year: currentYear, quarter: currentQuarter })}
           </h2>
           <div className="rounded-card border border-border-hairline bg-surface">
             <table className="w-full text-secondary">
@@ -201,7 +203,7 @@ export default async function DashboardPage({
                 {currentQuarterGroups.length === 0 && (
                   <tr>
                     <td className="px-[var(--density-row-padding-x)] py-8 text-center text-text-muted" colSpan={2}>
-                      Nothing accrued this quarter.
+                      {t("nothingAccrued")}
                     </td>
                   </tr>
                 )}
@@ -211,7 +213,7 @@ export default async function DashboardPage({
                       {group.ruleType}
                       {ESTIMATE_RULES.includes(group.ruleType) && (
                         <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
-                          ESTIMATE
+                          {tCommon("estimate")}
                         </span>
                       )}
                     </td>
@@ -225,7 +227,7 @@ export default async function DashboardPage({
           </div>
 
           <h2 className="mt-2 text-micro uppercase text-text-muted">
-            Accruals by period
+            {t("accrualsByPeriod")}
           </h2>
           <div className="rounded-card border border-border-hairline bg-surface">
             <table className="w-full text-secondary">
@@ -233,20 +235,22 @@ export default async function DashboardPage({
                 {periods.size === 0 && (
                   <tr>
                     <td className="px-[var(--density-row-padding-x)] py-8 text-center text-text-muted" colSpan={2}>
-                      No accruals yet.
+                      {t("noAccruals")}
                     </td>
                   </tr>
                 )}
                 {[...periods.values()].map((period) => (
                   <tr
-                    key={periodLabel(period)}
+                    key={periodKey(period)}
                     className="border-t border-border-hairline first:border-t-0"
                   >
                     <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
-                      {periodLabel(period)}
+                      {period.quarter === null
+                        ? t("periodAnnual", { year: period.year })
+                        : t("periodQuarter", { year: period.year, quarter: period.quarter })}
                       {period.hasEstimate && (
                         <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
-                          includes estimates
+                          {t("includesEstimates")}
                         </span>
                       )}
                     </td>

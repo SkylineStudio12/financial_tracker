@@ -48,6 +48,9 @@ import { cn } from "@/lib/utils";
 
 const ICON_PROPS = { absoluteStrokeWidth: true, strokeWidth: 1.5 } as const;
 
+/** Profile.subtitle (config literal) → catalog key under sidebar.subtitle. */
+const SUBTITLE_KEY = { Shared: "shared", Personal: "personal", SRL: "srl" } as const;
+
 function ProfileIcon({ profile, className }: { profile: Profile; className?: string }) {
   // Companies show their brand mark; personal/shared use Lucide icons.
   if (profile.slug === "skyline") return <SkylineLogo className={className} />;
@@ -73,7 +76,9 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
           <span className="truncate font-medium text-secondary text-text-primary">
             {activeProfile.label}
           </span>
-          <span className="text-caption text-text-muted">{activeProfile.subtitle}</span>
+          <span className="text-caption text-text-muted">
+            {t(`subtitle.${SUBTITLE_KEY[activeProfile.subtitle]}`)}
+          </span>
         </span>
         <ChevronsUpDownIcon className="ml-auto size-4 text-text-muted" {...ICON_PROPS} />
       </PopoverTrigger>
@@ -93,7 +98,9 @@ function ProfileSwitcher({ activeProfile }: { activeProfile: Profile }) {
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-secondary text-text-primary">{profile.label}</span>
-              <span className="text-caption text-text-muted">{profile.subtitle}</span>
+              <span className="text-caption text-text-muted">
+                {t(`subtitle.${SUBTITLE_KEY[profile.subtitle]}`)}
+              </span>
             </span>
             {profile.slug === activeProfile.slug && (
               <CheckIcon className="ml-auto size-4 shrink-0" {...ICON_PROPS} />
@@ -148,6 +155,7 @@ function LocaleToggle() {
 export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string }) {
   const pathname = usePathname();
   const t = useTranslations("sidebar");
+  const tCommon = useTranslations("common");
   const activeProfile = getProfile(activeProfileSlug) ?? PROFILES[0];
   const base = `/p/${activeProfile.slug}`;
 
@@ -217,7 +225,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
 
         {activeProfile.investments && (
           <SidebarGroup>
-            <SidebarGroupLabel>{t("investments")}</SidebarGroupLabel>
+            <SidebarGroupLabel>{tCommon("investments")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {investments.map((item) => (
@@ -244,7 +252,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
           </Avatar>
           <span className="flex min-w-0 flex-col leading-tight">
             <span className="truncate text-secondary text-text-primary">Greg</span>
-            <span className="text-caption text-text-muted">{t("appName")}</span>
+            <span className="text-caption text-text-muted">{tCommon("appName")}</span>
           </span>
           <LocaleToggle />
         </div>

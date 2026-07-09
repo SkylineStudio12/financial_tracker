@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import "./globals.css";
 
 // Geist is the single UI typeface (--font-sans) and the numeric companion
@@ -12,10 +12,10 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Financial tracker",
-  description: "Household and company finances",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common");
+  return { title: t("appName"), description: t("appDescription") };
+}
 
 export default async function RootLayout({
   children,

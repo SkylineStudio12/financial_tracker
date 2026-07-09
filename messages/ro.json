@@ -1,4 +1,10 @@
 {
+  "common": {
+    "appName": "Evidență financiară",
+    "appDescription": "Finanțe personale și de firmă",
+    "investments": "Investiții",
+    "estimate": "ESTIMARE"
+  },
   "sidebar": {
     "switchProfile": "Schimbă profilul",
     "views": "Vizualizări",
@@ -8,9 +14,33 @@
     "newSalary": "Salariu nou",
     "newDividend": "Dividend nou",
     "importStatement": "Importă extras",
-    "investments": "Investiții",
     "recordTrade": "Înregistrează ordin",
-    "appName": "Evidență financiară",
-    "language": "Limbă"
+    "language": "Limbă",
+    "subtitle": {
+      "shared": "Comun",
+      "personal": "Personal",
+      "srl": "SRL"
+    }
+  },
+  "dashboard": {
+    "title": "Panou de bord — {name}",
+    "accountBalances": "Solduri conturi",
+    "colAccount": "Cont",
+    "colType": "Tip",
+    "colBalance": "Sold",
+    "valuationFailed": "Deținerile nu au putut fi evaluate: {error}",
+    "netCashPosition": "Poziție de numerar net (toate entitățile)",
+    "cashEntity": "Numerar — {name}",
+    "totalCash": "Total numerar",
+    "accruedTaxLiabilities": "Obligații fiscale acumulate",
+    "netCash": "Numerar net",
+    "netCashNote": "Doar conturile bancare și de numerar; soldurile de brokeraj sunt excluse. Valorile în RON sunt sume la cost istoric, la cursul BNR din data tranzacției.",
+    "taxPanel": "Panou fiscal — acumulat {year} T{quarter}",
+    "nothingAccrued": "Nimic acumulat în acest trimestru.",
+    "accrualsByPeriod": "Acumulări pe perioade",
+    "noAccruals": "Nicio acumulare încă.",
+    "periodAnnual": "{year} anual",
+    "periodQuarter": "{year} T{quarter}",
+    "includesEstimates": "include estimări"
   }
 }

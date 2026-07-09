@@ -1,4 +1,10 @@
 {
+  "common": {
+    "appName": "Financial tracker",
+    "appDescription": "Household and company finances",
+    "investments": "Investments",
+    "estimate": "ESTIMATE"
+  },
   "sidebar": {
     "switchProfile": "Switch profile",
     "views": "Views",
@@ -8,9 +14,33 @@
     "newSalary": "New salary",
     "newDividend": "New dividend",
     "importStatement": "Import statement",
-    "investments": "Investments",
     "recordTrade": "Record trade",
-    "appName": "Financial tracker",
-    "language": "Language"
+    "language": "Language",
+    "subtitle": {
+      "shared": "Shared",
+      "personal": "Personal",
+      "srl": "SRL"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard — {name}",
+    "accountBalances": "Account balances",
+    "colAccount": "Account",
+    "colType": "Type",
+    "colBalance": "Balance",
+    "valuationFailed": "Holdings could not be valued: {error}",
+    "netCashPosition": "Net cash position (all entities)",
+    "cashEntity": "Cash — {name}",
+    "totalCash": "Total cash",
+    "accruedTaxLiabilities": "Accrued tax liabilities",
+    "netCash": "Net cash",
+    "netCashNote": "Bank and cash accounts only; brokerage balances excluded. RON values are historical-cost sums at transaction-date BNR rates.",
+    "taxPanel": "Tax panel — accrued {year} Q{quarter}",
+    "nothingAccrued": "Nothing accrued this quarter.",
+    "accrualsByPeriod": "Accruals by period",
+    "noAccruals": "No accruals yet.",
+    "periodAnnual": "{year} annual",
+    "periodQuarter": "{year} Q{quarter}",
+    "includesEstimates": "includes estimates"
   }
 }

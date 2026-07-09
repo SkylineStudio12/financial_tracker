@@ -37,6 +37,7 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0010 | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
 | L-0011 | db | Partial unique index on a soft-deleted table must scope to live rows |
 | L-0012 | ledger | Generic ledger mutations must account for dependent structures |
+| L-0013 | tooling | i18n tsc key-completeness masked by incremental build cache |
 
 ---
 
@@ -168,3 +169,14 @@ happens when the owner edits or deletes this from the normal UI — does it corr
 or does it go stale?"
 **Origin:** Phase 3 Stage 4 (edit guard); import delete stale-status (parked
 2026-07-07); Phase 4 Stage 2 (lot-consumption delete integrity).
+
+### L-0013 · 2026-07-09 · tooling · ratified
+**Lesson:** next-intl types catalog keys from en.json, so a missing key (incl.
+enum labels reached via typed-union template literals) is a tsc error — but
+tsc's incremental cache served a stale CLEAN result after the key was deleted;
+the error only surfaced once the cache was cleared.
+**Apply:** For every i18n/catalog change, run the review-time tsc gate with the
+incremental cache cleared (`rm -f tsconfig.tsbuildinfo .tsbuildinfo && npx tsc
+--noEmit`); CI should run non-incremental.
+**Origin:** i18n Stage 3b — enum-label completeness demo false-negatived, then
+errored once cache-cleared.

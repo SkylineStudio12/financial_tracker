@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,7 +17,7 @@ import {
   skipImportRowAction,
 } from "@/lib/import/actions";
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
-import { formatMinor } from "@/lib/format";
+import { formatDate, formatMinor } from "@/lib/format";
 import { errorClass } from "@/components/forms/ui";
 
 interface InboxRow {
@@ -71,6 +72,7 @@ function InboxRowItem({
   batchId: string;
 }) {
   const [categoryId, setCategoryId] = useState(row.suggestedCategoryId ?? "");
+  const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -108,7 +110,7 @@ function InboxRowItem({
           <span className="truncate text-secondary text-text-primary">
             {row.counterpartyName ?? "—"}
           </span>
-          <span className="text-caption text-text-muted">{row.bookDate}</span>
+          <span className="text-caption text-text-muted">{formatDate(row.bookDate, locale)}</span>
         </div>
         <span
           className={`font-numeric tabular-nums text-secondary ${
@@ -116,7 +118,7 @@ function InboxRowItem({
           }`}
         >
           {isCredit ? "+" : "−"}
-          {formatMinor(row.amountMinor, "RON")}
+          {formatMinor(row.amountMinor, "RON", locale)}
         </span>
       </div>
 

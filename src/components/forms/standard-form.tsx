@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import { saveStandardTransaction, type StandardPayload } from "@/lib/ledger/actions";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export function StandardForm({
   }));
   const categoryItems = options.categories.map((c) => ({ value: c.id, label: c.name }));
 
+  const locale = useLocale();
   const [direction, setDirection] = useState<"expense" | "income">(
     initial?.direction ?? "expense",
   );
@@ -295,7 +297,7 @@ export function StandardForm({
           </button>
           {splitMismatch && totalMinor !== null && splitSum !== null && (
             <span className={errorClass}>
-              Splits {formatMinor(splitSum, currency)} ≠ total {formatMinor(totalMinor, currency)}
+              Splits {formatMinor(splitSum, currency, locale)} ≠ total {formatMinor(totalMinor, currency, locale)}
             </span>
           )}
         </div>

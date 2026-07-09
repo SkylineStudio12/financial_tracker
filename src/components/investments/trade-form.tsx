@@ -15,6 +15,7 @@
  *   inline with the currency locked to the account's.
  */
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatMinor, parseAmountToMinor } from "@/lib/format";
+import { formatBpsPercent, formatMinor, parseAmountToMinor } from "@/lib/format";
 import { impliedRate, displayQuantity } from "@/lib/investments/trade-rules";
 import type { SellPreview } from "@/lib/investments/service";
 import {
@@ -592,6 +593,7 @@ function DividendEstimatePanel({
   estimate: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string } | null;
   held: string | undefined;
 }) {
+  const locale = useLocale();
   if (!estimate) {
     return (
       <p className="text-caption text-text-muted">
@@ -612,7 +614,7 @@ function DividendEstimatePanel({
       </div>
       <p className="text-caption text-text-muted">
         Rough indication if this dividend alone were taxed: dividend tax (
-        {estimate.dividendTaxRateBps / 100}%): ≈ {formatMinor(estimate.dividendTaxRonMinor, "RON")}.
+        {formatBpsPercent(estimate.dividendTaxRateBps, locale)}): ≈ {formatMinor(estimate.dividendTaxRonMinor, "RON", locale)}.
         The rate is a seeded placeholder pending the accountant.
       </p>
       <p className="text-caption text-text-muted">
@@ -637,6 +639,7 @@ function SellPreviewPanel({
   currency: string;
   held: string | undefined;
 }) {
+  const locale = useLocale();
   if (pending) {
     return <p className="text-caption text-text-muted">Previewing the FIFO consumption…</p>;
   }
@@ -676,10 +679,10 @@ function SellPreviewPanel({
                 {displayQuantity(lot.consuming)} of {displayQuantity(lot.lotQuantity)}
               </td>
               <td className="py-1 text-right font-numeric tabular-nums">
-                {formatMinor(lot.costBasisMinor, currency)}
+                {formatMinor(lot.costBasisMinor, currency, locale)}
               </td>
               <td className="py-1 text-right font-numeric tabular-nums">
-                {formatMinor(lot.costBasisRonMinor, "RON")}
+                {formatMinor(lot.costBasisRonMinor, "RON", locale)}
               </td>
             </tr>
           ))}
@@ -687,10 +690,10 @@ function SellPreviewPanel({
             <td className="py-1">Consumed basis</td>
             <td />
             <td className="py-1 text-right font-numeric tabular-nums">
-              {formatMinor(preview.basisMinor, currency)}
+              {formatMinor(preview.basisMinor, currency, locale)}
             </td>
             <td className="py-1 text-right font-numeric tabular-nums">
-              {formatMinor(preview.basisRonMinor, "RON")}
+              {formatMinor(preview.basisRonMinor, "RON", locale)}
             </td>
           </tr>
         </tbody>
@@ -705,11 +708,11 @@ function SellPreviewPanel({
           >
             {preview.gainMinor >= 0 ? "gain" : "loss"} of{" "}
             <span className="font-numeric tabular-nums">
-              {formatMinor(Math.abs(preview.gainMinor), currency)}
+              {formatMinor(Math.abs(preview.gainMinor), currency, locale)}
             </span>{" "}
             /{" "}
             <span className="font-numeric tabular-nums">
-              {formatMinor(Math.abs(preview.gainRonMinor), "RON")}
+              {formatMinor(Math.abs(preview.gainRonMinor), "RON", locale)}
             </span>
           </span>
           {preview.gainCategoryName && (

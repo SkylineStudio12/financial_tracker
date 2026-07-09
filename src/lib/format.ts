@@ -1,31 +1,81 @@
 /**
  * The single place where integer minor units become display strings.
  * Nothing else in the app divides by 100 or formats amounts.
+ *
+ * Every display function takes the active locale as a REQUIRED parameter —
+ * deliberately no default, so a missing locale is a tsc error, never a
+ * silent misrender of money in the wrong locale. Components acquire the
+ * locale once at their boundary (getLocale in server components, useLocale
+ * in client components) and pass it in; this module stays pure and
+ * context-free so it behaves identically on both sides.
  */
-const amountFormatter = new Intl.NumberFormat("ro-RO", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import type { Locale } from "@/i18n/config";
 
-/** 1234567 minor units + "RON" → "12.345,67 RON" */
-export function formatMinor(amountMinor: number, currency: string): string {
-  return `${amountFormatter.format(amountMinor / 100)} ${currency}`;
+/** CLDR tag per app locale — en is explicitly en-US (12,345.67). */
+const CLDR: Record<Locale, string> = { en: "en-US", ro: "ro-RO" };
+
+function makeFormatters(options: Intl.NumberFormatOptions): Record<Locale, Intl.NumberFormat> {
+  return {
+    en: new Intl.NumberFormat(CLDR.en, options),
+    ro: new Intl.NumberFormat(CLDR.ro, options),
+  };
 }
 
-/** 1234567 → "12.345,67" — number only, so the currency can render muted. */
-export function formatMinorNumber(amountMinor: number): string {
-  return amountFormatter.format(amountMinor / 100);
+const amountFormatters = makeFormatters({ minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rateFormatters = makeFormatters({ minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+/** 1234567 minor units + "RON" → ro "12.345,67 RON" / en "12,345.67 RON" */
+export function formatMinor(amountMinor: number, currency: string, locale: Locale): string {
+  return `${amountFormatters[locale].format(amountMinor / 100)} ${currency}`;
+}
+
+/** Number only, so the currency can render muted. */
+export function formatMinorNumber(amountMinor: number, locale: Locale): string {
+  return amountFormatters[locale].format(amountMinor / 100);
 }
 
 /** Effective FX rate implied by a posting's stored amounts (display only). */
-export function formatImpliedRate(amountMinor: number, amountRonMinor: number): string {
+export function formatImpliedRate(
+  amountMinor: number,
+  amountRonMinor: number,
+  locale: Locale,
+): string {
   if (amountMinor === 0) return "–";
-  return (amountRonMinor / amountMinor).toFixed(4);
+  return rateFormatters[locale].format(amountRonMinor / amountMinor);
 }
 
-/** Dates are displayed as their ISO form (YYYY-MM-DD) for now. */
-export function formatDate(isoDate: string): string {
-  return isoDate;
+/**
+ * Display date: en keeps ISO (2026-07-09) per the ruled decision; ro renders
+ * DD.MM.YYYY — by pure string rearrangement, never via new Date(), so no
+ * timezone can shift the day. Non-YYYY-MM-DD input passes through unchanged.
+ */
+export function formatDate(isoDate: string, locale: Locale): string {
+  if (locale === "en") return isoDate;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return isoDate;
+  const [, year, month, day] = match;
+  return `${day}.${month}.${year}`;
+}
+
+/**
+ * Basis points as a display percent: locale-formatted number + literal "%"
+ * with no space (owner ruling — CLDR ro would insert one; identical shape
+ * across locales wins). 100 bps → "1%"; pass minFractionDigits for a fixed
+ * precision (e.g. accrual rates render "1,00%" / "1.00%").
+ */
+export function formatBpsPercent(
+  bps: number,
+  locale: Locale,
+  {
+    minFractionDigits = 0,
+    maxFractionDigits = 2,
+  }: { minFractionDigits?: number; maxFractionDigits?: number } = {},
+): string {
+  const formatter = new Intl.NumberFormat(CLDR[locale], {
+    minimumFractionDigits: minFractionDigits,
+    maximumFractionDigits: Math.max(minFractionDigits, maxFractionDigits),
+  });
+  return `${formatter.format(bps / 100)}%`;
 }
 
 /**

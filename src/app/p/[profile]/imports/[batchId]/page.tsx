@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor } from "@/lib/format";
 import { getImportBatch } from "@/lib/import/queries";
@@ -17,6 +18,7 @@ export default async function ImportBatchPage({
   const profile = getProfile(slug);
   if (!profile || !profile.companyFlows) notFound();
 
+  const locale = await getLocale();
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
   const { batch, rows, categories } = data;
@@ -54,11 +56,11 @@ export default async function ImportBatchPage({
         </Link>
         <h1 className="text-title text-text-primary">{batch.statementNumber}</h1>
         <p className="text-caption text-text-muted">
-          {batch.accountName} · {formatDate(batch.periodStart)}–{formatDate(batch.periodEnd)} ·
-          opening {formatMinor(batch.openingBalanceMinor, "RON")} → closing{" "}
-          {formatMinor(batch.closingBalanceMinor, "RON")} (net{" "}
+          {batch.accountName} · {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·
+          opening {formatMinor(batch.openingBalanceMinor, "RON", locale)} → closing{" "}
+          {formatMinor(batch.closingBalanceMinor, "RON", locale)} (net{" "}
           {movement >= 0 ? "+" : "−"}
-          {formatMinor(Math.abs(movement), "RON")})
+          {formatMinor(Math.abs(movement), "RON", locale)})
         </p>
       </div>
 

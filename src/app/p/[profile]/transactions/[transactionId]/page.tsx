@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
-import { formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
+import { formatBpsPercent, formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
 import { getTransactionDetail } from "@/lib/ledger/queries";
 import { getProfile } from "@/lib/profiles";
@@ -21,6 +22,7 @@ export default async function TransactionDetailPage({
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
     notFound();
   }
+  const locale = await getLocale();
   const detail = await getTransactionDetail(transactionId);
   // Guard the transaction to the profile's entity (cross-entity ids 404).
   if (!detail || detail.transaction.entityId !== profile.entityId) notFound();
@@ -62,7 +64,7 @@ export default async function TransactionDetailPage({
       <div className="flex flex-col gap-1">
         <h1 className="text-card-title text-text-primary">{transaction.description}</h1>
         <div className="text-secondary text-text-muted">
-          {formatDate(transaction.date)} · {transaction.kind}
+          {formatDate(transaction.date, locale)} · {transaction.kind}
           {tagNames.length > 0 && <> · tags: {tagNames.join(", ")}</>}
         </div>
         {transaction.notes && <p className="text-secondary text-text-muted">{transaction.notes}</p>}
@@ -70,7 +72,7 @@ export default async function TransactionDetailPage({
           <div className="text-secondary text-text-muted">
             Applied FX rate{appliedRates.length > 1 ? "s" : ""}:{" "}
             {appliedRates
-              .map((r) => `1 ${r.currency} = ${r.rate} RON (BNR ${r.rateDate})`)
+              .map((r) => `1 ${r.currency} = ${r.rate} RON (BNR ${formatDate(r.rateDate, locale)})`)
               .join(" · ")}
           </div>
         )}
@@ -103,15 +105,15 @@ export default async function TransactionDetailPage({
                       posting.amount < 0 ? "text-status-negative-text" : "text-status-positive-text"
                     }`}
                   >
-                    {formatMinor(posting.amount, posting.currency)}
+                    {formatMinor(posting.amount, posting.currency, locale)}
                   </td>
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
-                    {formatMinor(posting.amountRon, "RON")}
+                    {formatMinor(posting.amountRon, "RON", locale)}
                   </td>
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
                     {posting.currency === "RON"
                       ? "—"
-                      : formatImpliedRate(posting.amount, posting.amountRon)}
+                      : formatImpliedRate(posting.amount, posting.amountRon, locale)}
                   </td>
                 </tr>
               ))}
@@ -149,14 +151,14 @@ export default async function TransactionDetailPage({
                         )}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
-                        {(accrual.rateBps / 100).toFixed(2)}%
+                        {formatBpsPercent(accrual.rateBps, locale, { minFractionDigits: 2 })}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                         {accrual.year}
                         {accrual.quarter ? ` Q${accrual.quarter}` : ""}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums text-text-muted">
-                        {posting ? formatMinor(posting.amountRon, "RON") : "—"}
+                        {posting ? formatMinor(posting.amountRon, "RON", locale) : "—"}
                       </td>
                     </tr>
                   );

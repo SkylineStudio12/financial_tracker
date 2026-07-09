@@ -7,6 +7,7 @@
  * duplicates.
  */
 import { useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -15,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatMinor, parseAmountToMinor } from "@/lib/format";
+import { formatDate, formatMinor, parseAmountToMinor } from "@/lib/format";
 import { upsertPriceSnapshotAction } from "@/lib/investments/actions";
 import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
 
@@ -41,6 +42,7 @@ export function PriceSnapshotForm({
   const [securityId, setSecurityId] = useState("");
   const [date, setDate] = useState(today);
   const [price, setPrice] = useState("");
+  const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -122,8 +124,8 @@ export function PriceSnapshotForm({
       </div>
       {selected?.latest && (
         <p className="text-caption text-text-muted">
-          Latest stored: {formatMinor(selected.latest.priceMinor, selected.currency)} on{" "}
-          {selected.latest.date}. Re-entering a date replaces its snapshot.
+          Latest stored: {formatMinor(selected.latest.priceMinor, selected.currency, locale)} on{" "}
+          {formatDate(selected.latest.date, locale)}. Re-entering a date replaces its snapshot.
         </p>
       )}
       {error && <p className={errorClass}>{error}</p>}

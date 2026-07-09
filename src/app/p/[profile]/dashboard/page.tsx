@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { entities } from "@/db/schema";
@@ -46,6 +47,7 @@ export default async function DashboardPage({
     .where(and(eq(entities.id, entityId), isNull(entities.deletedAt)));
   if (!entity) notFound();
 
+  const locale = await getLocale();
   const balances = await getAccountBalances(entityId, owner);
   // The all-entities net cash consolidation belongs to the SHARED household
   // view only; personal profiles show just that person's balances.
@@ -111,10 +113,10 @@ export default async function DashboardPage({
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">{account.name}</td>
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{account.type}</td>
                   <td className={amountClass(account.balance)}>
-                    {formatMinor(account.balance, account.currency)}
+                    {formatMinor(account.balance, account.currency, locale)}
                   </td>
                   <td className={amountClass(account.balanceRon)}>
-                    {formatMinor(account.balanceRon, "RON")}
+                    {formatMinor(account.balanceRon, "RON", locale)}
                   </td>
                 </tr>
               ))}
@@ -131,9 +133,10 @@ export default async function DashboardPage({
               <InvestmentSummaryCard
                 result={valuation}
                 investmentsHref={`/p/${profile.slug}/investments`}
+                locale={locale}
               />
-              <AllocationCard result={valuation} />
-              {profile.slug === "household" && <OwnerCard result={valuation} />}
+              <AllocationCard result={valuation} locale={locale} />
+              {profile.slug === "household" && <OwnerCard result={valuation} locale={locale} />}
             </div>
           ) : (
             <p className="text-secondary text-status-warning-text">
@@ -155,26 +158,26 @@ export default async function DashboardPage({
                   <tr key={row.entityName} className="border-t border-border-hairline first:border-t-0">
                     <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Cash — {row.entityName}</td>
                     <td className={amountClass(row.cashRon)}>
-                      {formatMinor(row.cashRon, "RON")}
+                      {formatMinor(row.cashRon, "RON", locale)}
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t border-border-hairline">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Total cash</td>
                   <td className={amountClass(netCash.totalCashRon)}>
-                    {formatMinor(netCash.totalCashRon, "RON")}
+                    {formatMinor(netCash.totalCashRon, "RON", locale)}
                   </td>
                 </tr>
                 <tr className="border-t border-border-hairline">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Accrued tax liabilities</td>
                   <td className={amountClass(netCash.accruedTaxRon)}>
-                    {formatMinor(netCash.accruedTaxRon, "RON")}
+                    {formatMinor(netCash.accruedTaxRon, "RON", locale)}
                   </td>
                 </tr>
                 <tr className="border-t border-border-hairline">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-body text-text-primary">Net cash</td>
                   <td className={`${amountClass(netCash.netRon)} text-body`}>
-                    {formatMinor(netCash.netRon, "RON")}
+                    {formatMinor(netCash.netRon, "RON", locale)}
                   </td>
                 </tr>
               </tbody>
@@ -213,7 +216,7 @@ export default async function DashboardPage({
                       )}
                     </td>
                     <td className={amountClass(group.accruedRon)}>
-                      {formatMinor(group.accruedRon, "RON")}
+                      {formatMinor(group.accruedRon, "RON", locale)}
                     </td>
                   </tr>
                 ))}
@@ -248,7 +251,7 @@ export default async function DashboardPage({
                       )}
                     </td>
                     <td className={amountClass(period.totalRon)}>
-                      {formatMinor(period.totalRon, "RON")}
+                      {formatMinor(period.totalRon, "RON", locale)}
                     </td>
                   </tr>
                 ))}

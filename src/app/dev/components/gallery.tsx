@@ -6,6 +6,7 @@
  * Static local sample data only. Dev/reference route; not in app navigation.
  */
 import * as React from "react";
+import { useLocale } from "next-intl";
 import {
   Building2Icon,
   CalendarIcon,
@@ -338,6 +339,7 @@ function SidebarDemo() {
 /* ---------------------------------------------------------------- gallery */
 
 export function Gallery() {
+  const locale = useLocale();
   const [date, setDate] = React.useState<Date | undefined>(new Date(2026, 6, 4));
 
   return (
@@ -800,9 +802,9 @@ export function Gallery() {
             <div className="grid gap-4 lg:grid-cols-2">
               <Demo label="EMPTY (day one) — invite, no zero; allocation + owner render nothing">
                 <div className="flex flex-col gap-3">
-                  <InvestmentSummaryCard result={EMPTY} investmentsHref="/p/greg/investments" />
-                  <AllocationCard result={EMPTY} />
-                  <OwnerCard result={EMPTY} />
+                  <InvestmentSummaryCard result={EMPTY} investmentsHref="/p/greg/investments" locale={locale} />
+                  <AllocationCard result={EMPTY} locale={locale} />
+                  <OwnerCard result={EMPTY} locale={locale} />
                 </div>
               </Demo>
               <Demo label="SPARSE — 2 holdings, 1 unpriced: 100%-of-priced bar + named exclusion">
@@ -810,9 +812,10 @@ export function Gallery() {
                   <InvestmentSummaryCard
                     result={SPARSE_ONE_UNPRICED}
                     investmentsHref="/p/greg/investments"
+                    locale={locale}
                   />
-                  <AllocationCard result={SPARSE_ONE_UNPRICED} />
-                  <OwnerCard result={SPARSE_ONE_UNPRICED} />
+                  <AllocationCard result={SPARSE_ONE_UNPRICED} locale={locale} />
+                  <OwnerCard result={SPARSE_ONE_UNPRICED} locale={locale} />
                 </div>
               </Demo>
               <Demo label="POPULATED with a stale price — oldest stale date on the summary, per-row as-of">
@@ -820,9 +823,10 @@ export function Gallery() {
                   <InvestmentSummaryCard
                     result={POPULATED_WITH_STALE}
                     investmentsHref="/p/household/investments"
+                    locale={locale}
                   />
-                  <AllocationCard result={POPULATED_WITH_STALE} />
-                  <OwnerCard result={POPULATED_WITH_STALE} />
+                  <AllocationCard result={POPULATED_WITH_STALE} locale={locale} />
+                  <OwnerCard result={POPULATED_WITH_STALE} locale={locale} />
                 </div>
               </Demo>
               <Demo label="ALL UNPRICED — real basis shown, never a clean 0.00 total">
@@ -830,9 +834,10 @@ export function Gallery() {
                   <InvestmentSummaryCard
                     result={ALL_UNPRICED}
                     investmentsHref="/p/household/investments"
+                    locale={locale}
                   />
-                  <AllocationCard result={ALL_UNPRICED} />
-                  <OwnerCard result={ALL_UNPRICED} />
+                  <AllocationCard result={ALL_UNPRICED} locale={locale} />
+                  <OwnerCard result={ALL_UNPRICED} locale={locale} />
                 </div>
               </Demo>
             </div>

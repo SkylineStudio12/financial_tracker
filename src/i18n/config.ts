@@ -10,8 +10,13 @@
 export const LOCALES = ["en", "ro"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-/** English until the ro catalog is complete (owner decision, i18n Stage 0). */
-export const DEFAULT_LOCALE: Locale = "en";
+/**
+ * Romanian by default (owner ruling, i18n Stage 2): number/date FORMATTING
+ * is complete in both locales, so the no-cookie view keeps today's exact
+ * money look (12.345,67 / DD.MM.YYYY); en STRINGS fall back readably until
+ * Stages 3–4 fill the ro catalog.
+ */
+export const DEFAULT_LOCALE: Locale = "ro";
 
 export const LOCALE_COOKIE = "locale";
 

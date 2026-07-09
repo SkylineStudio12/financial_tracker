@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { useLocale } from "next-intl"
+import { ro as roDateFns } from "date-fns/locale"
 import {
   DayPicker,
   getDefaultClassNames,
@@ -26,6 +28,10 @@ function Calendar({
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
 }) {
   const defaultClassNames = getDefaultClassNames()
+  // App-locale default (i18n Stage 2): an explicit `locale` prop still wins;
+  // en falls through to react-day-picker's built-in enUS.
+  const appLocale = useLocale()
+  const resolvedLocale = locale ?? (appLocale === "ro" ? roDateFns : undefined)
 
   return (
     <DayPicker
@@ -37,10 +43,10 @@ function Calendar({
         className
       )}
       captionLayout={captionLayout}
-      locale={locale}
+      locale={resolvedLocale}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString(locale?.code, { month: "short" }),
+          date.toLocaleString(resolvedLocale?.code, { month: "short" }),
         ...formatters,
       }}
       classNames={{

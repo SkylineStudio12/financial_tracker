@@ -13,15 +13,16 @@
  *    ("no holdings", an invite, an em-dash) — NEVER as "0.00 RON".
  */
 import Link from "next/link";
-import { formatMinor } from "@/lib/format";
+import type { Locale } from "@/i18n/config";
+import { formatDate, formatMinor } from "@/lib/format";
 import type { ValuationResult } from "@/lib/investments/valuation";
 
 const card = "flex flex-col gap-2 rounded-card border border-border-hairline bg-surface p-4";
 const cardTitle = "text-micro uppercase text-text-muted";
 const num = "font-numeric tabular-nums";
 
-const signed = (minor: number, currency: string) =>
-  `${minor >= 0 ? "+" : "−"}${formatMinor(Math.abs(minor), currency)}`;
+const signed = (minor: number, currency: string, locale: Locale) =>
+  `${minor >= 0 ? "+" : "−"}${formatMinor(Math.abs(minor), currency, locale)}`;
 const signClass = (minor: number) =>
   minor >= 0 ? "text-status-positive-text" : "text-status-negative-text";
 
@@ -33,7 +34,7 @@ function oldestStaleDate(result: ValuationResult): string | null {
   return staleDates[0] ?? null;
 }
 
-function HonestyLines({ result }: { result: ValuationResult }) {
+function HonestyLines({ result, locale }: { result: ValuationResult; locale: Locale }) {
   const stale = oldestStaleDate(result);
   const excludedBasis = result.totals.basisRonMinor - result.totals.valuedBasisRonMinor;
   return (
@@ -42,12 +43,12 @@ function HonestyLines({ result }: { result: ValuationResult }) {
         <p className="text-caption text-status-warning-text">
           Excludes {result.totals.unpricedCount} unpriced holding
           {result.totals.unpricedCount > 1 ? "s" : ""} (basis{" "}
-          <span className={num}>{formatMinor(excludedBasis, "RON")}</span>).
+          <span className={num}>{formatMinor(excludedBasis, "RON", locale)}</span>).
         </p>
       )}
       {stale && (
         <p className="text-caption text-status-warning-text">
-          Includes prices as old as {stale}.
+          Includes prices as old as {formatDate(stale, locale)}.
         </p>
       )}
     </>
@@ -58,9 +59,11 @@ function HonestyLines({ result }: { result: ValuationResult }) {
 export function InvestmentSummaryCard({
   result,
   investmentsHref,
+  locale,
 }: {
   result: ValuationResult;
   investmentsHref: string;
+  locale: Locale;
 }) {
   // Day one: no holdings at all — an honest invite, never a zero.
   if (result.holdings.length === 0) {
@@ -91,7 +94,7 @@ export function InvestmentSummaryCard({
         <p className="text-secondary text-text-primary">
           {result.holdings.length} holding{result.holdings.length > 1 ? "s" : ""}, none
           priced yet — cost basis{" "}
-          <span className={num}>{formatMinor(result.totals.basisRonMinor, "RON")}</span>.
+          <span className={num}>{formatMinor(result.totals.basisRonMinor, "RON", locale)}</span>.
         </p>
         <p className="text-caption text-text-muted">
           Add a price snapshot on the investments page to value them.
@@ -110,25 +113,25 @@ export function InvestmentSummaryCard({
     <div className={card}>
       <h3 className={cardTitle}>Portfolio value</h3>
       <p className={`text-number-lg text-text-primary ${num}`}>
-        {formatMinor(result.totals.valueRonMinor, "RON")}
+        {formatMinor(result.totals.valueRonMinor, "RON", locale)}
       </p>
       <p className="text-secondary">
         <span className={`${num} ${signClass(result.totals.unrealizedRonMinor)}`}>
-          {signed(result.totals.unrealizedRonMinor, "RON")}
+          {signed(result.totals.unrealizedRonMinor, "RON", locale)}
         </span>{" "}
         <span className="text-text-muted">
           unrealized on{" "}
-          <span className={num}>{formatMinor(result.totals.valuedBasisRonMinor, "RON")}</span>{" "}
+          <span className={num}>{formatMinor(result.totals.valuedBasisRonMinor, "RON", locale)}</span>{" "}
           basis
         </span>
       </p>
       <p className="text-caption text-text-muted">
         {[...byCurrency.entries()]
-          .map(([currency, value]) => `${formatMinor(value, currency)}`)
+          .map(([currency, value]) => `${formatMinor(value, currency, locale)}`)
           .join(" · ")}{" "}
-        — valued {result.date}
+        — valued {formatDate(result.date, locale)}
       </p>
-      <HonestyLines result={result} />
+      <HonestyLines result={result} locale={locale} />
     </div>
   );
 }
@@ -136,7 +139,7 @@ export function InvestmentSummaryCard({
 /** Card 2 — allocation. Hidden until at least one holding exists; unpriced
  * holdings never get a bar (a bar implies a share of a total they aren't
  * in) — they are named beneath. */
-export function AllocationCard({ result }: { result: ValuationResult }) {
+export function AllocationCard({ result, locale }: { result: ValuationResult; locale: Locale }) {
   if (result.holdings.length === 0) return null;
   const priced = result.holdings.filter((h) => h.valueRonMinor !== null);
   const unpriced = result.holdings.filter((h) => h.valueRonMinor === null);
@@ -161,12 +164,12 @@ export function AllocationCard({ result }: { result: ValuationResult }) {
                     {h.price?.stale && (
                       <span className="text-caption text-status-warning-text">
                         {" "}
-                        as of {h.price.priceDate}
+                        as of {formatDate(h.price.priceDate, locale)}
                       </span>
                     )}
                   </span>
                   <span className={`${num} text-text-muted`}>
-                    {formatMinor(h.valueRonMinor!, "RON")} · {pct}%
+                    {formatMinor(h.valueRonMinor!, "RON", locale)} · {pct}%
                   </span>
                 </div>
                 <div className="h-1.5 w-full rounded-badge bg-surface-inactive">
@@ -191,7 +194,7 @@ export function AllocationCard({ result }: { result: ValuationResult }) {
 
 /** Card 3 — by owner (household profile only). An owner with no holdings
  * reads "no holdings" — never 0.00 RON. */
-export function OwnerCard({ result }: { result: ValuationResult }) {
+export function OwnerCard({ result, locale }: { result: ValuationResult; locale: Locale }) {
   if (result.holdings.length === 0) return null;
   const owners = ["greg", "andra"] as const;
   const label: Record<(typeof owners)[number], string> = { greg: "Greg", andra: "Andra" };
@@ -216,8 +219,8 @@ export function OwnerCard({ result }: { result: ValuationResult }) {
                 </span>
               ) : (
                 <span className={num}>
-                  <span className="text-text-primary">{formatMinor(value, "RON")}</span>{" "}
-                  <span className={signClass(unrealized)}>{signed(unrealized, "RON")}</span>
+                  <span className="text-text-primary">{formatMinor(value, "RON", locale)}</span>{" "}
+                  <span className={signClass(unrealized)}>{signed(unrealized, "RON", locale)}</span>
                   {priced.length < theirs.length && (
                     <span className="text-caption text-status-warning-text">
                       {" "}

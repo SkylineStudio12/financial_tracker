@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import {
   previewDividend,
@@ -22,6 +23,7 @@ export function DividendFlow({
   const [date, setDate] = useState(today());
   const [gross, setGross] = useState("");
   const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
+  const locale = useLocale();
   const [preview, setPreview] = useState<DividendPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -117,17 +119,17 @@ export function DividendFlow({
             <tbody>
               <tr>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Gross dividend</td>
-                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.gross, "RON")}</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.gross, "RON", locale)}</td>
               </tr>
               <tr className="border-t border-border-hairline">
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Dividend tax (withheld)</td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-negative-text">
-                  {formatMinor(-preview.withholdingTax, "RON")}
+                  {formatMinor(-preview.withholdingTax, "RON", locale)}
                 </td>
               </tr>
               <tr className="border-t border-border-hairline">
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">Net to shareholder</td>
-                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.net, "RON")}</td>
+                <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-text-primary">{formatMinor(preview.net, "RON", locale)}</td>
               </tr>
               <tr className="border-t border-border-hairline">
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
@@ -137,7 +139,7 @@ export function DividendFlow({
                   </span>
                 </td>
                 <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums text-status-warning-text">
-                  {formatMinor(-preview.cassEstimate, "RON")}
+                  {formatMinor(-preview.cassEstimate, "RON", locale)}
                 </td>
               </tr>
               <tr className="border-t border-border-hairline">

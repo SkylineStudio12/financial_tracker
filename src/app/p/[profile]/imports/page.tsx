@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import { formatDate } from "@/lib/format";
 import { getImportFormOptions, listImportBatches } from "@/lib/import/queries";
@@ -17,6 +18,7 @@ export default async function ImportsPage({
   // Imports are a company-books feature; gate on the same flag as the flows.
   if (!profile || !profile.companyFlows) notFound();
 
+  const locale = await getLocale();
   const { bankAccounts } = await getImportFormOptions(profile.entityId);
   const batches = await listImportBatches(profile.entityId);
 
@@ -46,7 +48,7 @@ export default async function ImportsPage({
                     {batch.statementNumber} · {batch.accountName}
                   </span>
                   <span className="text-caption text-text-muted">
-                    {formatDate(batch.periodStart)}–{formatDate(batch.periodEnd)} ·{" "}
+                    {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·{" "}
                     {batch.pendingCount} of {batch.rowCount} pending
                   </span>
                 </Link>

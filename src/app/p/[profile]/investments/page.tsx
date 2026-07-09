@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
 import {
   listBrokerageAccounts,
@@ -24,6 +25,7 @@ export default async function InvestmentsPage({
   // personal profiles own the brokerage accounts; the SRLs don't trade.
   if (!profile || !profile.investments) notFound();
 
+  const locale = await getLocale();
   const accounts = await listBrokerageAccounts(profile.entityId, profile.owner);
   const securities = await listSecurities();
   const cashAccounts = accounts.filter((a) => a.type === "brokerage");
@@ -56,7 +58,7 @@ export default async function InvestmentsPage({
       <section className="flex flex-col gap-2">
         <h2 className="text-card-title text-text-primary">Holdings</h2>
         {valuation ? (
-          <HoldingsTable result={valuation} />
+          <HoldingsTable result={valuation} locale={locale} />
         ) : (
           <p className="text-secondary text-status-warning-text">
             Holdings could not be valued: {valuationError}

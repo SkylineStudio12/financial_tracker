@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLocale } from "next-intl/server";
 import { transactionKind } from "@/db/schema";
 import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor, formatMinorNumber } from "@/lib/format";
@@ -66,6 +67,7 @@ export default async function TransactionsPage({
   const profile = getProfile(slug);
   if (!profile) notFound();
   const { entityId, owner } = profile;
+  const locale = await getLocale();
   const query = await searchParams;
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
@@ -201,7 +203,7 @@ export default async function TransactionsPage({
                 {/* Number-first hierarchy: the amount anchors the row; date,
                     category, tags, and account are muted metadata. */}
                 <td className={`${cellClass} whitespace-nowrap text-text-muted`}>
-                  {formatDate(row.date)}
+                  {formatDate(row.date, locale)}
                 </td>
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
                 <td className={`${cellClass} text-text-muted`}>{row.category ?? "—"}</td>
@@ -212,13 +214,13 @@ export default async function TransactionsPage({
                 <td
                   className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums font-medium ${amountTone(row.kind, row.amount)}`}
                 >
-                  {formatMinorNumber(row.amount)}
+                  {formatMinorNumber(row.amount, locale)}
                   <span className="ml-1 font-normal text-text-muted">{row.currency}</span>
                 </td>
                 <td
                   className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums text-text-muted`}
                 >
-                  {formatMinor(row.amountRon, "RON")}
+                  {formatMinor(row.amountRon, "RON", locale)}
                 </td>
               </RowLink>
             ))}

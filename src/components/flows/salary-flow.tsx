@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useLocale } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import {
   previewSalary,
@@ -23,6 +24,7 @@ export function SalaryFlow({
   const [month, setMonth] = useState(currentMonth());
   const [gross, setGross] = useState("");
   const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
+  const locale = useLocale();
   const [preview, setPreview] = useState<SalaryPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -162,7 +164,7 @@ export function SalaryFlow({
                       amount < 0 ? "text-status-negative-text" : "text-text-primary"
                     }`}
                   >
-                    {formatMinor(amount, "RON")}
+                    {formatMinor(amount, "RON", locale)}
                   </td>
                 </tr>
               ))}

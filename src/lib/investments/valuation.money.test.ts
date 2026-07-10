@@ -13,6 +13,7 @@ import { inArray } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { priceSnapshots, securities } from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
+import { LedgerValidationError } from "@/lib/ledger";
 import { executeTrade } from "./service";
 import { valueAtPrice } from "./trade-rules";
 import { valueHoldings } from "./valuation";
@@ -134,12 +135,18 @@ async function run(env: TradeTestEnv) {
   // ------------------------------------------ 6. Date range: hard reject
   await assert.rejects(
     valueHoldings({ entityId: env.entityId, date: "2024-12-31" }),
-    /outside the supported FX range/,
+    (e) =>
+      e instanceof LedgerValidationError &&
+      e.code === "investments.valuationDateOutOfRange" &&
+      e.params?.date === "2024-12-31",
   );
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await assert.rejects(
     valueHoldings({ entityId: env.entityId, date: tomorrow }),
-    /outside the supported FX range/,
+    (e) =>
+      e instanceof LedgerValidationError &&
+      e.code === "investments.valuationDateOutOfRange" &&
+      e.params?.date === tomorrow,
   );
   ok("valuation dates before the FX floor or in the future are rejected loudly");
 }

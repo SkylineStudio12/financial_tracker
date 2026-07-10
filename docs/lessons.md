@@ -38,6 +38,7 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0011 | db | Partial unique index on a soft-deleted table must scope to live rows |
 | L-0012 | ledger | Generic ledger mutations must account for dependent structures |
 | L-0013 | tooling | i18n tsc key-completeness masked by incremental build cache |
+| L-0014 | i18n | Code-only error classes must convert all producers |
 
 ---
 
@@ -180,3 +181,18 @@ incremental cache cleared (`rm -f tsconfig.tsbuildinfo .tsbuildinfo && npx tsc
 --noEmit`); CI should run non-incremental.
 **Origin:** i18n Stage 3b — enum-label completeness demo false-negatived, then
 errored once cache-cleared.
+
+### L-0014 · 2026-07-10 · i18n · ratified
+**Lesson:** A "code-only" error class is only code-only if every producer emits
+codes. Converting the named sites while leaving adjacent producers on prose
+leaves the class carrying English through those paths — and the tsc
+completeness guard cannot catch it, because the guard checks code-to-catalog
+parity, not prose-to-code migration. The type guarantee is a facade until the
+last prose producer is converted.
+**Apply:** When converting an error class to codes, convert the whole class in
+one unit. Scope the unit by class, not by file list. If a producer must stay
+prose (e.g. IngParseError, by separate ruling), it must be a different class so
+the code-only class stays strictly code-only.
+**Origin:** i18n Stage 3f — LedgerValidationError also had producers in
+adjacent import, tax, prices, valuation, and trade-rules files beyond the named
+primary producers.

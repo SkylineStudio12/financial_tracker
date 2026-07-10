@@ -28,6 +28,8 @@ import {
 import { formatBpsPercent, formatMinor, parseAmountToMinor } from "@/lib/format";
 import { impliedRate, displayQuantity } from "@/lib/investments/trade-rules";
 import type { SellPreview } from "@/lib/investments/service";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import {
   bnrRateHintAction,
   createSecurityAction,
@@ -100,19 +102,20 @@ export function TradeForm({
   const [newSecOpen, setNewSecOpen] = useState(false);
   const [newTicker, setNewTicker] = useState("");
   const [newName, setNewName] = useState("");
-  const [newSecError, setNewSecError] = useState<string | null>(null);
+  const [newSecError, setNewSecError] = useState<AppError | null>(null);
   const [previewState, setPreviewState] = useState<{
     key: string;
-    result: SellPreview | { error: string };
+    result: SellPreview | { error: AppError };
   } | null>(null);
   const [bnrState, setBnrState] = useState<{ key: string; rate: string | null } | null>(null);
   const [estimateState, setEstimateState] = useState<{
     key: string;
-    value: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string };
+    value: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: AppError };
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
   const [previewPending, startPreview] = useTransition();
+  const translateError = useTranslatedError();
 
   const cash = cashAccounts.find((a) => a.id === cashAccountId);
   const positionCandidates = useMemo(
@@ -449,7 +452,7 @@ export function TradeForm({
             <p className="text-caption text-text-muted">
               {t("currencyLocked", { currency })}
             </p>
-            {newSecError && <p className={errorClass}>{newSecError}</p>}
+            {newSecError && <p className={errorClass}>{translateError(newSecError)}</p>}
             <div className="flex gap-2">
               <Button type="button" size="sm" onClick={createSecurity}>
                 {t("createSecurity")}
@@ -560,7 +563,7 @@ export function TradeForm({
         <DividendEstimatePanel estimate={estimate} held={heldOfSelected} />
       )}
 
-      {error && <p className={errorClass}>{error}</p>}
+      {error && <p className={errorClass}>{translateError(error)}</p>}
       <div>
         <Button type="submit" disabled={!canBook || pending}>
           {pending
@@ -590,11 +593,12 @@ function DividendEstimatePanel({
   estimate,
   held,
 }: {
-  estimate: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string } | null;
+  estimate: { dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: AppError } | null;
   held: string | undefined;
 }) {
   const locale = useLocale();
   const t = useTranslations("investments");
+  const translateError = useTranslatedError();
   if (!estimate) {
     return (
       <p className="text-caption text-text-muted">
@@ -605,7 +609,7 @@ function DividendEstimatePanel({
       </p>
     );
   }
-  if ("error" in estimate) return <p className={errorClass}>{estimate.error}</p>;
+  if ("error" in estimate) return <p className={errorClass}>{translateError(estimate.error)}</p>;
   return (
     <div className="flex flex-col gap-1.5 rounded-input border border-dashed border-border-hairline p-3">
       <div>
@@ -632,13 +636,14 @@ function SellPreviewPanel({
   currency,
   held,
 }: {
-  preview: SellPreview | { error: string } | null;
+  preview: SellPreview | { error: AppError } | null;
   pending: boolean;
   currency: string;
   held: string | undefined;
 }) {
   const locale = useLocale();
   const t = useTranslations("investments");
+  const translateError = useTranslatedError();
   if (pending) {
     return <p className="text-caption text-text-muted">{t("previewingFifo")}</p>;
   }
@@ -647,7 +652,7 @@ function SellPreviewPanel({
       <p className="text-caption text-text-muted">{t("youHold", { quantity: displayQuantity(held) })}</p>
     ) : null;
   }
-  if ("error" in preview) return <p className={errorClass}>{preview.error}</p>;
+  if ("error" in preview) return <p className={errorClass}>{translateError(preview.error)}</p>;
   if (!preview.ok) {
     return (
       <p className={errorClass}>

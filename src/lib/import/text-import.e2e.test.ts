@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { importRows, postings, taxAccruals, transactions } from "@/db/schema";
+import { LedgerValidationError } from "@/lib/ledger";
 import { bookHighConfidenceRows, bookImportRow, createImportBatch } from "./service";
 import {
   EXPECTED_KIND,
@@ -200,7 +201,13 @@ async function run(env: ImportTestEntity) {
 
   await ok("booking a duplicate row is refused (no second write)", async () => {
     const dup = reRows.find((r) => r.status === "duplicate")!;
-    await assert.rejects(() => bookImportRow({ rowId: dup.id }), /already duplicate/);
+    await assert.rejects(
+      () => bookImportRow({ rowId: dup.id }),
+      (e) =>
+        e instanceof LedgerValidationError &&
+        e.code === "imports.rowAlreadyStatus" &&
+        e.params?.status === "duplicate",
+    );
   });
 
   const finalTxCount = await db

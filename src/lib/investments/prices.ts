@@ -22,19 +22,23 @@ export async function upsertPriceSnapshot(input: {
   priceMinor: number;
 }): Promise<void> {
   if (!DATE_RE.test(input.date)) {
-    throw new LedgerValidationError(`Invalid snapshot date: ${input.date}`);
+    throw new LedgerValidationError("investments.invalidSnapshotDate", { date: input.date });
   }
   if (input.date > new Date().toISOString().slice(0, 10)) {
-    throw new LedgerValidationError("A price snapshot cannot be in the future");
+    throw new LedgerValidationError("investments.snapshotFuture");
   }
   if (!Number.isSafeInteger(input.priceMinor) || input.priceMinor <= 0) {
-    throw new LedgerValidationError("The price must be a positive amount in minor units");
+    throw new LedgerValidationError("investments.snapshotPricePositive");
   }
   const [security] = await db
     .select({ id: securities.id })
     .from(securities)
     .where(and(eq(securities.id, input.securityId), isNull(securities.deletedAt)));
-  if (!security) throw new LedgerValidationError(`Security not found: ${input.securityId}`);
+  if (!security) {
+    throw new LedgerValidationError("investments.securityNotFound", {
+      securityId: input.securityId,
+    });
+  }
 
   await db
     .insert(priceSnapshots)

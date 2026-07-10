@@ -8,6 +8,8 @@ import {
   saveSalary,
   type SalaryPreview,
 } from "@/lib/ledger/flow-actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
 import { errorClass, fieldClass, labelClass, primaryButtonClass } from "@/components/forms/ui";
 
@@ -27,8 +29,9 @@ export function SalaryFlow({
   const locale = useLocale();
   const t = useTranslations("flows");
   const tForms = useTranslations("forms");
+  const translateError = useTranslatedError();
   const [preview, setPreview] = useState<SalaryPreview | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
   const grossRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -182,7 +185,7 @@ export function SalaryFlow({
         </div>
       )}
 
-      {error && <p className={errorClass}>{error}</p>}
+      {error && <p className={errorClass}>{translateError(error)}</p>}
 
       <div className="flex gap-2">
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>

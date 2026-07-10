@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select";
 import { formatDate, formatMinor, parseAmountToMinor } from "@/lib/format";
 import { upsertPriceSnapshotAction } from "@/lib/investments/actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
 
 interface SecurityOption {
@@ -45,7 +47,8 @@ export function PriceSnapshotForm({
   const locale = useLocale();
   const t = useTranslations("investments");
   const tForms = useTranslations("forms");
-  const [error, setError] = useState<string | null>(null);
+  const translateError = useTranslatedError();
+  const [error, setError] = useState<AppError | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -132,7 +135,7 @@ export function PriceSnapshotForm({
           })}
         </p>
       )}
-      {error && <p className={errorClass}>{error}</p>}
+      {error && <p className={errorClass}>{translateError(error)}</p>}
       {saved && <p className="text-caption text-status-positive-text">{saved}</p>}
       <div>
         <Button type="submit" size="sm" disabled={!canSave || pending}>

@@ -3,12 +3,13 @@
 /**
  * Server actions for trade entry — thin wrappers over the Stage-2 trade
  * service: validate the caller's profile, delegate, surface
- * LedgerValidationError messages verbatim. All writes happen inside
+ * LedgerValidationError codes for client-side translation. All writes happen inside
  * executeTrade via createTransaction (single write path).
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LedgerValidationError } from "@/lib/ledger";
+import { toAppError, type AppError } from "@/lib/app-error";
 import { resolveRonRate } from "@/lib/fx";
 import { getProfile } from "@/lib/profiles";
 import {
@@ -25,7 +26,7 @@ import { upsertPriceSnapshot } from "./prices";
 function profileBase(profileSlug: string, entityId: string): string {
   const profile = getProfile(profileSlug);
   if (!profile || profile.entityId !== entityId || !profile.investments) {
-    throw new LedgerValidationError("Unknown profile for this entity");
+    throw new LedgerValidationError("profile.unknownInvestment");
   }
   return `/p/${profile.slug}`;
 }
@@ -44,7 +45,7 @@ export async function recordTradeAction(payload: {
   totalMinor: number;
   totalRonMinor: number;
   notes?: string;
-}): Promise<{ error: string } | undefined> {
+}): Promise<{ error: AppError } | undefined> {
   let base: string;
   try {
     base = profileBase(payload.profileSlug, payload.entityId);
@@ -61,7 +62,7 @@ export async function recordTradeAction(payload: {
       };
     } else {
       if (!payload.quantity || payload.priceMinor === undefined) {
-        throw new LedgerValidationError("A buy or sell needs the share quantity and price");
+        throw new LedgerValidationError("investments.buySellQuantityAndPriceRequired");
       }
       input = {
         kind: payload.kind,
@@ -78,7 +79,8 @@ export async function recordTradeAction(payload: {
     }
     await executeTrade(input);
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   revalidatePath(`${base}/investments`);
@@ -97,7 +99,7 @@ export async function recordTradeAction(payload: {
 export async function estimateDividendAction(payload: {
   date: string;
   dividendRonMinor: number;
-}): Promise<{ dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: string }> {
+}): Promise<{ dividendTaxRonMinor: number; dividendTaxRateBps: number } | { error: AppError }> {
   try {
     const estimate = await estimateDividendTaxes(payload.date, payload.dividendRonMinor);
     return {
@@ -105,7 +107,8 @@ export async function estimateDividendAction(payload: {
       dividendTaxRateBps: estimate.dividendTaxRule.rateBps,
     };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -116,11 +119,12 @@ export async function previewSellAction(payload: {
   quantity: string;
   totalMinor?: number | null;
   totalRonMinor?: number | null;
-}): Promise<SellPreview | { error: string }> {
+}): Promise<SellPreview | { error: AppError }> {
   try {
     return await previewSell(payload);
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -130,12 +134,13 @@ export async function createSecurityAction(payload: {
   name: string;
   currency: "RON" | "EUR" | "USD";
 }): Promise<
-  { id: string; ticker: string; name: string; currency: string } | { error: string }
+  { id: string; ticker: string; name: string; currency: string } | { error: AppError }
 > {
   try {
     return await getOrCreateSecurity(payload);
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -146,7 +151,7 @@ export async function upsertPriceSnapshotAction(payload: {
   securityId: string;
   date: string;
   priceMinor: number;
-}): Promise<{ ok: true } | { error: string }> {
+}): Promise<{ ok: true } | { error: AppError }> {
   try {
     const base = profileBase(payload.profileSlug, payload.entityId);
     await upsertPriceSnapshot({
@@ -157,7 +162,8 @@ export async function upsertPriceSnapshotAction(payload: {
     revalidatePath(`${base}/investments`);
     return { ok: true };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }

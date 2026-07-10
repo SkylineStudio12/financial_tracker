@@ -60,7 +60,7 @@ async function main() {
     };
     await assert.rejects(
       () => updateTransaction(txId, formShaped),
-      (e) => e instanceof LedgerValidationError && /imported from a bank statement/.test(e.message),
+      (e) => e instanceof LedgerValidationError && e.code === "ledger.importedRefsMustBePreserved",
     );
     ok("form-shaped edit (drops external_ref) is rejected at the service");
 

@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { deleteTransactionAction } from "@/lib/ledger/actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import { errorClass } from "./forms/ui";
 
 export function DeleteTransactionButton({
@@ -16,7 +18,8 @@ export function DeleteTransactionButton({
   profileSlug?: string;
 }) {
   const t = useTranslations("transactions");
-  const [error, setError] = useState<string | null>(null);
+  const translateError = useTranslatedError();
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -35,7 +38,7 @@ export function DeleteTransactionButton({
       >
         {pending ? t("deleting") : t("delete")}
       </button>
-      {error && <span className={errorClass}>{error}</span>}
+      {error && <span className={errorClass}>{translateError(error)}</span>}
     </span>
   );
 }

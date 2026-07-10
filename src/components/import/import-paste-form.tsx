@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createImportBatchAction } from "@/lib/import/actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import { errorClass, fieldClass, ghostButtonClass, labelClass } from "@/components/forms/ui";
 
 type InputMode = "csv" | "paste";
@@ -25,6 +27,7 @@ export function ImportPasteForm({
   bankAccounts: { id: string; name: string; currency: string }[];
 }) {
   const t = useTranslations("imports");
+  const translateError = useTranslatedError();
   const [bankAccountId, setBankAccountId] = useState(bankAccounts[0]?.id ?? "");
   // CSV upload is the DEFAULT input (Stage 4 amendment); pasted statement
   // text stays as the fallback. Both feed the same server action — format
@@ -32,7 +35,7 @@ export function ImportPasteForm({
   const [mode, setMode] = useState<InputMode>("csv");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -143,7 +146,11 @@ export function ImportPasteForm({
         </>
       )}
 
-      {error && <p className={errorClass}>{error}</p>}
+      {error && (
+        <p className={errorClass}>
+          {typeof error === "string" ? error : translateError(error)}
+        </p>
+      )}
       <div>
         <Button type="submit" disabled={pending || !text.trim()}>
           {pending ? t("parsing") : t("parseIntoInbox")}

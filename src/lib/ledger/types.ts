@@ -1,4 +1,5 @@
 import type { transactionKind } from "@/db/schema";
+export { LedgerValidationError } from "@/lib/app-error";
 
 export type TransactionKind = (typeof transactionKind.enumValues)[number];
 
@@ -46,12 +47,4 @@ export interface TransactionInput {
   postings: PostingInput[];
   /** Tax accrual links for postings on tax_liability accounts. */
   accruals?: AccrualInput[];
-}
-
-/** Thrown for any business-rule violation; message is user-presentable. */
-export class LedgerValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "LedgerValidationError";
-  }
 }

@@ -14,6 +14,7 @@ import {
   createTransaction,
   LedgerValidationError,
 } from "@/lib/ledger";
+import { toAppError, type AppError } from "@/lib/app-error";
 import { buildImportTransactionInput, bookingNeedsCategory } from "./booking";
 import { OWNER_BANK_NAMES, SUGGESTED_CATEGORY_BY_KIND } from "./config";
 import {
@@ -37,7 +38,7 @@ export interface CreateBatchResult {
 /**
  * Parse + classify a pasted ING statement and stage it in the review inbox.
  * NOTHING touches the ledger here. Throws LedgerValidationError (or
- * IngParseError from the parser) with a user-presentable message.
+ * IngParseError from the parser) with a user-presentable error.
  */
 export async function createImportBatch(params: {
   entityId: string;
@@ -53,15 +54,13 @@ export async function createImportBatch(params: {
     .from(accounts)
     .where(and(eq(accounts.id, params.bankAccountId), isNull(accounts.deletedAt)));
   if (!account || account.entityId !== params.entityId) {
-    throw new LedgerValidationError("Statement account not found on this entity");
+    throw new LedgerValidationError("imports.statementAccountNotFound");
   }
   if (account.type !== "bank" || !account.isActive) {
-    throw new LedgerValidationError("Statements import into an active bank account");
+    throw new LedgerValidationError("imports.statementAccountMustBeActiveBank");
   }
   if (account.currency !== "RON") {
-    throw new LedgerValidationError(
-      "The ING statement importer supports RON current accounts only",
-    );
+    throw new LedgerValidationError("imports.statementAccountMustBeRon");
   }
 
   // Format routing (CSV amendment): CSV is the DEFAULT source, detected by
@@ -95,9 +94,7 @@ export async function createImportBatch(params: {
     .from(importBatches)
     .where(eq(importBatches.rawTextHash, rawTextHash));
   if (existingBatch) {
-    throw new LedgerValidationError(
-      "This exact statement text is already imported — open its batch in the inbox instead",
-    );
+    throw new LedgerValidationError("imports.statementTextAlreadyImported");
   }
 
   const period = parseStatementPeriod(stmt.period);
@@ -230,15 +227,15 @@ export async function bookImportRow(params: {
   categoryId?: string | null;
 }): Promise<BookRowResult> {
   const [row] = await db.select().from(importRows).where(eq(importRows.id, params.rowId));
-  if (!row) throw new LedgerValidationError("Import row not found");
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
   if (row.status !== "pending") {
-    throw new LedgerValidationError(`This row is already ${row.status}`);
+    throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
   }
   const [batch] = await db
     .select()
     .from(importBatches)
     .where(eq(importBatches.id, row.batchId));
-  if (!batch) throw new LedgerValidationError("Import batch not found");
+  if (!batch) throw new LedgerValidationError("imports.batchNotFound");
 
   // The L-0010 tripwire runs over the WHOLE batch's resolved refs before
   // every booking — a duplicate here means the identity design broke.
@@ -267,7 +264,7 @@ export async function bookImportRow(params: {
     );
   const equity = entityAccounts.find((a) => a.type === "equity");
   if (!equity) {
-    throw new LedgerValidationError("This entity has no equity account to balance against");
+    throw new LedgerValidationError("imports.equityAccountMissing");
   }
   const taxLiability = entityAccounts.find((a) => a.type === "tax_liability") ?? null;
 
@@ -321,7 +318,7 @@ export interface BookHighConfidenceResult {
   duplicates: number;
   /** Rows left pending: low confidence, overlap-suspect, or no category. */
   left: number;
-  errors: string[];
+  errors: AppError[];
 }
 
 /**
@@ -359,11 +356,9 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
       else result.duplicates += 1;
     } catch (error) {
       result.left += 1;
-      if (error instanceof LedgerValidationError) {
-        result.errors.push(`Line ${row.lineNo}: ${error.message}`);
-      } else {
-        throw error;
-      }
+      const appError = toAppError(error);
+      if (appError) result.errors.push(appError);
+      else throw error;
     }
   }
   return result;
@@ -374,9 +369,9 @@ export async function skipImportRow(rowId: string): Promise<void> {
     .select({ status: importRows.status })
     .from(importRows)
     .where(eq(importRows.id, rowId));
-  if (!row) throw new LedgerValidationError("Import row not found");
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
   if (row.status !== "pending") {
-    throw new LedgerValidationError(`This row is already ${row.status}`);
+    throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
   }
   await db.update(importRows).set({ status: "skipped" }).where(eq(importRows.id, rowId));
 }

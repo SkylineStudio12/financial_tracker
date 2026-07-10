@@ -46,20 +46,20 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function validateAndPrepare(input: TransactionInput): Promise<PreparedPosting[]> {
   if (!DATE_RE.test(input.date)) {
-    throw new LedgerValidationError(`Invalid transaction date: ${input.date}`);
+    throw new LedgerValidationError("ledger.invalidTransactionDate", { date: input.date });
   }
   if (!input.description.trim()) {
-    throw new LedgerValidationError("Description is required");
+    throw new LedgerValidationError("ledger.descriptionRequired");
   }
   if (input.postings.length < 2) {
-    throw new LedgerValidationError("A transaction needs at least two postings");
+    throw new LedgerValidationError("ledger.postingsNeedAtLeastTwo");
   }
   for (const posting of input.postings) {
     if (!Number.isSafeInteger(posting.amount) || posting.amount === 0) {
-      throw new LedgerValidationError("Posting amounts must be non-zero integers in minor units");
+      throw new LedgerValidationError("ledger.postingAmountInvalid");
     }
     if (posting.amountRon !== undefined && !Number.isSafeInteger(posting.amountRon)) {
-      throw new LedgerValidationError("RON amounts must be integers in minor units");
+      throw new LedgerValidationError("ledger.ronAmountInvalid");
     }
   }
 
@@ -71,9 +71,9 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
   const accountById = new Map(accountRows.map((a) => [a.id, a]));
   for (const accountId of accountIds) {
     const account = accountById.get(accountId);
-    if (!account) throw new LedgerValidationError(`Account not found: ${accountId}`);
+    if (!account) throw new LedgerValidationError("ledger.accountNotFound", { accountId });
     if (!account.isActive) {
-      throw new LedgerValidationError(`Account is inactive: ${account.name}`);
+      throw new LedgerValidationError("ledger.accountInactive", { accountName: account.name });
     }
   }
 
@@ -89,9 +89,9 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
   const categoryById = new Map(categoryRows.map((c) => [c.id, c]));
   for (const categoryId of categoryIds) {
     const category = categoryById.get(categoryId);
-    if (!category) throw new LedgerValidationError(`Category not found: ${categoryId}`);
+    if (!category) throw new LedgerValidationError("ledger.categoryNotFound", { categoryId });
     if (category.entityId !== null && category.entityId !== input.entityId) {
-      throw new LedgerValidationError(`Category "${category.name}" belongs to another entity`);
+      throw new LedgerValidationError("ledger.categoryWrongEntity", { categoryName: category.name });
     }
   }
 
@@ -100,20 +100,16 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
     const account = accountById.get(posting.accountId)!;
     if (posting.categoryId) {
       if (input.kind === "transfer") {
-        throw new LedgerValidationError("Transfers are never categorized");
+        throw new LedgerValidationError("ledger.transferCategorized");
       }
       if (account.type === "tax_liability") {
-        throw new LedgerValidationError("Tax accrual postings are never categorized");
+        throw new LedgerValidationError("ledger.taxAccrualCategorized");
       }
       if (account.type !== "equity") {
-        throw new LedgerValidationError(
-          "Categories belong on the equity (P&L) leg, not on real-account postings",
-        );
+        throw new LedgerValidationError("ledger.categoryOnRealAccount");
       }
     } else if (input.kind === "standard" && account.type === "equity") {
-      throw new LedgerValidationError(
-        "The income/expense side of a standard transaction requires a category",
-      );
+      throw new LedgerValidationError("ledger.standardEquityCategoryRequired");
     }
   }
 
@@ -149,10 +145,7 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
 
   const sum = prepared.reduce((total, p) => total + p.amountRon, 0);
   if (sum !== 0) {
-    throw new LedgerValidationError(
-      `Postings must sum to zero in RON; got ${sum} minor units. ` +
-        "For cross-currency transfers, mirror the sending leg's RON amount on the receiving leg.",
-    );
+    throw new LedgerValidationError("ledger.ronZeroSum", { sum });
   }
 
   // Statement-line refs must be unique per account within one transaction;
@@ -162,9 +155,9 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
     if (!posting.externalRef) continue;
     const key = `${posting.accountId}\u0000${posting.externalRef}`;
     if (seenRefs.has(key)) {
-      throw new LedgerValidationError(
-        `Duplicate external_ref "${posting.externalRef}" on the same account within one transaction`,
-      );
+      throw new LedgerValidationError("ledger.duplicateExternalRefInTransaction", {
+        externalRef: posting.externalRef,
+      });
     }
     seenRefs.add(key);
   }
@@ -172,10 +165,12 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
   for (const accrual of input.accruals ?? []) {
     const posting = input.postings[accrual.postingIndex];
     if (!posting) {
-      throw new LedgerValidationError(`Accrual references posting ${accrual.postingIndex} which does not exist`);
+      throw new LedgerValidationError("ledger.accrualPostingMissing", {
+        postingIndex: accrual.postingIndex,
+      });
     }
     if (accountById.get(posting.accountId)!.type !== "tax_liability") {
-      throw new LedgerValidationError("Tax accruals must link a posting on a tax_liability account");
+      throw new LedgerValidationError("ledger.accrualPostingNotTaxLiability");
     }
   }
   return prepared;
@@ -251,7 +246,7 @@ async function insertTransactionRows(
 async function snapshotTransaction(id: string) {
   const [transaction] = await db.select().from(transactions).where(eq(transactions.id, id));
   if (!transaction || transaction.deletedAt) {
-    throw new LedgerValidationError(`Transaction not found: ${id}`);
+    throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
   }
   const postingRows = await db.select().from(postings).where(eq(postings.transactionId, id));
   const tagRows = await db
@@ -313,11 +308,7 @@ function assertExternalRefsPreserved(
   );
   for (const posting of prior) {
     if (posting.externalRef && !nextRefs.has(`${posting.accountId} ${posting.externalRef}`)) {
-      throw new LedgerValidationError(
-        "This transaction was imported from a bank statement; editing it here would drop " +
-          "its statement reference and break duplicate protection. Correct it from the " +
-          "import inbox, or delete it and re-import.",
-      );
+      throw new LedgerValidationError("ledger.importedRefsMustBePreserved");
     }
   }
 }
@@ -337,11 +328,7 @@ async function assertNotTradeTransaction(id: string): Promise<void> {
     .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)))
     .limit(1);
   if (trade) {
-    throw new LedgerValidationError(
-      "This transaction records a trade — its postings, trade row, and lot " +
-        "consumptions are one structure. Delete the trade and re-enter it " +
-        "instead of editing.",
-    );
+    throw new LedgerValidationError("ledger.tradeTransactionCannotBeEdited");
   }
 }
 
@@ -383,10 +370,9 @@ export function assertBatchExternalRefsUnique(
     if (!row.externalRef) continue;
     const key = `${row.accountId} ${row.externalRef}`;
     if (seen.has(key)) {
-      throw new LedgerValidationError(
-        `Import batch contains external_ref "${row.externalRef}" twice for the same account — ` +
-          "the long-reference stability assumption is broken; aborting instead of silently dropping a row",
-      );
+      throw new LedgerValidationError("ledger.importBatchDuplicateExternalRef", {
+        externalRef: row.externalRef,
+      });
     }
     seen.add(key);
   }
@@ -418,10 +404,7 @@ export async function softDeleteTransaction(id: string): Promise<void> {
           )
           .limit(1);
         if (dependent) {
-          throw new LedgerValidationError(
-            "Shares from this buy have already been sold — delete the dependent sell(s) first, " +
-              "then this buy",
-          );
+          throw new LedgerValidationError("ledger.consumedBuyCannotBeDeleted");
         }
       }
       const sellIds = tradeRows.filter((t) => t.kind === "sell").map((t) => t.id);

@@ -86,7 +86,7 @@ export async function buildImportTransactionInput(params: {
 
   const description = row.counterpartyName ?? row.description;
   if (!description) {
-    throw new LedgerValidationError(`Row ${row.lineNo} has no usable description`);
+    throw new LedgerValidationError("imports.rowDescriptionMissing", { lineNo: row.lineNo });
   }
 
   const base = { entityId: ctx.entityId, date: row.bookDate, description, notes };
@@ -101,9 +101,7 @@ export async function buildImportTransactionInput(params: {
 
   if (kind === "state_payment") {
     if (!ctx.taxLiabilityAccountId) {
-      throw new LedgerValidationError(
-        "This entity has no tax_liability account to settle a state payment against",
-      );
+      throw new LedgerValidationError("imports.statePaymentTaxLiabilityMissing");
     }
     return {
       ...base,
@@ -113,9 +111,10 @@ export async function buildImportTransactionInput(params: {
   }
 
   if (!categoryId) {
-    throw new LedgerValidationError(
-      `Pick a category for line ${row.lineNo} (${kind}) before booking it`,
-    );
+    throw new LedgerValidationError("imports.categoryRequiredForLine", {
+      lineNo: row.lineNo,
+      kind,
+    });
   }
   const postings: PostingInput[] = [
     bankLeg,

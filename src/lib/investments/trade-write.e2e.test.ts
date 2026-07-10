@@ -25,7 +25,7 @@ import {
   trades,
   transactions,
 } from "@/db/schema";
-import { softDeleteTransaction } from "@/lib/ledger";
+import { LedgerValidationError, softDeleteTransaction } from "@/lib/ledger";
 import { estimateDividendTaxes, executeTrade } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity, type TradeTestEnv } from "./test-support";
 
@@ -165,14 +165,21 @@ async function run(env: TradeTestEnv) {
       kind: "sell", accountId: env.cashAccountId, securityId: env.securityId,
       date: "2031-06-06", quantity: "6", priceMinor: 1500, totalMinor: 9_000, totalRonMinor: 45_000,
     }),
-    /only 5\.00000000 held/,
+    (e) =>
+      e instanceof LedgerValidationError &&
+      e.code === "investments.sellOverConsumesLots" &&
+      e.params?.heldQuantity === "5.00000000" &&
+      e.params.requestedQuantity === "6.00000000",
   );
   assert.equal(await db.$count(transactions, eq(transactions.entityId, env.entityId)), txCountBefore);
   assert.equal(await db.$count(lotConsumptions), consCountBefore);
   ok("over-consumption (sell 6, hold 5) rejected atomically — zero rows written");
 
   // --------------------- 4. Soft-delete unwind + buy-delete guard (L-0011)
-  await assert.rejects(softDeleteTransaction(lot1.transactionId), /already been sold/);
+  await assert.rejects(
+    softDeleteTransaction(lot1.transactionId),
+    (e) => e instanceof LedgerValidationError && e.code === "ledger.consumedBuyCannotBeDeleted",
+  );
   ok("deleting a consumed buy is refused (dependent sell exists)");
 
   await softDeleteTransaction(sell.transactionId);
@@ -288,7 +295,10 @@ async function run(env: TradeTestEnv) {
       ...buyBase, date: "2031-08-01", quantity: "1", priceMinor: 30_000_001,
       totalMinor: 30_000_001, totalRonMinor: 100_000_000,
     }),
-    /don't reconcile/,
+    (e) =>
+      e instanceof LedgerValidationError &&
+      e.code === "investments.tradeTotalsDoNotReconcile" &&
+      e.params?.currency === "USD",
   );
   ok("a pair the 6-dp rate cannot reproduce within 1 ban is REJECTED, not clamped");
 

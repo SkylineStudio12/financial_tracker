@@ -59,7 +59,7 @@ async function frozenReference(params: {
           ),
         );
       if (!taxAccount) {
-        throw new LedgerValidationError("Company has no tax_liability account");
+        throw new LedgerValidationError("tax.companyTaxLiabilityMissing");
       }
       const [taxesCategory] = await db
         .select({ id: categories.id })
@@ -72,9 +72,7 @@ async function frozenReference(params: {
           ),
         );
       if (!taxesCategory) {
-        throw new LedgerValidationError(
-          'Company needs a "Taxes" category for the micro revenue tax accrual',
-        );
+        throw new LedgerValidationError("tax.taxesCategoryMissing");
       }
       accruals.push({
         postingIndex: params.basePostingIndex,

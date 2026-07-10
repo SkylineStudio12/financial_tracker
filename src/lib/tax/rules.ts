@@ -34,7 +34,7 @@ export async function getActiveRule(type: TaxRuleType, date: string): Promise<Ac
     .orderBy(desc(taxRules.validFrom))
     .limit(1);
   if (!rule) {
-    throw new LedgerValidationError(`No active ${type} tax rule for ${date}`);
+    throw new LedgerValidationError("tax.taxRuleMissing", { type, date });
   }
   return rule;
 }

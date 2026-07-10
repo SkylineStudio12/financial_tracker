@@ -88,9 +88,10 @@ export async function valueHoldings(params: {
   const today = new Date().toISOString().slice(0, 10);
   const date = params.date ?? today;
   if (!DATE_RE.test(date) || date < FX_FLOOR || date > today) {
-    throw new LedgerValidationError(
-      `Valuation date ${date} is outside the supported FX range (${FX_FLOOR} to today)`,
-    );
+    throw new LedgerValidationError("investments.valuationDateOutOfRange", {
+      date,
+      floor: FX_FLOOR,
+    });
   }
 
   const cashAccounts = (await listBrokerageAccounts(params.entityId, params.owner)).filter(

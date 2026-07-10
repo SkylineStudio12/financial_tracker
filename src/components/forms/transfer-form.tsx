@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { parseAmountToMinor } from "@/lib/format";
 import { saveTransferTransaction, type TransferPayload } from "@/lib/ledger/actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -56,6 +58,7 @@ export function TransferForm({
   }));
 
   const t = useTranslations("forms");
+  const translateError = useTranslatedError();
   const [fromAccountId, setFromAccountId] = useState(
     initial?.fromAccountId ?? transferable[0]?.id ?? "",
   );
@@ -66,7 +69,7 @@ export function TransferForm({
   const [amount, setAmount] = useState(initial?.amount ?? "");
   const [received, setReceived] = useState(initial?.received ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
   // autoFocus doesn't fire on hydration of server-rendered pages; focus manually.
   const amountRef = useRef<HTMLInputElement>(null);
@@ -214,7 +217,7 @@ export function TransferForm({
       {fromAccountId === toAccountId && (
         <p className={errorClass}>{t("pickTwoDifferent")}</p>
       )}
-      {error && <p className={errorClass}>{error}</p>}
+      {error && <p className={errorClass}>{translateError(error)}</p>}
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={!valid || pending}>

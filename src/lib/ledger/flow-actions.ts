@@ -20,6 +20,7 @@ import {
   type AccrualInput,
   type PostingInput,
 } from "@/lib/ledger";
+import { toAppError, type AppError } from "@/lib/app-error";
 import { computeDividend, computeSalary } from "@/lib/tax/compute";
 import { getActiveRule, quarterOf, yearOf, type ActiveRule } from "@/lib/tax/rules";
 import { profileForEntity } from "@/lib/profiles";
@@ -27,7 +28,7 @@ import { profileForEntity } from "@/lib/profiles";
 /** Companies map 1:1 to profiles, so the post-save view derives from the id. */
 function companyTransactionsPath(companyId: string): string {
   const profile = profileForEntity(companyId);
-  if (!profile) throw new LedgerValidationError("Unknown company — no profile maps to it");
+  if (!profile) throw new LedgerValidationError("profile.unknownCompany");
   return `/p/${profile.slug}/transactions`;
 }
 
@@ -48,11 +49,13 @@ export interface DividendFlowPayload {
   personalAccountId: string;
 }
 
-type ActionResult = { error: string };
+type ActionResult = { error: AppError };
 
 /** Salaries are dated on the last day of the selected month. */
 function monthEndDate(month: string): string {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new LedgerValidationError(`Invalid month: ${month}`);
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new LedgerValidationError("flows.invalidMonth", { month });
+  }
   const [year, monthNumber] = [Number(month.slice(0, 4)), Number(month.slice(5, 7))];
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   return `${month}-${String(lastDay).padStart(2, "0")}`;
@@ -63,7 +66,7 @@ async function loadCompanyAccounts(companyId: string) {
     .select()
     .from(entities)
     .where(and(eq(entities.id, companyId), eq(entities.type, "company"), isNull(entities.deletedAt)));
-  if (!company) throw new LedgerValidationError("Not a company entity");
+  if (!company) throw new LedgerValidationError("flows.notCompanyEntity");
 
   const companyAccounts = await db
     .select()
@@ -73,7 +76,7 @@ async function loadCompanyAccounts(companyId: string) {
   const taxLiability = companyAccounts.find((a) => a.type === "tax_liability" && a.isActive);
   const equity = companyAccounts.find((a) => a.type === "equity" && a.isActive);
   if (!bank || !taxLiability || !equity) {
-    throw new LedgerValidationError("Company needs active bank, tax_liability, and equity accounts");
+    throw new LedgerValidationError("flows.companyAccountsMissing");
   }
   return { company, bank, taxLiability, equity };
 }
@@ -126,16 +129,17 @@ export async function previewSalary(
       rateNote: `Rates: income tax ${rules.incomeTax.rateBps / 100}%, CAS ${rules.cas.rateBps / 100}%, CASS ${rules.cass.rateBps / 100}%, CAM ${rules.cam.rateBps / 100}% (placeholder values — confirm before relying on them)`,
     };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
 
 export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResult | undefined> {
   try {
-    if (!payload.employeeName.trim()) throw new LedgerValidationError("Employee name is required");
+    if (!payload.employeeName.trim()) throw new LedgerValidationError("flows.employeeNameRequired");
     if (!Number.isSafeInteger(payload.grossMinor) || payload.grossMinor <= 0) {
-      throw new LedgerValidationError("Gross amount must be positive");
+      throw new LedgerValidationError("flows.grossAmountPositive");
     }
     const date = monthEndDate(payload.month);
     const { company, bank, taxLiability, equity } = await loadCompanyAccounts(payload.companyId);
@@ -196,7 +200,8 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
       accruals,
     });
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   redirect(companyTransactionsPath(payload.companyId));
@@ -225,7 +230,8 @@ export async function previewDividend(
       rateNote: `Rates: dividend tax ${dividendRule.rateBps / 100}%, CASS ${cassRule.rateBps / 100}% of gross as a rough ESTIMATE (real CASS is capped in minimum-wage multiples; placeholder values — confirm)`,
     };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -233,10 +239,10 @@ export async function previewDividend(
 export async function saveDividend(payload: DividendFlowPayload): Promise<ActionResult | undefined> {
   try {
     if (!Number.isSafeInteger(payload.grossMinor) || payload.grossMinor <= 0) {
-      throw new LedgerValidationError("Gross amount must be positive");
+      throw new LedgerValidationError("flows.grossAmountPositive");
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.date)) {
-      throw new LedgerValidationError(`Invalid date: ${payload.date}`);
+      throw new LedgerValidationError("flows.invalidDate", { date: payload.date });
     }
     const { company, bank, taxLiability, equity } = await loadCompanyAccounts(payload.companyId);
     const dividendRule = await getActiveRule("dividend_tax", payload.date);
@@ -275,7 +281,8 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
       accruals,
     });
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   redirect(companyTransactionsPath(payload.companyId));

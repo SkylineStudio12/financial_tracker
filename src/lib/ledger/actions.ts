@@ -20,6 +20,7 @@ import {
   type PostingInput,
   type TransactionInput,
 } from "@/lib/ledger";
+import { toAppError, type AppError } from "@/lib/app-error";
 import { getProfile, profileForEntity } from "@/lib/profiles";
 import { planMicroTaxAccrual } from "@/lib/tax/micro-tax";
 
@@ -33,7 +34,7 @@ function transactionsPath(entityId: string, profileSlug?: string): string {
   const profile = profileSlug ? getProfile(profileSlug) : undefined;
   const safe =
     profile && profile.entityId === entityId ? profile : profileForEntity(entityId);
-  if (!safe) throw new LedgerValidationError("Unknown entity — no profile maps to it");
+  if (!safe) throw new LedgerValidationError("profile.unknownEntity");
   return `/p/${safe.slug}/transactions`;
 }
 
@@ -75,14 +76,14 @@ export interface TransferPayload {
   note?: string;
 }
 
-type ActionResult = { error: string } | { ok: true };
+type ActionResult = { error: AppError } | { ok: true };
 
 async function loadAccount(accountId: string) {
   const [account] = await db
     .select()
     .from(accounts)
     .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)));
-  if (!account) throw new LedgerValidationError("Account not found");
+  if (!account) throw new LedgerValidationError("forms.accountNotFound");
   return account;
 }
 
@@ -99,7 +100,7 @@ async function findEquityAccount(entityId: string) {
       ),
     );
   if (!equity) {
-    throw new LedgerValidationError("This entity has no equity account to balance against");
+    throw new LedgerValidationError("forms.equityAccountMissing");
   }
   return equity;
 }
@@ -114,7 +115,7 @@ async function resolveTagIds(names: string[]): Promise<string[]> {
     .from(tags)
     .where(and(inArray(tags.name, cleaned), isNull(tags.deletedAt)));
   if (rows.length !== cleaned.length) {
-    throw new LedgerValidationError("A tag could not be created (soft-deleted name reuse?)");
+    throw new LedgerValidationError("forms.tagCreateFailed");
   }
   return rows.map((r) => r.id);
 }
@@ -135,17 +136,17 @@ export async function saveStandardTransaction(
     const equity = await findEquityAccount(payload.entityId);
 
     if (payload.splits.length === 0) {
-      throw new LedgerValidationError("Pick at least one category");
+      throw new LedgerValidationError("forms.pickAtLeastOneCategory");
     }
     for (const split of payload.splits) {
       if (!Number.isSafeInteger(split.amountMinor) || split.amountMinor <= 0) {
-        throw new LedgerValidationError("Split amounts must be positive");
+        throw new LedgerValidationError("forms.splitAmountPositive");
       }
-      if (!split.categoryId) throw new LedgerValidationError("Every split needs a category");
+      if (!split.categoryId) throw new LedgerValidationError("forms.splitCategoryRequired");
     }
     const splitSum = payload.splits.reduce((sum, s) => sum + s.amountMinor, 0);
     if (splitSum !== payload.totalMinor) {
-      throw new LedgerValidationError("Split amounts must sum to the total");
+      throw new LedgerValidationError("forms.splitSumMismatch");
     }
 
     // The bank/cash leg is in the account currency; the categorized equity
@@ -204,7 +205,8 @@ export async function saveStandardTransaction(
       payload.transactionId,
     );
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   if (payload.stay) return { ok: true };
@@ -216,10 +218,10 @@ export async function saveTransferTransaction(
 ): Promise<ActionResult | undefined> {
   try {
     if (payload.fromAccountId === payload.toAccountId) {
-      throw new LedgerValidationError("Pick two different accounts");
+      throw new LedgerValidationError("forms.sameAccountTransfer");
     }
     if (!Number.isSafeInteger(payload.amountMinor) || payload.amountMinor <= 0) {
-      throw new LedgerValidationError("Amount must be positive");
+      throw new LedgerValidationError("forms.amountPositive");
     }
     const from = await loadAccount(payload.fromAccountId);
     const to = await loadAccount(payload.toAccountId);
@@ -230,9 +232,7 @@ export async function saveTransferTransaction(
     if (from.currency !== to.currency) {
       const received = payload.receivedMinor;
       if (!received || !Number.isSafeInteger(received) || received <= 0) {
-        throw new LedgerValidationError(
-          `Enter the received amount in ${to.currency} (accounts have different currencies)`,
-        );
+        throw new LedgerValidationError("forms.receivedAmountRequired", { currency: to.currency });
       }
       toLeg.amount = received;
       // Zero-sum across currencies: exactly one leg carries a mirrored RON
@@ -261,7 +261,8 @@ export async function saveTransferTransaction(
       payload.transactionId,
     );
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   if (payload.stay) return { ok: true };
@@ -276,7 +277,8 @@ export async function deleteTransactionAction(
   try {
     await softDeleteTransaction(transactionId);
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
   redirect(transactionsPath(entityId, profileSlug));

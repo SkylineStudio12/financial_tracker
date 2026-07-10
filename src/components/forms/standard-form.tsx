@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { formatMinor, parseAmountToMinor } from "@/lib/format";
 import { saveStandardTransaction, type StandardPayload } from "@/lib/ledger/actions";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -65,6 +67,7 @@ export function StandardForm({
 
   const locale = useLocale();
   const t = useTranslations("forms");
+  const translateError = useTranslatedError();
   const [direction, setDirection] = useState<"expense" | "income">(
     initial?.direction ?? "expense",
   );
@@ -77,7 +80,7 @@ export function StandardForm({
   );
   const [tagsText, setTagsText] = useState(initial?.tagNames.join(", ") ?? "");
   const [counterparty, setCounterparty] = useState(initial?.counterparty ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
   // autoFocus doesn't fire on hydration of server-rendered pages; focus manually.
   const amountRef = useRef<HTMLInputElement>(null);
@@ -332,7 +335,7 @@ export function StandardForm({
         </label>
       </div>
 
-      {error && <p className={errorClass}>{error}</p>}
+      {error && <p className={errorClass}>{translateError(error)}</p>}
 
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={!valid || pending}>

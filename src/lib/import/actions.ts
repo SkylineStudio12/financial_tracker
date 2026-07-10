@@ -8,6 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LedgerValidationError } from "@/lib/ledger";
+import { toAppError, type AppError } from "@/lib/app-error";
 import { getProfile } from "@/lib/profiles";
 import { IngParseError } from "./ing/types";
 import {
@@ -18,14 +19,14 @@ import {
 } from "./service";
 
 type ActionResult =
-  | { error: string }
+  | { error: AppError | string }
   | { ok: true; status?: "duplicate"; summary?: { booked: number; duplicates: number; left: number } };
 
 /** Validated /p/{slug}/imports base for redirects and revalidation. */
 function importsPath(profileSlug: string, entityId: string): string {
   const profile = getProfile(profileSlug);
   if (!profile || profile.entityId !== entityId) {
-    throw new LedgerValidationError("Unknown profile for this entity");
+    throw new LedgerValidationError("profile.unknownEntity");
   }
   return `/p/${profile.slug}/imports`;
 }
@@ -39,7 +40,7 @@ export async function createImportBatchAction(payload: {
   let batchId: string;
   try {
     if (!payload.text.trim()) {
-      throw new LedgerValidationError("Paste the statement text first");
+      throw new LedgerValidationError("imports.statementTextRequired");
     }
     const result = await createImportBatch({
       entityId: payload.entityId,
@@ -48,7 +49,9 @@ export async function createImportBatchAction(payload: {
     });
     batchId = result.batchId;
   } catch (error) {
-    if (error instanceof LedgerValidationError || error instanceof IngParseError) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    if (error instanceof IngParseError) {
       return { error: error.message };
     }
     throw error;
@@ -71,7 +74,8 @@ export async function bookImportRowAction(payload: {
       status: result.status === "duplicate" ? "duplicate" : undefined,
     };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -84,7 +88,9 @@ export async function bookHighConfidenceAction(payload: {
   try {
     const result = await bookHighConfidenceRows(payload.batchId);
     revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
-    if (result.errors.length) return { error: result.errors.join(" · ") };
+    if (result.errors.length) {
+      return { error: { code: "imports.highConfidenceBookingFailed", params: { count: result.errors.length } } };
+    }
     return {
       ok: true,
       summary: {
@@ -94,7 +100,8 @@ export async function bookHighConfidenceAction(payload: {
       },
     };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }
@@ -110,7 +117,8 @@ export async function skipImportRowAction(payload: {
     revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
     return { ok: true };
   } catch (error) {
-    if (error instanceof LedgerValidationError) return { error: error.message };
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
     throw error;
   }
 }

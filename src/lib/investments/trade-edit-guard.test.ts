@@ -9,7 +9,12 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { transactions } from "@/db/schema";
-import { createTransaction, softDeleteTransaction, updateTransaction } from "@/lib/ledger";
+import {
+  createTransaction,
+  LedgerValidationError,
+  softDeleteTransaction,
+  updateTransaction,
+} from "@/lib/ledger";
 import { executeTrade } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity } from "./test-support";
 
@@ -52,7 +57,7 @@ async function main() {
           },
         ],
       }),
-      /records a trade[\s\S]*Delete the trade and re-enter/,
+      (e) => e instanceof LedgerValidationError && e.code === "ledger.tradeTransactionCannotBeEdited",
     );
     const [unchanged] = await db
       .select()

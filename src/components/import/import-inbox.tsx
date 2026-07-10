@@ -19,6 +19,8 @@ import {
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
 import { formatDate, formatMinor } from "@/lib/format";
 import { errorClass } from "@/components/forms/ui";
+import { useTranslatedError } from "@/components/use-translated-error";
+import type { AppError } from "@/lib/app-error";
 import type { ClassifyReason, Confidence, ImportKind } from "@/lib/import/ing/classify";
 
 interface InboxRow {
@@ -145,8 +147,9 @@ function InboxRowItem({
   const [categoryId, setCategoryId] = useState(row.suggestedCategoryId ?? "");
   const t = useTranslations("imports");
   const labels = useImportLabels();
+  const translateError = useTranslatedError();
   const locale = useLocale();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const needsCategory = bookingNeedsCategory(row.kind);
@@ -248,7 +251,11 @@ function InboxRowItem({
           {row.status === "duplicate" && ` ${t("alreadyInLedgerSuffix")}`}
         </span>
       )}
-      {error && <p className={errorClass}>{error}</p>}
+      {error && (
+        <p className={errorClass}>
+          {typeof error === "string" ? error : translateError(error)}
+        </p>
+      )}
     </div>
   );
 }
@@ -268,7 +275,8 @@ export function ImportInbox({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const t = useTranslations("imports");
-  const [error, setError] = useState<string | null>(null);
+  const translateError = useTranslatedError();
+  const [error, setError] = useState<AppError | string | null>(null);
   const [pending, startTransition] = useTransition();
   const pendingCount = rows.filter((r) => r.status === "pending").length;
 
@@ -302,7 +310,11 @@ export function ImportInbox({
         </Button>
       </div>
       {message && <p className="text-caption text-status-positive-text">{message}</p>}
-      {error && <p className={errorClass}>{error}</p>}
+      {error && (
+        <p className={errorClass}>
+          {typeof error === "string" ? error : translateError(error)}
+        </p>
+      )}
       <div className="flex flex-col">
         {rows.map((row) => (
           <InboxRowItem

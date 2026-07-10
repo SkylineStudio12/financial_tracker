@@ -15,9 +15,9 @@ const QTY_SCALE = 100_000_000n;
 
 export function parseQuantity(text: string): bigint {
   const m = text.trim().match(/^(\d+)(?:\.(\d{1,8}))?$/);
-  if (!m) throw new LedgerValidationError(`Invalid share quantity: "${text}"`);
+  if (!m) throw new LedgerValidationError("investments.invalidShareQuantity", { quantity: text });
   const scaled = BigInt(m[1]) * QTY_SCALE + BigInt((m[2] ?? "").padEnd(8, "0"));
-  if (scaled <= 0n) throw new LedgerValidationError("Share quantity must be positive");
+  if (scaled <= 0n) throw new LedgerValidationError("investments.shareQuantityPositive");
   return scaled;
 }
 
@@ -38,13 +38,13 @@ export function displayQuantity(quantity: string | bigint): string {
  */
 export function valueAtPrice(priceMinor: number, quantityScaled: bigint): number {
   if (!Number.isSafeInteger(priceMinor) || priceMinor < 0) {
-    throw new LedgerValidationError(`Invalid price: ${priceMinor}`);
+    throw new LedgerValidationError("investments.invalidPrice", { price: priceMinor });
   }
   const product = BigInt(priceMinor) * quantityScaled;
   const rounded = (product + QTY_SCALE / 2n) / QTY_SCALE;
   const result = Number(rounded);
   if (!Number.isSafeInteger(result)) {
-    throw new LedgerValidationError("Holding value out of safe integer range");
+    throw new LedgerValidationError("investments.holdingValueUnsafe");
   }
   return result;
 }

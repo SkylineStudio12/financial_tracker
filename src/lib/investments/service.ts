@@ -106,7 +106,13 @@ export { deriveRateToRon, formatQuantity, parseQuantity } from "./trade-rules";
 
 function assertPositiveMinor(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new LedgerValidationError(`${label} must be a positive integer in minor units`);
+    const code =
+      label === "The trade total"
+        ? "investments.tradeTotalPositive"
+        : label === "The RON total"
+          ? "investments.ronTotalPositive"
+          : "investments.sharePricePositive";
+    throw new LedgerValidationError(code);
   }
 }
 
@@ -118,19 +124,17 @@ function resolveTradeRate(input: {
 }): string | null {
   if (input.currency === "RON") {
     if (input.totalMinor !== input.totalRonMinor) {
-      throw new LedgerValidationError(
-        "A RON-denominated trade must have identical RON and original totals",
-      );
+      throw new LedgerValidationError("investments.ronTradeTotalsMismatch");
     }
     return null;
   }
   const rate = deriveRateToRon(input.totalRonMinor, input.totalMinor);
   const roundTrip = convertMinorToRon(input.totalMinor, rate);
   if (Math.abs(roundTrip - input.totalRonMinor) > 1) {
-    throw new LedgerValidationError(
-      `The ${input.currency} and RON totals don't reconcile (implied rate ${rate}) — ` +
-        "one of the two amounts is mistyped; correct it and re-enter",
-    );
+    throw new LedgerValidationError("investments.tradeTotalsDoNotReconcile", {
+      currency: input.currency,
+      rate,
+    });
   }
   return rate;
 }
@@ -140,8 +144,10 @@ async function loadAccount(id: string) {
     .select()
     .from(accounts)
     .where(and(eq(accounts.id, id), isNull(accounts.deletedAt)));
-  if (!account) throw new LedgerValidationError(`Account not found: ${id}`);
-  if (!account.isActive) throw new LedgerValidationError(`Account is inactive: ${account.name}`);
+  if (!account) throw new LedgerValidationError("investments.accountNotFound", { accountId: id });
+  if (!account.isActive) {
+    throw new LedgerValidationError("investments.accountInactive", { accountName: account.name });
+  }
   return account;
 }
 
@@ -150,12 +156,13 @@ async function loadSecurity(id: string, expectedCurrency: string) {
     .select()
     .from(securities)
     .where(and(eq(securities.id, id), isNull(securities.deletedAt)));
-  if (!security) throw new LedgerValidationError(`Security not found: ${id}`);
+  if (!security) throw new LedgerValidationError("investments.securityNotFound", { securityId: id });
   if (security.currency !== expectedCurrency) {
-    throw new LedgerValidationError(
-      `${security.ticker} is ${security.currency} but the account is ${expectedCurrency} — ` +
-        "trade it from the matching-currency brokerage account",
-    );
+    throw new LedgerValidationError("investments.securityCurrencyMismatch", {
+      ticker: security.ticker,
+      securityCurrency: security.currency,
+      accountCurrency: expectedCurrency,
+    });
   }
   return security;
 }
@@ -173,9 +180,10 @@ async function findCategory(entityId: string, name: string, kind: "income" | "ex
       ),
     );
   if (!category) {
-    throw new LedgerValidationError(
-      `Category "${name}" (${kind}) is missing for this entity — seed it before booking trades`,
-    );
+    throw new LedgerValidationError("investments.categoryMissing", {
+      categoryName: name,
+      kind,
+    });
   }
   return category;
 }
@@ -187,7 +195,7 @@ async function findEquityAccount(entityId: string) {
     .where(
       and(eq(accounts.entityId, entityId), eq(accounts.type, "equity"), isNull(accounts.deletedAt)),
     );
-  if (!equity) throw new LedgerValidationError("This entity has no equity account");
+  if (!equity) throw new LedgerValidationError("investments.equityAccountMissing");
   return equity;
 }
 
@@ -277,9 +285,7 @@ export async function loadLots(tx: LedgerTx, accountId: string, securityId: stri
   return buyRows.map((buy) => {
     const positionLeg = positionByTx.get(buy.transactionId);
     if (!positionLeg) {
-      throw new LedgerValidationError(
-        `Buy trade ${buy.id} has no live position leg — its transaction is inconsistent`,
-      );
+      throw new LedgerValidationError("investments.buyMissingPositionLeg", { tradeId: buy.id });
     }
     const c = consumedByLot.get(buy.id);
     return {
@@ -327,10 +333,11 @@ export function planFifoConsumption(
 ): ConsumptionSpec[] {
   const totalRemaining = lots.reduce((s, lot) => s + (lot.quantity - lot.consumedQuantity), 0n);
   if (sellQuantity > totalRemaining) {
-    throw new LedgerValidationError(
-      `Selling ${formatQuantity(sellQuantity)} but only ${formatQuantity(totalRemaining)} ` +
-        `held across live lots of ${context}`,
-    );
+    throw new LedgerValidationError("investments.sellOverConsumesLots", {
+      requestedQuantity: formatQuantity(sellQuantity),
+      heldQuantity: formatQuantity(totalRemaining),
+      context,
+    });
   }
   const specs: ConsumptionSpec[] = [];
   let left = sellQuantity;
@@ -358,7 +365,7 @@ export async function executeTrade(input: TradeInput): Promise<TradeResult> {
   assertPositiveMinor(input.totalRonMinor, "The RON total");
   const cash = await loadAccount(input.accountId);
   if (cash.type !== "brokerage") {
-    throw new LedgerValidationError("Trades book against a brokerage cash account");
+    throw new LedgerValidationError("investments.brokerageAccountRequired");
   }
   const rate = resolveTradeRate({
     currency: cash.currency,
@@ -381,7 +388,7 @@ type Account = Awaited<ReturnType<typeof loadAccount>>;
 
 async function executeBuy(input: BuySellInput, cash: Account, rate: string | null): Promise<TradeResult> {
   if (!input.positionAccountId) {
-    throw new LedgerValidationError("A buy needs the paired position account");
+    throw new LedgerValidationError("investments.buyPositionAccountRequired");
   }
   const position = await loadAccount(input.positionAccountId);
   if (
@@ -391,9 +398,7 @@ async function executeBuy(input: BuySellInput, cash: Account, rate: string | nul
     position.currency !== cash.currency ||
     position.owner !== cash.owner
   ) {
-    throw new LedgerValidationError(
-      "The paired account must be a `position` account with the same entity, currency, and owner as the cash account",
-    );
+    throw new LedgerValidationError("investments.buyPositionAccountMismatch");
   }
   const security = await loadSecurity(input.securityId, cash.currency);
   const quantity = parseQuantity(input.quantity);
@@ -451,9 +456,7 @@ async function executeSell(input: BuySellInput, cash: Account, rate: string | nu
       specs.map((s) => lots.find((l) => l.tradeId === s.buyTradeId)!.positionAccountId),
     );
     if (positionAccountIds.size !== 1) {
-      throw new LedgerValidationError(
-        "The consumed lots span more than one position account — repair the data before selling",
-      );
+      throw new LedgerValidationError("investments.sellLotsSpanPositions");
     }
     const [positionAccountId] = positionAccountIds;
 
@@ -465,10 +468,7 @@ async function executeSell(input: BuySellInput, cash: Account, rate: string | nu
     const gainRon = input.totalRonMinor - basisRon;
 
     if ((basis === 0) !== (basisRon === 0)) {
-      throw new LedgerValidationError(
-        "This sell consumes a dust quantity whose basis rounds to zero in one currency only — " +
-          "sell a slightly larger quantity",
-      );
+      throw new LedgerValidationError("investments.sellDustBasisMismatch");
     }
 
     // Gain leg category by the sign of the SECURITY-currency gain
@@ -492,10 +492,7 @@ async function executeSell(input: BuySellInput, cash: Account, rate: string | nu
       // The equity account is RON: its amount IS the RON gain value.
       legs.push({ accountId: equity.id, amount: -gainRon, amountRon: -gainRon, categoryId: gainCategory!.id });
     } else if (gain !== 0) {
-      throw new LedgerValidationError(
-        "This sell has a non-zero foreign-currency gain that rounds to exactly zero RON — " +
-          "adjust the quantity so the RON ledger can carry it",
-      );
+      throw new LedgerValidationError("investments.sellForeignGainRoundsToZeroRon");
     }
 
     const transactionId = await createTransaction(
@@ -547,7 +544,7 @@ async function executeCashEvent(
 ): Promise<TradeResult> {
   const isDividend = input.kind === "dividend";
   if (isDividend && !input.securityId) {
-    throw new LedgerValidationError("A dividend comes from a holding — pick the security");
+    throw new LedgerValidationError("investments.dividendSecurityRequired");
   }
   const security = input.securityId ? await loadSecurity(input.securityId, cash.currency) : null;
   const equity = await findEquityAccount(cash.entityId);
@@ -641,7 +638,7 @@ export async function previewSell(input: {
 }): Promise<SellPreview> {
   const cash = await loadAccount(input.accountId);
   if (cash.type !== "brokerage") {
-    throw new LedgerValidationError("Trades book against a brokerage cash account");
+    throw new LedgerValidationError("investments.brokerageAccountRequired");
   }
   const security = await loadSecurity(input.securityId, cash.currency);
   const quantity = parseQuantity(input.quantity);
@@ -800,18 +797,19 @@ export async function getOrCreateSecurity(input: {
   const ticker = input.ticker.trim().toUpperCase();
   const name = input.name.trim();
   if (!/^[A-Z0-9.]{1,12}$/.test(ticker)) {
-    throw new LedgerValidationError("Ticker must be 1-12 letters/digits (e.g. VUAA, AAPL)");
+    throw new LedgerValidationError("investments.tickerInvalid");
   }
-  if (!name) throw new LedgerValidationError("Security name is required");
+  if (!name) throw new LedgerValidationError("investments.securityNameRequired");
   const [existing] = await db
     .select()
     .from(securities)
     .where(and(eq(securities.ticker, ticker), isNull(securities.deletedAt)));
   if (existing) {
     if (existing.currency !== input.currency) {
-      throw new LedgerValidationError(
-        `${ticker} already exists in ${existing.currency} — one security, one currency`,
-      );
+      throw new LedgerValidationError("investments.securityCurrencyConflict", {
+        ticker,
+        currency: existing.currency,
+      });
     }
     return { id: existing.id, ticker: existing.ticker, name: existing.name, currency: existing.currency };
   }

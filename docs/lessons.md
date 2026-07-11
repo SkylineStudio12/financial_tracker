@@ -39,6 +39,8 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0012 | ledger | Generic ledger mutations must account for dependent structures |
 | L-0013 | tooling | i18n tsc key-completeness masked by incremental build cache |
 | L-0014 | i18n | Code-only error classes must convert all producers |
+| L-0015 | import | Verify external rate and ratio direction empirically |
+| L-0016 | assumption | Sample-based inferences must be labeled as hypotheses |
 
 ---
 
@@ -196,3 +198,18 @@ the code-only class stays strictly code-only.
 **Origin:** i18n Stage 3f — LedgerValidationError also had producers in
 adjacent import, tax, prices, valuation, and trade-rules files beyond the named
 primary producers.
+
+### L-0015 · 2026-07-11 · import · ratified
+**Lesson:** Never assume the semantic direction of a rate or ratio column in an
+external export.
+**Apply:** Verify empirically against known historical values on at least three
+rows spanning the date range, and lock the direction with a unit test fixture.
+**Origin:** Revolut brokerage import — inverted FX-rate direction.
+
+### L-0016 · 2026-07-11 · assumption · ratified
+**Lesson:** Sample-based inferences in a design doc must be labeled as
+hypotheses. Full-population computation or an external anchor supersedes them.
+**Apply:** Treat sample findings as provisional until the full population or a
+verified external anchor confirms them.
+**Origin:** Revolut brokerage import — atypical fee sample and phantom-cash
+prediction both overturned by full-data and live-account verification.

@@ -10,6 +10,7 @@ import "dotenv/config";
 import { db, pool } from "./index";
 import { accounts, entities, categories, taxRules } from "./schema";
 import { bookSkylineOpeningBalance } from "./opening-balances";
+import { GREG_REVOLUT_ACCOUNTS } from "./revolut-accounts";
 
 const PLACEHOLDER_NOTE =
   "PLACEHOLDER — rate must be confirmed against current Romanian legislation before any tax calculation is trusted.";
@@ -56,7 +57,11 @@ async function main() {
     await tx.insert(accounts).values([
       { entityId: household.id, name: "Greg — bank", type: "bank", currency: "RON", owner: "greg" as const },
       { entityId: household.id, name: "Greg — cash", type: "cash", currency: "RON", owner: "greg" as const },
-      { entityId: household.id, name: "Greg — Revolut brokerage", type: "brokerage", currency: "USD", owner: "greg" as const },
+      ...GREG_REVOLUT_ACCOUNTS.map((account) => ({
+        entityId: household.id,
+        owner: "greg" as const,
+        ...account,
+      })),
       { entityId: household.id, name: "Andra — bank", type: "bank", currency: "RON", owner: "andra" as const },
       { entityId: household.id, name: "Andra — savings", type: "bank", currency: "RON", owner: "andra" as const },
       // Two SINGLE-currency brokerage accounts (owner decision, Phase 4
@@ -69,7 +74,6 @@ async function main() {
       // holdings AT COST — a buy moves cash → positions, a sell unwinds
       // exactly the consumed lots' basis, so the balance is total cost
       // (original ccy) / total RON basis of open lots.
-      { entityId: household.id, name: "Greg — Revolut positions USD", type: "position", currency: "USD", owner: "greg" as const },
       { entityId: household.id, name: "Andra — Revolut positions USD", type: "position", currency: "USD", owner: "andra" as const },
       { entityId: household.id, name: "Andra — Revolut positions EUR", type: "position", currency: "EUR", owner: "andra" as const },
       { entityId: household.id, name: "Opening equity", type: "equity", currency: "RON" },

@@ -42,6 +42,9 @@ import {
   lotConsumptions,
   postings,
   securities,
+  stockSplitConsumptionAdjustments,
+  stockSplitLotAdjustments,
+  stockSplits,
   trades,
   transactions,
 } from "@/db/schema";
@@ -360,7 +363,7 @@ export function planFifoConsumption(
   return specs;
 }
 
-export async function executeTrade(input: TradeInput): Promise<TradeResult> {
+export async function executeTrade(input: TradeInput, tx?: LedgerTx): Promise<TradeResult> {
   assertPositiveMinor(input.totalMinor, "The trade total");
   assertPositiveMinor(input.totalRonMinor, "The RON total");
   const cash = await loadAccount(input.accountId);
@@ -375,18 +378,23 @@ export async function executeTrade(input: TradeInput): Promise<TradeResult> {
 
   switch (input.kind) {
     case "buy":
-      return executeBuy(input, cash, rate);
+      return executeBuy(input, cash, rate, tx);
     case "sell":
-      return executeSell(input, cash, rate);
+      return executeSell(input, cash, rate, tx);
     case "dividend":
     case "fee":
-      return executeCashEvent(input, cash, rate);
+      return executeCashEvent(input, cash, rate, tx);
   }
 }
 
 type Account = Awaited<ReturnType<typeof loadAccount>>;
 
-async function executeBuy(input: BuySellInput, cash: Account, rate: string | null): Promise<TradeResult> {
+async function executeBuy(
+  input: BuySellInput,
+  cash: Account,
+  rate: string | null,
+  outerTx?: LedgerTx,
+): Promise<TradeResult> {
   if (!input.positionAccountId) {
     throw new LedgerValidationError("investments.buyPositionAccountRequired");
   }
@@ -404,7 +412,7 @@ async function executeBuy(input: BuySellInput, cash: Account, rate: string | nul
   const quantity = parseQuantity(input.quantity);
   assertPositiveMinor(input.priceMinor, "The share price");
 
-  return db.transaction(async (tx) => {
+  const write = async (tx: LedgerTx) => {
     const transactionId = await createTransaction(
       {
         entityId: cash.entityId,
@@ -433,16 +441,22 @@ async function executeBuy(input: BuySellInput, cash: Account, rate: string | nul
       })
       .returning({ id: trades.id });
     return { transactionId, tradeId: trade.id };
-  });
+  };
+  return outerTx ? write(outerTx) : db.transaction(write);
 }
 
-async function executeSell(input: BuySellInput, cash: Account, rate: string | null): Promise<TradeResult> {
+async function executeSell(
+  input: BuySellInput,
+  cash: Account,
+  rate: string | null,
+  outerTx?: LedgerTx,
+): Promise<TradeResult> {
   const security = await loadSecurity(input.securityId, cash.currency);
   const quantity = parseQuantity(input.quantity);
   assertPositiveMinor(input.priceMinor, "The share price");
   const equity = await findEquityAccount(cash.entityId);
 
-  return db.transaction(async (tx) => {
+  const write = async (tx: LedgerTx) => {
     // Reads inside the same transaction the writes commit in — the guard
     // and the walk see exactly the state the sell will mutate.
     const lots = await loadLots(tx, cash.id, security.id);
@@ -534,13 +548,15 @@ async function executeSell(input: BuySellInput, cash: Account, rate: string | nu
       realizedGainMinor: gain,
       realizedGainRonMinor: gainRon,
     };
-  });
+  };
+  return outerTx ? write(outerTx) : db.transaction(write);
 }
 
 async function executeCashEvent(
   input: CashEventInput,
   cash: Account,
   rate: string | null,
+  outerTx?: LedgerTx,
 ): Promise<TradeResult> {
   const isDividend = input.kind === "dividend";
   if (isDividend && !input.securityId) {
@@ -559,7 +575,7 @@ async function executeCashEvent(
       ? `Brokerage fee (${security.ticker})`
       : "Brokerage fee";
 
-  return db.transaction(async (tx) => {
+  const write = async (tx: LedgerTx) => {
     const transactionId = await createTransaction(
       {
         entityId: cash.entityId,
@@ -590,7 +606,134 @@ async function executeCashEvent(
       })
       .returning({ id: trades.id });
     return { transactionId, tradeId: trade.id };
-  });
+  };
+  return outerTx ? write(outerTx) : db.transaction(write);
+}
+
+export interface StockSplitInput {
+  accountId: string;
+  securityId: string;
+  occurredAt: string;
+  ratio: number;
+  /** Positive quantity added to the currently open position, up to 8 dp. */
+  deltaQuantity: string;
+}
+
+/**
+ * Apply a whole-number stock split to every live lot in one account/security.
+ * Quantities change units; trade totals and every basis field remain byte-for-
+ * byte unchanged. Prior consumption quantities scale too, preserving both the
+ * remaining-position equation and cumulative basis allocation for future sells.
+ */
+export async function executeStockSplit(
+  input: StockSplitInput,
+  outerTx?: LedgerTx,
+): Promise<{ splitId: string }> {
+  if (!Number.isSafeInteger(input.ratio) || input.ratio <= 1) {
+    throw new LedgerValidationError("investments.stockSplitRatioInvalid", { ratio: input.ratio });
+  }
+  const cash = await loadAccount(input.accountId);
+  if (cash.type !== "brokerage") {
+    throw new LedgerValidationError("investments.brokerageAccountRequired");
+  }
+  await loadSecurity(input.securityId, cash.currency);
+  const delta = parseQuantity(input.deltaQuantity);
+
+  const write = async (tx: LedgerTx) => {
+    // Lock the live lots before deriving the split. The imported pass is
+    // serialized separately, while this protects against a concurrent sell.
+    await tx.execute(sql`
+      SELECT ${trades.id} FROM ${trades}
+      WHERE ${trades.accountId} = ${cash.id}
+        AND ${trades.securityId} = ${input.securityId}
+        AND ${trades.kind} = 'buy'
+        AND ${trades.deletedAt} IS NULL
+      FOR UPDATE
+    `);
+    const buyRows = await tx
+      .select({ id: trades.id, quantity: trades.quantity })
+      .from(trades)
+      .where(
+        and(
+          eq(trades.accountId, cash.id),
+          eq(trades.securityId, input.securityId),
+          eq(trades.kind, "buy"),
+          isNull(trades.deletedAt),
+        ),
+      );
+    if (buyRows.length === 0) {
+      throw new LedgerValidationError("investments.stockSplitNoOpenLots");
+    }
+    const buyIds = buyRows.map((row) => row.id);
+    const consumptionRows = await tx
+      .select({ id: lotConsumptions.id, quantity: lotConsumptions.quantity })
+      .from(lotConsumptions)
+      .where(
+        and(inArray(lotConsumptions.buyTradeId, buyIds), isNull(lotConsumptions.deletedAt)),
+      );
+    const totalBought = buyRows.reduce((sum, row) => sum + parseQuantity(row.quantity), 0n);
+    const totalConsumed = consumptionRows.reduce(
+      (sum, row) => sum + parseQuantity(row.quantity),
+      0n,
+    );
+    const held = totalBought - totalConsumed;
+    const expectedDelta = held * BigInt(input.ratio - 1);
+    if (held <= 0n || delta !== expectedDelta) {
+      throw new LedgerValidationError("investments.stockSplitDeltaMismatch", {
+        expected: trimQty(expectedDelta),
+        actual: trimQty(delta),
+      });
+    }
+
+    const [split] = await tx
+      .insert(stockSplits)
+      .values({
+        accountId: cash.id,
+        securityId: input.securityId,
+        occurredAt: input.occurredAt,
+        ratio: input.ratio,
+      })
+      .returning({ id: stockSplits.id });
+
+    const lotAdjustments = buyRows.map((row) => {
+      const before = parseQuantity(row.quantity);
+      return { row, before, after: before * BigInt(input.ratio) };
+    });
+    await tx.insert(stockSplitLotAdjustments).values(
+      lotAdjustments.map(({ row, before, after }) => ({
+        splitId: split.id,
+        buyTradeId: row.id,
+        quantityBefore: formatQuantity(before),
+        quantityAfter: formatQuantity(after),
+      })),
+    );
+    for (const { row, after } of lotAdjustments) {
+      await tx.update(trades).set({ quantity: formatQuantity(after) }).where(eq(trades.id, row.id));
+    }
+
+    if (consumptionRows.length > 0) {
+      const consumptionAdjustments = consumptionRows.map((row) => {
+        const before = parseQuantity(row.quantity);
+        return { row, before, after: before * BigInt(input.ratio) };
+      });
+      await tx.insert(stockSplitConsumptionAdjustments).values(
+        consumptionAdjustments.map(({ row, before, after }) => ({
+          splitId: split.id,
+          consumptionId: row.id,
+          quantityBefore: formatQuantity(before),
+          quantityAfter: formatQuantity(after),
+        })),
+      );
+      for (const { row, after } of consumptionAdjustments) {
+        await tx
+          .update(lotConsumptions)
+          .set({ quantity: formatQuantity(after) })
+          .where(eq(lotConsumptions.id, row.id));
+      }
+    }
+    return { splitId: split.id };
+  };
+  return outerTx ? write(outerTx) : db.transaction(write);
 }
 
 function trimQty(scaled: bigint): string {

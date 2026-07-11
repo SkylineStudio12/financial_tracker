@@ -21,6 +21,7 @@
       "cash": "Cash",
       "brokerage": "Brokerage",
       "position": "Positions",
+      "clearing": "Clearing",
       "tax_liability": "Tax liability",
       "equity": "Equity"
     },
@@ -44,6 +45,7 @@
     "newDividend": "New dividend",
     "importStatement": "Import statement",
     "recordTrade": "Record trade",
+    "importBrokerage": "Import brokerage",
     "language": "Language",
     "subtitle": {
       "shared": "Shared",
@@ -240,6 +242,51 @@
       "businessTransferNoMarker": "outgoing business transfer to a company counterparty without a professional-services marker",
       "creditNoIncomingMarker": "credit without a recognized incoming-funds marker",
       "noClassificationRule": "no classification rule matched this row shape"
+    },
+    "revolut": {
+      "title": "Import Revolut brokerage",
+      "csvLabel": "Revolut stock-transactions CSV",
+      "help": "Choose the complete Revolut stock-transactions export.",
+      "loaded": "Loaded {fileName}.",
+      "parse": "Parse into review inbox",
+      "parsing": "Parsing…",
+      "recent": "Recent brokerage imports",
+      "none": "No brokerage exports imported yet.",
+      "batchBooked": "booked",
+      "batchPending": "{pending} pending · {excluded} excluded · {total} total",
+      "batchDetail": "{parsed} parsed · {staged} review rows · {corrections} correction pairs dropped",
+      "verificationTitle": "Verification report",
+      "externallyVerified": "Cash and holdings were verified against the live Revolut account on 2026-07-11.",
+      "pass": "PASS",
+      "fail": "FAIL",
+      "cashValue": "End cash {amount}",
+      "holdingsTitle": "End holdings ({count})",
+      "splitCheck": "{ticker} split {ratio}:1 — {status}",
+      "pltrCheck": "PLTR {quantity} = {lots}; remaining {remaining}",
+      "residualsTitle": "Buy residuals (minor units)",
+      "residualSummary": "{group}: n={count}, min={min}, median={median}, max={max}",
+      "reviewRowsTitle": "Rows for approval",
+      "reviewSummary": "{total} rows · {excluded} excluded. Exclusions do not book.",
+      "rowCount": "{count} rows",
+      "excludeRow": "Exclude CSV row {lineNo}",
+      "suspectedDuplicate": "possible duplicate",
+      "duplicate": "already booked",
+      "excluded": "excluded",
+      "approvalWarning": "Approval books every non-excluded row in timestamp order as one atomic operation. Any failure rolls back the entire batch.",
+      "approveAll": "Approve and book remaining batch",
+      "approving": "Booking atomically…",
+      "approved": "Batch booked",
+      "approvedSummary": "Booked {booked} rows ({transactions} transactions, {splits} splits); {duplicates} duplicates and {excluded} exclusions.",
+      "kind": {
+        "buy": "Buys",
+        "sell": "Sells",
+        "cash_top_up": "Cash top-ups",
+        "cash_withdrawal": "Cash withdrawals",
+        "custody_fee": "Custody fees",
+        "dividend": "Dividends",
+        "dividend_tax_correction": "Dividend-tax corrections",
+        "stock_split": "Stock splits"
+      }
     }
   },
   "investments": {
@@ -421,7 +468,10 @@
       "shareQuantityPositive": "Share quantity must be positive.",
       "invalidPrice": "Invalid price: {price}.",
       "holdingValueUnsafe": "Holding value out of safe integer range.",
-      "valuationDateOutOfRange": "Valuation date {date} is outside the supported FX range ({floor} to today)."
+      "valuationDateOutOfRange": "Valuation date {date} is outside the supported FX range ({floor} to today).",
+      "stockSplitRatioInvalid": "A stock-split ratio must be a whole number greater than one; got {ratio}.",
+      "stockSplitNoOpenLots": "This stock split has no open lots to adjust.",
+      "stockSplitDeltaMismatch": "The stock-split delta is {actual}, but the open lots and ratio require {expected}."
     },
     "imports": {
       "statementAccountNotFound": "Statement account not found on this entity.",
@@ -437,6 +487,27 @@
       "categoryRequiredForLine": "Pick a category for line {lineNo} ({kind}) before booking it.",
       "statementTextRequired": "Paste the statement text first.",
       "highConfidenceBookingFailed": "Bulk booking hit {count} row error(s). Book the remaining rows individually to inspect each blocker."
+    },
+    "revolut": {
+      "requiredAccountsMissing": "The required Revolut USD/EUR cash, position, or clearing accounts are missing. Apply the brokerage-import migrations first.",
+      "csvRequired": "Choose the Revolut CSV export first.",
+      "unpairedCorrections": "The export contains {count} unpaired dividend-tax correction row(s); approval is blocked.",
+      "securityCurrencyConflict": "{ticker} already exists with a different currency.",
+      "batchNotFound": "Revolut import batch not found.",
+      "batchAlreadyBooked": "This Revolut batch is already booked and can no longer be changed.",
+      "rowNotFound": "Revolut import row not found.",
+      "rowLocked": "A booked or duplicate row cannot be excluded.",
+      "excludedBuyNeededBySell": "Cannot approve: sell row {actionLine} consumes excluded buy row {buyLine}.",
+      "excludedBuyNeededBySplit": "Cannot approve: stock-split row {actionLine} depends on excluded buy row {buyLine}.",
+      "splitDependencyInvalid": "The surviving rows no longer produce an integer stock-split ratio at row {lineNo}.",
+      "splitRatioMissing": "No verified split ratio is available for row {lineNo}.",
+      "unsupportedBookingKind": "Unsupported Revolut booking kind: {kind}.",
+      "securityMissing": "One or more staged securities are missing before booking.",
+      "bookingRowFailed": "Atomic booking failed at CSV row {lineNo} ({causeCode}). Nothing was booked.",
+      "cashAssertionFailed": "Post-booking {currency} cash is {actual} minor units; expected {expected}. The whole batch was rolled back.",
+      "holdingsAssertionFailed": "Post-booking holdings do not match the approved simulation. The whole batch was rolled back.",
+      "zeroSumAssertionFailed": "A booked transaction failed the RON zero-sum assertion. The whole batch was rolled back.",
+      "taxAccrualAssertionFailed": "The brokerage import unexpectedly created a tax accrual. The whole batch was rolled back."
     },
     "tax": {
       "companyTaxLiabilityMissing": "Company has no tax_liability account.",

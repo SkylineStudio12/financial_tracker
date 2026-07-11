@@ -22,6 +22,7 @@ export const accountType = pgEnum("account_type", [
   // cannot drop an enum value — this widening is one-way; the down path is
   // unsafe by design.
   "position",
+  "clearing",
   "tax_liability",
   "equity",
 ]);

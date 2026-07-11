@@ -9,6 +9,9 @@ import {
   categories,
   entities,
   lotConsumptions,
+  stockSplitConsumptionAdjustments,
+  stockSplitLotAdjustments,
+  stockSplits,
   postings,
   securities,
   trades,
@@ -77,6 +80,21 @@ export async function teardownTradeTestEntity(env: TradeTestEnv): Promise<void> 
       await db.select({ id: trades.id }).from(trades).where(inArray(trades.transactionId, txIds))
     ).map((t) => t.id);
     if (tradeIds.length > 0) {
+      const splitIds = (
+        await db
+          .select({ id: stockSplits.id })
+          .from(stockSplits)
+          .where(inArray(stockSplits.accountId, [env.cashAccountId]))
+      ).map((row) => row.id);
+      if (splitIds.length > 0) {
+        await db
+          .delete(stockSplitConsumptionAdjustments)
+          .where(inArray(stockSplitConsumptionAdjustments.splitId, splitIds));
+        await db
+          .delete(stockSplitLotAdjustments)
+          .where(inArray(stockSplitLotAdjustments.splitId, splitIds));
+        await db.delete(stockSplits).where(inArray(stockSplits.id, splitIds));
+      }
       await db.delete(lotConsumptions).where(inArray(lotConsumptions.sellTradeId, tradeIds));
       await db.delete(trades).where(inArray(trades.id, tradeIds));
     }

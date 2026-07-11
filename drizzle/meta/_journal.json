@@ -43,6 +43,13 @@
       "when": 1783452519817,
       "tag": "0005_parallel_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783803585243,
+      "tag": "0006_skinny_lilith",
+      "breakpoints": true
     }
   ]
 }

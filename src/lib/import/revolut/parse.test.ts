@@ -8,6 +8,7 @@ import {
   RevolutParseError,
 } from "./parse";
 import { countRevolutTypes, pairDividendTaxCorrections, simulateRevolut } from "./simulate";
+import { findExclusionDependencies } from "./dependencies";
 
 const fixturePath = join(process.cwd(), "fixtures", "revolut", "All_stock_transactions.csv");
 const fixture = readFileSync(fixturePath, "utf8");
@@ -123,6 +124,28 @@ ok("duplicate content hashes inside one batch fail loudly", () => {
     (error: unknown) =>
       error instanceof RevolutParseError && /Duplicate content hash within batch/.test(error.message),
   );
+});
+
+ok("excluding a FIFO buy names both the buy and dependent sell", () => {
+  assert.deepEqual(findExclusionDependencies(rows, new Set([16])), [
+    { kind: "sell", actionLineNo: 113, excludedBuyLineNo: 16 },
+  ]);
+});
+
+ok("excluding an open pre-split buy names both the buy and split", () => {
+  const nvdaSplit = simulation.splitChecks.find((split) => split.ticker === "NVDA")!;
+  const buyLineNo = nvdaSplit.dependentBuyLineNos[0];
+  assert.deepEqual(findExclusionDependencies(rows, new Set([buyLineNo])), [
+    { kind: "split", actionLineNo: nvdaSplit.lineNo, excludedBuyLineNo: buyLineNo },
+  ]);
+});
+
+ok("excluding a dividend, cash row, or fee creates no lot dependency", () => {
+  const safeLines = rows
+    .filter((row) => ["dividend", "cash_top_up", "cash_withdrawal", "custody_fee"].includes(row.kind))
+    .slice(0, 4)
+    .map((row) => row.lineNo);
+  assert.deepEqual(findExclusionDependencies(rows, new Set(safeLines)), []);
 });
 
 console.log(`\nAll ${checks} Revolut parser/simulation checks passed.`);

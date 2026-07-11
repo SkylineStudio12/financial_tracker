@@ -21,6 +21,7 @@ export interface SplitCheck {
   delta: string;
   ratio: number | null;
   passed: boolean;
+  dependentBuyLineNos: number[];
 }
 
 export interface SellSimulation {
@@ -227,6 +228,9 @@ export function simulateRevolut(rows: readonly RevolutRow[]): RevolutSimulation 
         delta: formatQuantityScaled(row.quantityScaled!),
         ratio: passed ? Number(integerRatio) : null,
         passed,
+        dependentBuyLineNos: tickerLots
+          .filter((lot) => lot.remainingQuantity > 0n)
+          .map((lot) => lot.buyLineNo),
       });
       if (!passed) continue;
       for (const lot of tickerLots) lot.remainingQuantity *= integerRatio;

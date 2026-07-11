@@ -4,6 +4,7 @@ export * from "./categories";
 export * from "./transactions";
 export * from "./fx";
 export * from "./imports";
+export * from "./brokerage-imports";
 export * from "./investments";
 export * from "./tax";
 export * from "./audit";

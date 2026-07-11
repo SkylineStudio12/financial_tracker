@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
+    "db:provision-revolut": "tsx scripts/provision-revolut-accounts.ts",
     "db:verify": "tsx src/db/verify-schema.ts",
     "fx:sync": "tsx scripts/fx-sync.ts",
     "db:studio": "drizzle-kit studio"

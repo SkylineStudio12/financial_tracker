@@ -21,6 +21,7 @@
       "cash": "Numerar",
       "brokerage": "Brokeraj",
       "position": "Poziții",
+      "clearing": "Tranzit",
       "tax_liability": "Datorie fiscală",
       "equity": "Capital propriu"
     },
@@ -44,6 +45,7 @@
     "newDividend": "Dividend nou",
     "importStatement": "Importă extras",
     "recordTrade": "Înregistrează ordin",
+    "importBrokerage": "Importă brokeraj",
     "language": "Limbă",
     "subtitle": {
       "shared": "Comun",
@@ -240,6 +242,51 @@
       "businessTransferNoMarker": "transfer de business către o companie, fără marcaj de servicii profesionale",
       "creditNoIncomingMarker": "credit fără un marcaj recunoscut de fonduri încasate",
       "noClassificationRule": "nicio regulă de clasificare nu s-a potrivit cu forma rândului"
+    },
+    "revolut": {
+      "title": "Importă brokerajul Revolut",
+      "csvLabel": "CSV cu tranzacțiile bursiere Revolut",
+      "help": "Alege exportul complet de tranzacții bursiere Revolut.",
+      "loaded": "Încărcat {fileName}.",
+      "parse": "Parsează în inboxul de revizuire",
+      "parsing": "Se parsează…",
+      "recent": "Importuri recente de brokeraj",
+      "none": "Niciun export de brokeraj importat încă.",
+      "batchBooked": "înregistrat",
+      "batchPending": "{pending} în așteptare · {excluded} excluse · {total} total",
+      "batchDetail": "{parsed} parsate · {staged} rânduri de revizuit · {corrections} perechi de corecții eliminate",
+      "verificationTitle": "Raport de verificare",
+      "externallyVerified": "Cash-ul și deținerile au fost verificate cu contul Revolut live la 2026-07-11.",
+      "pass": "OK",
+      "fail": "EȘEC",
+      "cashValue": "Cash final {amount}",
+      "holdingsTitle": "Dețineri finale ({count})",
+      "splitCheck": "Split {ticker} {ratio}:1 — {status}",
+      "pltrCheck": "PLTR {quantity} = {lots}; rămas {remaining}",
+      "residualsTitle": "Reziduuri cumpărări (unități minore)",
+      "residualSummary": "{group}: n={count}, min={min}, mediană={median}, max={max}",
+      "reviewRowsTitle": "Rânduri pentru aprobare",
+      "reviewSummary": "{total} rânduri · {excluded} excluse. Excluderile nu se înregistrează.",
+      "rowCount": "{count} rânduri",
+      "excludeRow": "Exclude rândul CSV {lineNo}",
+      "suspectedDuplicate": "posibil duplicat",
+      "duplicate": "deja înregistrat",
+      "excluded": "exclus",
+      "approvalWarning": "Aprobarea înregistrează fiecare rând neexclus în ordinea timestampului, într-o singură operațiune atomică. Orice eșec anulează întregul lot.",
+      "approveAll": "Aprobă și înregistrează lotul rămas",
+      "approving": "Se înregistrează atomic…",
+      "approved": "Lot înregistrat",
+      "approvedSummary": "Înregistrate {booked} rânduri ({transactions} tranzacții, {splits} splituri); {duplicates} duplicate și {excluded} excluderi.",
+      "kind": {
+        "buy": "Cumpărări",
+        "sell": "Vânzări",
+        "cash_top_up": "Alimentări cash",
+        "cash_withdrawal": "Retrageri cash",
+        "custody_fee": "Comisioane de custodie",
+        "dividend": "Dividende",
+        "dividend_tax_correction": "Corecții impozit dividende",
+        "stock_split": "Splituri"
+      }
     }
   },
   "investments": {
@@ -421,7 +468,10 @@
       "shareQuantityPositive": "Cantitatea de acțiuni trebuie să fie pozitivă.",
       "invalidPrice": "Preț invalid: {price}.",
       "holdingValueUnsafe": "Valoarea deținerii depășește intervalul întreg sigur.",
-      "valuationDateOutOfRange": "Data de evaluare {date} este în afara intervalului FX suportat ({floor} până azi)."
+      "valuationDateOutOfRange": "Data de evaluare {date} este în afara intervalului FX suportat ({floor} până azi).",
+      "stockSplitRatioInvalid": "Raportul unui split trebuie să fie un număr întreg mai mare decât unu; primit {ratio}.",
+      "stockSplitNoOpenLots": "Acest split nu are loturi deschise de ajustat.",
+      "stockSplitDeltaMismatch": "Delta splitului este {actual}, dar loturile deschise și raportul cer {expected}."
     },
     "imports": {
       "statementAccountNotFound": "Contul extrasului nu a fost găsit pe această entitate.",
@@ -437,6 +487,27 @@
       "categoryRequiredForLine": "Alege o categorie pentru rândul {lineNo} ({kind}) înainte de înregistrare.",
       "statementTextRequired": "Lipește mai întâi textul extrasului.",
       "highConfidenceBookingFailed": "Înregistrarea bulk a întâlnit {count} erori de rând. Înregistrează rândurile rămase individual ca să vezi fiecare blocaj."
+    },
+    "revolut": {
+      "requiredAccountsMissing": "Lipsesc conturile Revolut necesare de cash USD/EUR, poziții sau tranzit. Aplică mai întâi migrările importului de brokeraj.",
+      "csvRequired": "Alege mai întâi exportul CSV Revolut.",
+      "unpairedCorrections": "Exportul conține {count} rând(uri) de corecție a impozitului pe dividende fără pereche; aprobarea este blocată.",
+      "securityCurrencyConflict": "{ticker} există deja cu altă valută.",
+      "batchNotFound": "Lotul de import Revolut nu a fost găsit.",
+      "batchAlreadyBooked": "Acest lot Revolut este deja înregistrat și nu mai poate fi modificat.",
+      "rowNotFound": "Rândul de import Revolut nu a fost găsit.",
+      "rowLocked": "Un rând înregistrat sau duplicat nu poate fi exclus.",
+      "excludedBuyNeededBySell": "Aprobarea este blocată: vânzarea de la rândul {actionLine} consumă cumpărarea exclusă de la rândul {buyLine}.",
+      "excludedBuyNeededBySplit": "Aprobarea este blocată: splitul de la rândul {actionLine} depinde de cumpărarea exclusă de la rândul {buyLine}.",
+      "splitDependencyInvalid": "Rândurile rămase nu mai produc un raport întreg de split la rândul {lineNo}.",
+      "splitRatioMissing": "Nu există un raport de split verificat pentru rândul {lineNo}.",
+      "unsupportedBookingKind": "Tip de înregistrare Revolut nesuportat: {kind}.",
+      "securityMissing": "Unul sau mai multe titluri pregătite lipsesc înainte de înregistrare.",
+      "bookingRowFailed": "Înregistrarea atomică a eșuat la rândul CSV {lineNo} ({causeCode}). Nu s-a înregistrat nimic.",
+      "cashAssertionFailed": "Cash-ul {currency} după înregistrare este {actual} unități minore; se așteptau {expected}. Întregul lot a fost anulat.",
+      "holdingsAssertionFailed": "Deținerile după înregistrare nu corespund simulării aprobate. Întregul lot a fost anulat.",
+      "zeroSumAssertionFailed": "O tranzacție înregistrată a eșuat verificarea de sumă zero în RON. Întregul lot a fost anulat.",
+      "taxAccrualAssertionFailed": "Importul de brokeraj a creat neașteptat o acumulare fiscală. Întregul lot a fost anulat."
     },
     "tax": {
       "companyTaxLiabilityMissing": "Compania nu are cont tax_liability.",

@@ -3,6 +3,7 @@ import {
   boolean,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -126,6 +127,71 @@ export const lotConsumptions = pgTable(
     uniqueIndex("lot_consumptions_sell_buy_uidx")
       .on(table.sellTradeId, table.buyTradeId)
       .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+/** A split changes share units, never money or basis. The service records the
+ * event and its exact per-lot transformations before updating quantities. */
+export const stockSplits = pgTable(
+  "stock_splits",
+  {
+    id,
+    securityId: uuid("security_id")
+      .notNull()
+      .references(() => securities.id),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    occurredAt: text("occurred_at").notNull(),
+    ratio: integer("ratio").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("stock_splits_security_id_idx").on(table.securityId),
+    uniqueIndex("stock_splits_account_security_occurred_uidx").on(
+      table.accountId,
+      table.securityId,
+      table.occurredAt,
+    ),
+  ],
+);
+
+export const stockSplitLotAdjustments = pgTable(
+  "stock_split_lot_adjustments",
+  {
+    id,
+    splitId: uuid("split_id")
+      .notNull()
+      .references(() => stockSplits.id, { onDelete: "cascade" }),
+    buyTradeId: uuid("buy_trade_id")
+      .notNull()
+      .references(() => trades.id),
+    quantityBefore: numeric("quantity_before", { precision: 20, scale: 8 }).notNull(),
+    quantityAfter: numeric("quantity_after", { precision: 20, scale: 8 }).notNull(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex("stock_split_lot_adjustments_split_buy_uidx").on(table.splitId, table.buyTradeId)],
+);
+
+export const stockSplitConsumptionAdjustments = pgTable(
+  "stock_split_consumption_adjustments",
+  {
+    id,
+    splitId: uuid("split_id")
+      .notNull()
+      .references(() => stockSplits.id, { onDelete: "cascade" }),
+    consumptionId: uuid("consumption_id")
+      .notNull()
+      .references(() => lotConsumptions.id),
+    quantityBefore: numeric("quantity_before", { precision: 20, scale: 8 }).notNull(),
+    quantityAfter: numeric("quantity_after", { precision: 20, scale: 8 }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("stock_split_consumption_adjustments_split_consumption_uidx").on(
+      table.splitId,
+      table.consumptionId,
+    ),
   ],
 );
 

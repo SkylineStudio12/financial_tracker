@@ -86,24 +86,27 @@ completeness"; dropping the "nothing is booked" marker. Related markers
 elsewhere are catalog-driven since Stage 3b/3c (`common.estimate` —
 ESTIMATE/ESTIMARE) and must keep warning force in every locale.
 
-## 4. Import review inbox (statement imports)
+## 4. Import review inboxes (statement + brokerage imports)
 
-**What:** `src/components/import/import-inbox.tsx` — every staged statement
-row books only through explicit confirmation. Per row: Book is disabled
-unless the row is `pending` AND its category requirement is satisfied
-(`bookingNeedsCategory` in `src/lib/import/booking-rules.ts`); the
-confidence badge renders destructive-variant when not high. The bulk action
-is explicitly scoped: "Confirm all high-confidence" books high-confidence
-rows only — low-confidence, overlap-suspect, and category-less rows stay
-for review.
+**What:** `src/components/import/import-inbox.tsx` preserves the ING per-row
+gate and tightly-scoped high-confidence bulk action. The Revolut brokerage
+inbox in `src/components/import/revolut-inbox.tsx` uses a different approved
+gate: verification evidence first, grouped drill-down with row exclusions,
+then ONE explicit whole-batch approval after every group. No row or group can
+book independently; approval runs all surviving rows chronologically in one
+database transaction, and dependency checks block exclusions that would
+strand a sell or split.
 
-**Why placement matters:** the confirm-gate is the human safety layer
-between a parser's guess and the ledger. Confidence and blocking states are
-visible on the row they gate, at the moment of decision.
+**Why placement matters:** the confirm-gate is the human safety layer between
+a parser's output and the ledger. ING confidence and blocking states stay on
+the row they gate. Brokerage verification, exclusions, and the atomicity
+warning remain visible before the sole approval command, so approval means
+informed consent to the reviewed remainder as one indivisible unit.
 
-**Breaking edits:** auto-booking on import; letting low-confidence or
-category-less rows through the bulk action; hiding the confidence badge or
-moving it away from the Book control it justifies.
+**Breaking edits:** auto-booking on import; weakening ING's confidence/category
+rules; adding per-row or per-group brokerage booking; moving brokerage approval
+above the verification/groups; hiding exclusions or dependency blockers; or
+making a partial booking look like a successful batch.
 
 ---
 

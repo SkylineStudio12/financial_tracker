@@ -170,6 +170,9 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
   ];
   const investments = [
     { href: `${base}/investments`, label: t("recordTrade"), icon: TrendingUpIcon },
+    ...(activeProfile.owner === "greg"
+      ? [{ href: `${base}/imports`, label: t("importBrokerage"), icon: ImportIcon }]
+      : []),
   ];
 
   return (

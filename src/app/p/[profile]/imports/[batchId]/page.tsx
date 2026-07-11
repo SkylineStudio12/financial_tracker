@@ -12,6 +12,12 @@ import {
   type ImportKind,
 } from "@/lib/import/ing/classify";
 import { ImportInbox } from "@/components/import/import-inbox";
+import { RevolutInbox } from "@/components/import/revolut-inbox";
+import { getRevolutImportBatch } from "@/lib/import/revolut/brokerage-queries";
+import type {
+  StoredRevolutRow,
+  StoredRevolutVerification,
+} from "@/lib/import/revolut/brokerage-service";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +28,56 @@ export default async function ImportBatchPage({
 }) {
   const { profile: slug, batchId } = await params;
   const profile = getProfile(slug);
-  if (!profile || !profile.companyFlows) notFound();
+  if (!profile || (!profile.companyFlows && profile.owner !== "greg")) notFound();
 
   const locale = await getLocale();
   const t = await getTranslations("imports");
+  if (profile.owner === "greg") {
+    const revolut = await getRevolutImportBatch(batchId, profile.entityId, "greg");
+    if (!revolut) notFound();
+    return (
+      <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
+        <div className="flex flex-col gap-1">
+          <Link
+            href={`/p/${profile.slug}/imports`}
+            className="w-fit text-caption text-text-muted outline-none hover:text-accent focus-visible:ring-3 focus-visible:ring-focus-ring"
+          >
+            {t("allImports")}
+          </Link>
+          <h1 className="text-title text-text-primary">{revolut.batch.sourceFileName}</h1>
+          <p className="text-caption text-text-muted">
+            {t("revolut.batchDetail", {
+              parsed: revolut.batch.parsedRowCount,
+              staged: revolut.batch.stagedRowCount,
+              corrections: revolut.batch.correctionPairCount,
+            })}
+          </p>
+        </div>
+        <RevolutInbox
+          profileSlug={profile.slug}
+          entityId={profile.entityId}
+          batchId={revolut.batch.id}
+          report={revolut.batch.verification as StoredRevolutVerification}
+          booked={revolut.batch.bookedAt !== null}
+          rows={revolut.rows.map((row) => {
+            const payload = row.payload as StoredRevolutRow;
+            return {
+              id: row.id,
+              lineNo: row.lineNo,
+              occurredAt: row.occurredAt,
+              kind: payload.kind,
+              ticker: row.ticker,
+              currency: row.currency as "USD" | "EUR",
+              totalMinor: payload.totalMinor,
+              quantityText: payload.quantityText,
+              status: row.status,
+              suspectedDuplicate: row.suspectedDuplicate,
+            };
+          })}
+        />
+      </div>
+    );
+  }
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
   const { batch, rows, categories } = data;

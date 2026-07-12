@@ -41,6 +41,9 @@ cost it twice. **Read this file before starting any unit of work.**
 | L-0014 | i18n | Code-only error classes must convert all producers |
 | L-0015 | import | Verify external rate and ratio direction empirically |
 | L-0016 | assumption | Sample-based inferences must be labeled as hypotheses |
+| L-0017 | process | Ambiguous continuation does not waive a STOP gate |
+| L-0018 | provenance | Untracked material keeps its provenance label |
+| L-0019 | review | Tier-3 checkpoint evidence must be durable in the repo |
 
 ---
 
@@ -213,3 +216,26 @@ hypotheses. Full-population computation or an external anchor supersedes them.
 verified external anchor confirms them.
 **Origin:** Revolut brokerage import — atypical fee sample and phantom-cash
 prediction both overturned by full-data and live-account verification.
+
+### L-0017 · 2026-07-12 · process · ratified
+**Lesson:** Ambiguous continuation phrasing does not waive a STOP gate.
+**Apply:** If the owner's message can be read as anything other than explicit
+approval, stop and ask.
+**Origin:** Part 2 step 2 was committed before review on an ambiguous
+continuation.
+
+### L-0018 · 2026-07-12 · provenance · ratified
+**Lesson:** Material without a tracked source or task-prompt mandate must be
+flagged to the owner when carried into a document, never silently included or
+compressed. Provenance labels travel with the material.
+**Apply:** Surface the source and approval status before carrying such material.
+**Origin:** The provisional model-tiering note was carried into the handover
+refresh unflagged and its provenance label was dropped.
+
+### L-0019 · 2026-07-12 · review · ratified
+**Lesson:** Tier-3 checkpoint evidence must be durable in the repo.
+**Apply:** Record at least one line per checkpoint in `docs/review-log.md` with
+date, unit, checkpoint, verdict, and owner-approval timestamp; full reports are
+optional for heavy units. Treat a Tier-3 commit with no review-log entry as ungated.
+**Origin:** The 3f gate was honored but unprovable from the repo; evidence
+survived only in a chat transcript.

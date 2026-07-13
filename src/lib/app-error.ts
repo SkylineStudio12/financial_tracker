@@ -79,6 +79,7 @@ export const ERROR_CODES = [
   "investments.shareQuantityPositive",
   "investments.invalidPrice",
   "investments.holdingValueUnsafe",
+  "investments.fxCoverageMissing",
   "investments.valuationDateOutOfRange",
   "investments.stockSplitRatioInvalid",
   "investments.stockSplitNoOpenLots",

@@ -24,12 +24,31 @@ async function main() {
       throw new Error("Backfill needs both --from and --to as YYYY-MM-DD");
     }
     const result = await backfillRange(from, to);
+    console.log(`Backfilled ${from}..${to}:`);
     console.log(
-      `Backfilled ${from}..${to}: ${result.bankingDays} banking days, ${result.upserted} rates upserted.`,
+      `  coverage ${result.firstDate}..${result.lastDate}: ${result.bankingDays} banking days, ${result.storedRows} paired rows`,
     );
+    console.log(
+      `  writes: ${result.inserted} inserted, ${result.existing} existing, ${result.upserted} upserted`,
+    );
+    console.log(
+      `  structure: ${result.oneSidedDates} one-sided dates, maximum gap ${result.maxGapDays} days`,
+    );
+    console.log(`  overwrite delta: ${result.overwriteDeltaCount} changed rates`);
+    for (const delta of result.overwriteDeltas) {
+      console.log(`    ${delta.date} ${delta.currency}: ${delta.before} -> ${delta.after}`);
+    }
+    console.log(`  fixtures: ${result.fixtures.length} exact matches`);
+    for (const fixture of result.fixtures) {
+      console.log(
+        `    ${fixture.date} ${fixture.currency}: expected ${fixture.expected}, stored ${fixture.actual}`,
+      );
+    }
   } else {
     const result = await syncLatestRates();
-    console.log(`Synced latest BNR rates for ${result.date}: ${result.upserted} rates upserted.`);
+    console.log(
+      `Synced latest BNR rates for ${result.date}: ${result.upserted} rates upserted, ${result.overwriteDeltaCount} overwrite deltas.`,
+    );
   }
 }
 

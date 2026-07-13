@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { inArray } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { priceSnapshots, securities } from "@/db/schema";
-import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
+import { convertMinorToRon, getEarliestPairedRateDate, resolveRonRate } from "@/lib/fx";
 import { LedgerValidationError } from "@/lib/ledger";
 import { executeTrade } from "./service";
 import { valueAtPrice } from "./trade-rules";
@@ -133,12 +133,18 @@ async function run(env: TradeTestEnv) {
   ok("totals equal the sum of priced holdings to the ban; unrealized = value − valued basis");
 
   // ------------------------------------------ 6. Date range: hard reject
+  const fxFloor = await getEarliestPairedRateDate();
+  assert.equal(fxFloor, "2024-01-03");
+  const beforeFxFloor = new Date(`${fxFloor}T00:00:00Z`);
+  beforeFxFloor.setUTCDate(beforeFxFloor.getUTCDate() - 1);
+  const unsupportedDate = beforeFxFloor.toISOString().slice(0, 10);
   await assert.rejects(
-    valueHoldings({ entityId: env.entityId, date: "2024-12-31" }),
+    valueHoldings({ entityId: env.entityId, date: unsupportedDate }),
     (e) =>
       e instanceof LedgerValidationError &&
       e.code === "investments.valuationDateOutOfRange" &&
-      e.params?.date === "2024-12-31",
+      e.params?.date === unsupportedDate &&
+      e.params?.floor === fxFloor,
   );
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
   await assert.rejects(

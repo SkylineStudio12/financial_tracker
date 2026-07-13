@@ -468,6 +468,7 @@
       "shareQuantityPositive": "Cantitatea de acțiuni trebuie să fie pozitivă.",
       "invalidPrice": "Preț invalid: {price}.",
       "holdingValueUnsafe": "Valoarea deținerii depășește intervalul întreg sigur.",
+      "fxCoverageMissing": "Evaluarea istorică are nevoie de un istoric pereche al cursurilor EUR și USD înainte de a putea rula.",
       "valuationDateOutOfRange": "Data de evaluare {date} este în afara intervalului FX suportat ({floor} până azi).",
       "stockSplitRatioInvalid": "Raportul unui split trebuie să fie un număr întreg mai mare decât unu; primit {ratio}.",
       "stockSplitNoOpenLots": "Acest split nu are loturi deschise de ajustat.",

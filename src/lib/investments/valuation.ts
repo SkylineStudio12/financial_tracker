@@ -11,7 +11,7 @@
  * with the price's actual date; no snapshot at all → the holding is NOT
  * valued (never zero, never silent) and totals say how many were excluded.
  *
- * SUPPORTED DATE RANGE, hard-enforced: FX_FLOOR (first local BNR rate) ≤
+ * SUPPORTED DATE RANGE, hard-enforced: earliest locally paired EUR/USD rate ≤
  * date ≤ today. Outside it: LedgerValidationError — no silent wrong number.
  * Today may trigger the on-demand BNR fetch (the app's normal FX mechanism).
  *
@@ -22,13 +22,11 @@
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { priceSnapshots, securities, trades } from "@/db/schema";
-import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
+import { convertMinorToRon, getEarliestPairedRateDate, resolveRonRate } from "@/lib/fx";
 import { LedgerValidationError } from "@/lib/ledger";
 import { listBrokerageAccounts, loadLots } from "./service";
 import { formatQuantity, valueAtPrice } from "./trade-rules";
 
-/** First banking day with a locally-synced BNR rate (Stage-0 verified). */
-const FX_FLOOR = "2025-01-03";
 /** Same tolerance the FX fallback uses — one mental model. */
 const STALE_DAYS = 7;
 
@@ -87,10 +85,12 @@ export async function valueHoldings(params: {
 }): Promise<ValuationResult> {
   const today = new Date().toISOString().slice(0, 10);
   const date = params.date ?? today;
-  if (!DATE_RE.test(date) || date < FX_FLOOR || date > today) {
+  const fxFloor = await getEarliestPairedRateDate();
+  if (!fxFloor) throw new LedgerValidationError("investments.fxCoverageMissing");
+  if (!DATE_RE.test(date) || date < fxFloor || date > today) {
     throw new LedgerValidationError("investments.valuationDateOutOfRange", {
       date,
-      floor: FX_FLOOR,
+      floor: fxFloor,
     });
   }
 

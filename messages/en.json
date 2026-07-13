@@ -468,6 +468,7 @@
       "shareQuantityPositive": "Share quantity must be positive.",
       "invalidPrice": "Invalid price: {price}.",
       "holdingValueUnsafe": "Holding value out of safe integer range.",
+      "fxCoverageMissing": "Historical valuation needs paired EUR and USD exchange-rate history before it can run.",
       "valuationDateOutOfRange": "Valuation date {date} is outside the supported FX range ({floor} to today).",
       "stockSplitRatioInvalid": "A stock-split ratio must be a whole number greater than one; got {ratio}.",
       "stockSplitNoOpenLots": "This stock split has no open lots to adjust.",

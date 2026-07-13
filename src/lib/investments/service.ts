@@ -34,7 +34,7 @@
  * the entered RON by more than 1 ban the entry is REJECTED as a mistyped
  * amount — never clamped or absorbed. BNR is never consulted here.
  */
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -222,6 +222,8 @@ interface LotState {
  * live consumed state and its position leg (RON basis source).
  * Exported for the valuation module: open quantity/basis derive from the
  * SAME lot machinery that books — never a parallel computation.
+ * MAINTENANCE: Keep lot shape and assembly aligned with loadLotsAsOf; changing
+ * either reader without the other breaks the today-equality guarantee.
  */
 export async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Promise<LotState[]> {
   // The trade date lives on the TRANSACTION (trades carry no date of their
@@ -302,6 +304,170 @@ export async function loadLots(tx: LedgerTx, accountId: string, securityId: stri
       consumedQuantity: c ? parseQuantity(c.quantity) : 0n,
       allocatedMinor: c ? BigInt(c.basis) : 0n,
       allocatedRonMinor: c ? BigInt(c.basisRon) : 0n,
+    };
+  });
+}
+
+const SPLIT_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
+function splitCalendarDate(occurredAt: string): string {
+  if (!SPLIT_TIMESTAMP_RE.test(occurredAt)) {
+    throw new LedgerValidationError("investments.stockSplitTimestampInvalid", { occurredAt });
+  }
+  return occurredAt.slice(0, 10);
+}
+
+/**
+ * FIFO lots as they stood at the end of `date`. Current-state callers keep
+ * using loadLots; today's request delegates to it exactly. Historical reads
+ * filter later trades and invert later split adjustments from newest to oldest.
+ * MAINTENANCE: Keep lot shape and assembly aligned with loadLots; changing
+ * either reader without the other breaks the today-equality guarantee.
+ */
+export async function loadLotsAsOf(
+  tx: LedgerTx,
+  accountId: string,
+  securityId: string,
+  date: string,
+): Promise<LotState[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  if (date === today) return loadLots(tx, accountId, securityId);
+
+  const buyRows = (
+    await tx
+      .select({ trade: trades, date: transactions.date })
+      .from(trades)
+      .innerJoin(transactions, eq(trades.transactionId, transactions.id))
+      .where(
+        and(
+          eq(trades.accountId, accountId),
+          eq(trades.securityId, securityId),
+          eq(trades.kind, "buy"),
+          isNull(trades.deletedAt),
+          lte(transactions.date, date),
+        ),
+      )
+      .orderBy(asc(transactions.date), asc(trades.createdAt), asc(trades.id))
+  ).map((r) => ({ ...r.trade, buyDate: r.date }));
+  if (buyRows.length === 0) return [];
+
+  const buyIds = buyRows.map((buy) => buy.id);
+  const lotQuantityById = new Map(buyRows.map((buy) => [buy.id, parseQuantity(buy.quantity)]));
+  const lotAdjustments = await tx
+    .select({
+      buyTradeId: stockSplitLotAdjustments.buyTradeId,
+      occurredAt: stockSplits.occurredAt,
+      quantityBefore: stockSplitLotAdjustments.quantityBefore,
+    })
+    .from(stockSplitLotAdjustments)
+    .innerJoin(stockSplits, eq(stockSplitLotAdjustments.splitId, stockSplits.id))
+    .where(inArray(stockSplitLotAdjustments.buyTradeId, buyIds))
+    .orderBy(desc(stockSplits.occurredAt));
+  for (const adjustment of lotAdjustments) {
+    if (splitCalendarDate(adjustment.occurredAt) > date) {
+      lotQuantityById.set(adjustment.buyTradeId, parseQuantity(adjustment.quantityBefore));
+    }
+  }
+
+  const consumptionRows = await tx
+    .select({
+      id: lotConsumptions.id,
+      buyTradeId: lotConsumptions.buyTradeId,
+      quantity: lotConsumptions.quantity,
+      costBasisMinor: lotConsumptions.costBasisMinor,
+      costBasisRonMinor: lotConsumptions.costBasisRonMinor,
+    })
+    .from(lotConsumptions)
+    .innerJoin(trades, eq(lotConsumptions.sellTradeId, trades.id))
+    .innerJoin(transactions, eq(trades.transactionId, transactions.id))
+    .where(
+      and(
+        inArray(lotConsumptions.buyTradeId, buyIds),
+        isNull(lotConsumptions.deletedAt),
+        isNull(trades.deletedAt),
+        lte(transactions.date, date),
+      ),
+    );
+  const consumptionQuantityById = new Map(
+    consumptionRows.map((row) => [row.id, parseQuantity(row.quantity)]),
+  );
+  if (consumptionRows.length > 0) {
+    const consumptionAdjustments = await tx
+      .select({
+        consumptionId: stockSplitConsumptionAdjustments.consumptionId,
+        occurredAt: stockSplits.occurredAt,
+        quantityBefore: stockSplitConsumptionAdjustments.quantityBefore,
+      })
+      .from(stockSplitConsumptionAdjustments)
+      .innerJoin(stockSplits, eq(stockSplitConsumptionAdjustments.splitId, stockSplits.id))
+      .where(
+        inArray(
+          stockSplitConsumptionAdjustments.consumptionId,
+          consumptionRows.map((row) => row.id),
+        ),
+      )
+      .orderBy(desc(stockSplits.occurredAt));
+    for (const adjustment of consumptionAdjustments) {
+      if (splitCalendarDate(adjustment.occurredAt) > date) {
+        consumptionQuantityById.set(
+          adjustment.consumptionId,
+          parseQuantity(adjustment.quantityBefore),
+        );
+      }
+    }
+  }
+
+  const consumedByLot = new Map<
+    string,
+    { quantity: bigint; basis: bigint; basisRon: bigint }
+  >();
+  for (const row of consumptionRows) {
+    const current = consumedByLot.get(row.buyTradeId) ?? {
+      quantity: 0n,
+      basis: 0n,
+      basisRon: 0n,
+    };
+    current.quantity += consumptionQuantityById.get(row.id)!;
+    current.basis += BigInt(row.costBasisMinor);
+    current.basisRon += BigInt(row.costBasisRonMinor);
+    consumedByLot.set(row.buyTradeId, current);
+  }
+
+  const positionLegs = await tx
+    .select()
+    .from(postings)
+    .where(
+      and(
+        inArray(
+          postings.transactionId,
+          buyRows.map((buy) => buy.transactionId),
+        ),
+        isNull(postings.deletedAt),
+      ),
+    );
+  const positionByTx = new Map(
+    positionLegs
+      .filter((posting) => posting.accountId !== accountId && posting.amount > 0)
+      .map((posting) => [posting.transactionId, posting]),
+  );
+
+  return buyRows.map((buy) => {
+    const positionLeg = positionByTx.get(buy.transactionId);
+    if (!positionLeg) {
+      throw new LedgerValidationError("investments.buyMissingPositionLeg", { tradeId: buy.id });
+    }
+    const consumed = consumedByLot.get(buy.id);
+    return {
+      tradeId: buy.id,
+      transactionId: buy.transactionId,
+      buyDate: buy.buyDate,
+      quantity: lotQuantityById.get(buy.id)!,
+      totalMinor: BigInt(buy.total),
+      totalRonMinor: BigInt(positionLeg.amountRon),
+      positionAccountId: positionLeg.accountId,
+      consumedQuantity: consumed?.quantity ?? 0n,
+      allocatedMinor: consumed?.basis ?? 0n,
+      allocatedRonMinor: consumed?.basisRon ?? 0n,
     };
   });
 }

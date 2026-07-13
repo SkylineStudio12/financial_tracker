@@ -9,6 +9,8 @@ full review reports remain optional for heavy units.
 | 2026-07-10 | i18n 3f (Tier-3) | B | approved, committed 37a81a5 | 2026-07-10T06:34:27Z |
 | 2026-07-13 | FX backfill (Tier-3) | A | approved | 2026-07-13 (owner-confirmed date; exact time unavailable) |
 | 2026-07-13 | FX backfill (Tier-3) | B | approved with owner override: Revolut booking e2e failure predates this unit on clean main | 2026-07-13T06:17:14Z |
+| 2026-07-13 | As-of-date valuation (Tier-3) | A | approved with future-date, shared-test-cleanup, and pre-first-trade additions | 2026-07-13 (owner-confirmed date; exact time unavailable) |
+| 2026-07-13 | As-of-date valuation (Tier-3) | B | approved; pre-existing Revolut booking e2e red excluded (`exactDuplicates` 285 vs 0) | 2026-07-13 (owner-confirmed date; exact time unavailable) |
 
 *Both 3f rows are retroactive, reconstructed 2026-07-12 from the conversation
 record.*

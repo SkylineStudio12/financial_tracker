@@ -472,7 +472,8 @@
       "valuationDateOutOfRange": "Valuation date {date} is outside the supported FX range ({floor} to today).",
       "stockSplitRatioInvalid": "A stock-split ratio must be a whole number greater than one; got {ratio}.",
       "stockSplitNoOpenLots": "This stock split has no open lots to adjust.",
-      "stockSplitDeltaMismatch": "The stock-split delta is {actual}, but the open lots and ratio require {expected}."
+      "stockSplitDeltaMismatch": "The stock-split delta is {actual}, but the open lots and ratio require {expected}.",
+      "stockSplitTimestampInvalid": "Stock split timestamp {occurredAt} is invalid; repair the split record before valuing this date."
     },
     "imports": {
       "statementAccountNotFound": "Statement account not found on this entity.",

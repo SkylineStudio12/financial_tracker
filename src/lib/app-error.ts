@@ -84,6 +84,7 @@ export const ERROR_CODES = [
   "investments.stockSplitRatioInvalid",
   "investments.stockSplitNoOpenLots",
   "investments.stockSplitDeltaMismatch",
+  "investments.stockSplitTimestampInvalid",
   "imports.statementAccountNotFound",
   "imports.statementAccountMustBeActiveBank",
   "imports.statementAccountMustBeRon",

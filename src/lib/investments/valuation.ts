@@ -24,7 +24,7 @@ import { db } from "@/db";
 import { priceSnapshots, securities, trades } from "@/db/schema";
 import { convertMinorToRon, getEarliestPairedRateDate, resolveRonRate } from "@/lib/fx";
 import { LedgerValidationError } from "@/lib/ledger";
-import { listBrokerageAccounts, loadLots } from "./service";
+import { listBrokerageAccounts, loadLotsAsOf } from "./service";
 import { formatQuantity, valueAtPrice } from "./trade-rules";
 
 /** Same tolerance the FX fallback uses — one mental model. */
@@ -117,7 +117,9 @@ export async function valueHoldings(params: {
         and(eq(trades.accountId, account.id), eq(trades.kind, "buy"), isNull(trades.deletedAt)),
       );
     for (const { securityId } of held) {
-      const lots = await db.transaction((tx) => loadLots(tx, account.id, securityId));
+      const lots = await db.transaction((tx) =>
+        loadLotsAsOf(tx, account.id, securityId, date),
+      );
       let openQty = 0n;
       let basisMinor = 0n;
       let basisRonMinor = 0n;

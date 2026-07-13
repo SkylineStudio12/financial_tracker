@@ -472,7 +472,8 @@
       "valuationDateOutOfRange": "Data de evaluare {date} este în afara intervalului FX suportat ({floor} până azi).",
       "stockSplitRatioInvalid": "Raportul unui split trebuie să fie un număr întreg mai mare decât unu; primit {ratio}.",
       "stockSplitNoOpenLots": "Acest split nu are loturi deschise de ajustat.",
-      "stockSplitDeltaMismatch": "Delta splitului este {actual}, dar loturile deschise și raportul cer {expected}."
+      "stockSplitDeltaMismatch": "Delta splitului este {actual}, dar loturile deschise și raportul cer {expected}.",
+      "stockSplitTimestampInvalid": "Marcajul temporal {occurredAt} al splitului este invalid; repară înregistrarea înainte de evaluarea acestei date."
     },
     "imports": {
       "statementAccountNotFound": "Contul extrasului nu a fost găsit pe această entitate.",

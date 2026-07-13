@@ -1,7 +1,6 @@
 /**
- * MONEY-GRADE valuation suite (Phase 4 Stage 4). Trades use 2031 dates (no
- * BNR dependency at booking, as established); the VALUATION date is a real
- * 2026 banking-day range date so resolveRonRate resolves OFFLINE from the
+ * MONEY-GRADE valuation suite (Phase 4 Stage 4). Trades precede the VALUATION
+ * date, a real 2026 banking-day range date, so resolveRonRate resolves OFFLINE from the
  * locally-synced fx_rates — the expected RON figures are computed in the
  * test from the SAME resolved rate, so assertions are exact and
  * rate-agnostic.
@@ -48,11 +47,11 @@ async function run(env: TradeTestEnv) {
 
   // Worked-example remainder: lots 10@$100(460 RON) + 10@$120(612 RON),
   // sell 15 → open 5 shares, basis $60.00 / 306.00 RON.
-  await executeTrade({ ...buyBase, date: "2031-03-03", quantity: "10", priceMinor: 1000, totalMinor: 10_000, totalRonMinor: 46_000 });
-  await executeTrade({ ...buyBase, date: "2031-04-09", quantity: "10", priceMinor: 1200, totalMinor: 12_000, totalRonMinor: 61_200 });
+  await executeTrade({ ...buyBase, date: "2025-03-03", quantity: "10", priceMinor: 1000, totalMinor: 10_000, totalRonMinor: 46_000 });
+  await executeTrade({ ...buyBase, date: "2025-04-09", quantity: "10", priceMinor: 1200, totalMinor: 12_000, totalRonMinor: 61_200 });
   await executeTrade({
     kind: "sell", accountId: env.cashAccountId, securityId: env.securityId,
-    date: "2031-06-05", quantity: "15", priceMinor: 1500, totalMinor: 22_500, totalRonMinor: 112_500,
+    date: "2025-06-05", quantity: "15", priceMinor: 1500, totalMinor: 22_500, totalRonMinor: 112_500,
   });
   await db.insert(priceSnapshots).values({ securityId: env.securityId, date: VAL_DATE, price: 1_600 });
 
@@ -60,21 +59,21 @@ async function run(env: TradeTestEnv) {
   // value 499.5 rounds HALF-UP to 500 (single final rounding).
   const fracSec = await newSecurity("FRC");
   await executeTrade({
-    ...buyBase, securityId: fracSec, date: "2031-02-01", quantity: "1.5", priceMinor: 300, totalMinor: 450, totalRonMinor: 2_070,
+    ...buyBase, securityId: fracSec, date: "2025-02-01", quantity: "1.5", priceMinor: 300, totalMinor: 450, totalRonMinor: 2_070,
   });
   await db.insert(priceSnapshots).values({ securityId: fracSec, date: VAL_DATE, price: 333 });
 
   // Stale-priced holding: only snapshot is 10 days before the valuation date.
   const staleSec = await newSecurity("STL");
   await executeTrade({
-    ...buyBase, securityId: staleSec, date: "2031-02-02", quantity: "2", priceMinor: 500, totalMinor: 1_000, totalRonMinor: 4_600,
+    ...buyBase, securityId: staleSec, date: "2025-02-02", quantity: "2", priceMinor: 500, totalMinor: 1_000, totalRonMinor: 4_600,
   });
   await db.insert(priceSnapshots).values({ securityId: staleSec, date: "2026-06-05", price: 700 });
 
   // Unpriced holding: no snapshot at all.
   const nakedSec = await newSecurity("NKD");
   await executeTrade({
-    ...buyBase, securityId: nakedSec, date: "2031-02-03", quantity: "3", priceMinor: 200, totalMinor: 600, totalRonMinor: 2_760,
+    ...buyBase, securityId: nakedSec, date: "2025-02-03", quantity: "3", priceMinor: 200, totalMinor: 600, totalRonMinor: 2_760,
   });
 
   const result = await valueHoldings({ entityId: env.entityId, date: VAL_DATE });

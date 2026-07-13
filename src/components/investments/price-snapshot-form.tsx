@@ -1,10 +1,8 @@
 "use client";
 
 /**
- * Manual price snapshot entry — the guaranteed price path until an API
- * source is picked (owner decision: deferred until real tickers exist).
- * Upserts on (security, date): re-entering a date replaces, never
- * duplicates.
+ * Manual price snapshot entry. Manual rows have highest provenance priority;
+ * re-entering a (security, date) replaces rather than duplicates it.
  */
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";

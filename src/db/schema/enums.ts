@@ -42,6 +42,14 @@ export const categoryKind = pgEnum("category_kind", ["income", "expense"]);
 
 export const tradeKind = pgEnum("trade_kind", ["buy", "sell", "dividend", "fee"]);
 
+export const priceProvider = pgEnum("price_provider", ["stooq", "eodhd"]);
+
+export const priceSnapshotSource = pgEnum("price_snapshot_source", [
+  "manual",
+  "stooq",
+  "eodhd",
+]);
+
 export const taxRuleType = pgEnum("tax_rule_type", [
   "micro_revenue_tax",
   "dividend_tax",

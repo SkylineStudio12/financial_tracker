@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# owner-downloaded price backfill files
+/Stooq/
+
 # vercel
 .vercel
 

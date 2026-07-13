@@ -158,6 +158,7 @@ export async function upsertPriceSnapshotAction(payload: {
       securityId: payload.securityId,
       date: payload.date,
       priceMinor: payload.priceMinor,
+      source: "manual",
     });
     revalidatePath(`${base}/investments`);
     return { ok: true };

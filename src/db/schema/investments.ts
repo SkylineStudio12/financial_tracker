@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { currency, tradeKind } from "./enums";
+import { currency, priceProvider, priceSnapshotSource, tradeKind } from "./enums";
 import { id, moneyMinor, softDelete, timestamps } from "./helpers";
 import { accounts } from "./entities";
 import { transactions } from "./transactions";
@@ -27,6 +27,29 @@ export const securities = pgTable(
     ...softDelete,
   },
   (table) => [uniqueIndex("securities_ticker_unique").on(table.ticker)],
+);
+
+export const securityPriceMappings = pgTable(
+  "security_price_mappings",
+  {
+    id,
+    securityId: uuid("security_id")
+      .notNull()
+      .references(() => securities.id),
+    provider: priceProvider("provider").notNull(),
+    symbol: text("symbol").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("security_price_mappings_security_provider_unique").on(
+      table.securityId,
+      table.provider,
+    ),
+    uniqueIndex("security_price_mappings_provider_symbol_unique").on(
+      table.provider,
+      table.symbol,
+    ),
+  ],
 );
 
 /**
@@ -195,8 +218,8 @@ export const stockSplitConsumptionAdjustments = pgTable(
   ],
 );
 
-/** Daily security prices in minor units (synced in a later phase).
- * No soft delete: synced data is replaced, not user-edited. */
+/** Daily security prices in minor units with explicit writer provenance.
+ * No soft delete: the shared upsert applies source-precedence policy. */
 export const priceSnapshots = pgTable(
   "price_snapshots",
   {
@@ -206,6 +229,7 @@ export const priceSnapshots = pgTable(
       .references(() => securities.id),
     date: date("date").notNull(),
     price: moneyMinor("price").notNull(),
+    source: priceSnapshotSource("source").notNull().default("manual"),
     ...timestamps,
   },
   (table) => [

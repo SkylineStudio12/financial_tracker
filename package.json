@@ -19,6 +19,7 @@
     "fx:sync": "tsx scripts/fx-sync.ts",
     "prices:stooq": "tsx scripts/stooq-price-import.ts",
     "prices:verify-seam": "tsx scripts/verify-price-seam.ts",
+    "test:reversal": "tsx scripts/run-reversal-test.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

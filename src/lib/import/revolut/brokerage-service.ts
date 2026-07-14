@@ -3,15 +3,26 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
+  auditLog,
+  lotConsumptions,
   postings,
   revolutBookedRows,
   revolutImportBatches,
   revolutImportRows,
   securities,
+  stockSplitConsumptionAdjustments,
+  stockSplitLotAdjustments,
+  stockSplits,
   taxAccruals,
   trades,
+  transactions,
 } from "@/db/schema";
-import { createTransaction, LedgerValidationError, type LedgerTx } from "@/lib/ledger";
+import {
+  createTransaction,
+  LedgerValidationError,
+  softDeleteRevolutBatchTransaction,
+  type LedgerTx,
+} from "@/lib/ledger";
 import {
   executeStockSplit,
   executeTrade,
@@ -634,6 +645,250 @@ export async function approveRevolutBatch(
     };
   };
   return outerTx ? write(outerTx) : db.transaction(write);
+}
+
+export interface DeleteBookedRevolutBatchResult {
+  transactions: number;
+  splits: number;
+  markers: number;
+}
+
+/**
+ * Reverse one booked brokerage batch as a single atomic operation. Ownership
+ * comes from markers created by this batch, never from import-row result links:
+ * duplicate rows can point at another batch's booking and must remain untouched.
+ */
+export async function deleteBookedRevolutBatch(params: {
+  batchId: string;
+  entityId: string;
+  owner: "greg";
+}): Promise<DeleteBookedRevolutBatchResult> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(734920260711)`);
+    const [batch] = await tx
+      .select()
+      .from(revolutImportBatches)
+      .where(
+        and(
+          eq(revolutImportBatches.id, params.batchId),
+          eq(revolutImportBatches.entityId, params.entityId),
+          eq(revolutImportBatches.owner, params.owner),
+        ),
+      )
+      .for("update");
+    if (!batch) throw new LedgerValidationError("revolut.batchNotFound");
+    if (!batch.bookedAt) throw new LedgerValidationError("revolut.batchNotBooked");
+
+    const markerRows = await tx
+      .select({
+        markerId: revolutBookedRows.id,
+        transactionId: revolutBookedRows.transactionId,
+        stockSplitId: revolutBookedRows.stockSplitId,
+        lineNo: revolutImportRows.lineNo,
+        payload: revolutImportRows.payload,
+      })
+      .from(revolutBookedRows)
+      .innerJoin(revolutImportRows, eq(revolutImportRows.id, revolutBookedRows.sourceRowId))
+      .where(eq(revolutImportRows.batchId, params.batchId));
+    const [bookedRowCount] = await tx
+      .select({ count: sql<number>`count(*)::int`.mapWith(Number) })
+      .from(revolutImportRows)
+      .where(
+        and(
+          eq(revolutImportRows.batchId, params.batchId),
+          eq(revolutImportRows.status, "booked"),
+        ),
+      );
+    if (
+      markerRows.length !== bookedRowCount.count ||
+      markerRows.some(
+        (marker) => (marker.transactionId === null) === (marker.stockSplitId === null),
+      )
+    ) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+
+    const transactionIds = [
+      ...new Set(markerRows.flatMap((marker) => (marker.transactionId ? [marker.transactionId] : []))),
+    ];
+    const splitIds = [
+      ...new Set(markerRows.flatMap((marker) => (marker.stockSplitId ? [marker.stockSplitId] : []))),
+    ];
+    const liveTransactions = transactionIds.length
+      ? await tx
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(and(inArray(transactions.id, transactionIds), isNull(transactions.deletedAt)))
+      : [];
+    const existingSplits = splitIds.length
+      ? await tx.select({ id: stockSplits.id }).from(stockSplits).where(inArray(stockSplits.id, splitIds))
+      : [];
+    if (liveTransactions.length !== transactionIds.length || existingSplits.length !== splitIds.length) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+
+    const batchTrades = transactionIds.length
+      ? await tx
+          .select()
+          .from(trades)
+          .where(and(inArray(trades.transactionId, transactionIds), isNull(trades.deletedAt)))
+      : [];
+    const batchBuyIds = batchTrades.filter((trade) => trade.kind === "buy").map((trade) => trade.id);
+    const liveConsumptions = batchBuyIds.length
+      ? await tx
+          .select({
+            id: lotConsumptions.id,
+            sellTradeId: lotConsumptions.sellTradeId,
+          })
+          .from(lotConsumptions)
+          .where(
+            and(
+              inArray(lotConsumptions.buyTradeId, batchBuyIds),
+              isNull(lotConsumptions.deletedAt),
+            ),
+          )
+      : [];
+    const consumingSellIds = [...new Set(liveConsumptions.map((row) => row.sellTradeId))];
+    const consumingSells = consumingSellIds.length
+      ? await tx
+          .select({ id: trades.id, transactionId: trades.transactionId, deletedAt: trades.deletedAt })
+          .from(trades)
+          .where(inArray(trades.id, consumingSellIds))
+      : [];
+    if (consumingSells.length !== consumingSellIds.length) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+    const batchTransactionSet = new Set(transactionIds);
+    const outsideSellTransactionIds = consumingSells
+      .filter(
+        (sell) => sell.deletedAt !== null || !batchTransactionSet.has(sell.transactionId),
+      )
+      .map((sell) => sell.transactionId);
+    if (outsideSellTransactionIds.length > 0) {
+      throw new LedgerValidationError("revolut.batchOutsideConsumption", {
+        transactionIds: outsideSellTransactionIds.join(", "),
+      });
+    }
+
+    const lotAdjustments = splitIds.length
+      ? await tx
+          .select()
+          .from(stockSplitLotAdjustments)
+          .where(inArray(stockSplitLotAdjustments.splitId, splitIds))
+      : [];
+    const consumptionAdjustments = splitIds.length
+      ? await tx
+          .select()
+          .from(stockSplitConsumptionAdjustments)
+          .where(inArray(stockSplitConsumptionAdjustments.splitId, splitIds))
+      : [];
+    const adjustedSplitIds = new Set(lotAdjustments.map((adjustment) => adjustment.splitId));
+    if (splitIds.some((splitId) => !adjustedSplitIds.has(splitId))) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+    const adjustedConsumptionIds = [
+      ...new Set(consumptionAdjustments.map((adjustment) => adjustment.consumptionId)),
+    ];
+    const adjustedConsumptions = adjustedConsumptionIds.length
+      ? await tx
+          .select({
+            id: lotConsumptions.id,
+            buyTradeId: lotConsumptions.buyTradeId,
+            sellTradeId: lotConsumptions.sellTradeId,
+          })
+          .from(lotConsumptions)
+          .where(inArray(lotConsumptions.id, adjustedConsumptionIds))
+      : [];
+    if (adjustedConsumptions.length !== adjustedConsumptionIds.length) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+    const adjustedTradeIds = [
+      ...new Set([
+        ...lotAdjustments.map((adjustment) => adjustment.buyTradeId),
+        ...adjustedConsumptions.flatMap((consumption) => [
+          consumption.buyTradeId,
+          consumption.sellTradeId,
+        ]),
+      ]),
+    ];
+    const adjustedTrades = adjustedTradeIds.length
+      ? await tx
+          .select({ id: trades.id, transactionId: trades.transactionId })
+          .from(trades)
+          .where(inArray(trades.id, adjustedTradeIds))
+      : [];
+    if (adjustedTrades.length !== adjustedTradeIds.length) {
+      throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+    }
+    const outsideAdjustedTransactionIds = adjustedTrades
+      .filter((trade) => !batchTransactionSet.has(trade.transactionId))
+      .map((trade) => trade.transactionId);
+    if (outsideAdjustedTransactionIds.length > 0) {
+      throw new LedgerValidationError("revolut.batchOutsideSplitDependency", {
+        transactionIds: outsideAdjustedTransactionIds.join(", "),
+      });
+    }
+
+    const ordered = [...markerRows].sort((a, b) => {
+      const aMicros = timestampToMicros((a.payload as StoredRevolutRow).timestamp);
+      const bMicros = timestampToMicros((b.payload as StoredRevolutRow).timestamp);
+      return aMicros > bMicros ? -1 : aMicros < bMicros ? 1 : b.lineNo - a.lineNo;
+    });
+    for (const marker of ordered) {
+      if (marker.transactionId) {
+        await softDeleteRevolutBatchTransaction(marker.transactionId, params.batchId, tx);
+        continue;
+      }
+      const splitId = marker.stockSplitId!;
+      for (const adjustment of lotAdjustments.filter((row) => row.splitId === splitId)) {
+        await tx
+          .update(trades)
+          .set({ quantity: adjustment.quantityBefore })
+          .where(eq(trades.id, adjustment.buyTradeId));
+      }
+      for (const adjustment of consumptionAdjustments.filter((row) => row.splitId === splitId)) {
+        await tx
+          .update(lotConsumptions)
+          .set({ quantity: adjustment.quantityBefore })
+          .where(eq(lotConsumptions.id, adjustment.consumptionId));
+      }
+      await tx
+        .delete(stockSplitConsumptionAdjustments)
+        .where(eq(stockSplitConsumptionAdjustments.splitId, splitId));
+      await tx
+        .delete(stockSplitLotAdjustments)
+        .where(eq(stockSplitLotAdjustments.splitId, splitId));
+    }
+
+    await tx.insert(auditLog).values({
+      tableName: "revolut_import_batches",
+      rowId: batch.id,
+      action: "delete",
+      previousValues: {
+        batchId: batch.id,
+        rawTextHash: batch.rawTextHash,
+        sourceFileName: batch.sourceFileName,
+        bookedAt: batch.bookedAt,
+        transactions: transactionIds.length,
+        splits: splitIds.length,
+        markers: markerRows.length,
+      },
+    });
+    if (markerRows.length > 0) {
+      await tx
+        .delete(revolutBookedRows)
+        .where(inArray(revolutBookedRows.id, markerRows.map((marker) => marker.markerId)));
+    }
+    await tx.delete(revolutImportBatches).where(eq(revolutImportBatches.id, params.batchId));
+    if (splitIds.length > 0) {
+      await tx.delete(stockSplits).where(inArray(stockSplits.id, splitIds));
+    }
+    return {
+      transactions: transactionIds.length,
+      splits: splitIds.length,
+      markers: markerRows.length,
+    };
+  });
 }
 
 export type StoredRevolutVerification = RevolutVerification;

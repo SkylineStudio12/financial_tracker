@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +23,10 @@ import { formatMinor } from "@/lib/format";
 import type { AppError } from "@/lib/app-error";
 import {
   approveRevolutBatchAction,
+  deleteBookedRevolutBatchAction,
   setRevolutRowExcludedAction,
 } from "@/lib/import/revolut/brokerage-actions";
+import type { RevolutBatchReversalPreview } from "@/lib/import/revolut/brokerage-queries";
 import type { ApproveRevolutBatchResult, StoredRevolutVerification } from "@/lib/import/revolut/brokerage-service";
 import type { RevolutKind } from "@/lib/import/revolut/parse";
 
@@ -115,6 +129,7 @@ export function RevolutInbox({
   report,
   rows,
   booked,
+  reversal,
 }: {
   profileSlug: string;
   entityId: string;
@@ -122,12 +137,14 @@ export function RevolutInbox({
   report: StoredRevolutVerification;
   rows: InboxRow[];
   booked: boolean;
+  reversal: RevolutBatchReversalPreview | null;
 }) {
   const t = useTranslations("imports.revolut");
   const translateError = useTranslatedError();
   const locale = useLocale();
   const [localRows, setLocalRows] = useState(rows);
   const [error, setError] = useState<AppError | null>(null);
+  const [deleteError, setDeleteError] = useState<AppError | null>(null);
   const [summary, setSummary] = useState<ApproveRevolutBatchResult | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -157,6 +174,14 @@ export function RevolutInbox({
       const result = await approveRevolutBatchAction({ profileSlug, entityId, batchId });
       if ("error" in result) setError(result.error);
       else setSummary(result.summary);
+    });
+  }
+
+  function deleteBatch() {
+    setDeleteError(null);
+    startTransition(async () => {
+      const result = await deleteBookedRevolutBatchAction({ profileSlug, entityId, batchId });
+      if (result && "error" in result) setDeleteError(result.error);
     });
   }
 
@@ -230,6 +255,46 @@ export function RevolutInbox({
           </Button>
         </div>
       </section>
+      {booked && reversal && (
+        <section className="flex flex-col gap-2 border-t border-border-hairline pt-4">
+          <div>
+            <h2 className="text-card-title text-text-primary">{t("deleteTitle")}</h2>
+            <p className="text-caption text-text-muted">{t("deleteIntro")}</p>
+          </div>
+          <AlertDialog>
+            <AlertDialogTrigger render={<Button variant="destructive" disabled={pending} />}>
+              <Trash2 absoluteStrokeWidth strokeWidth={1.5} />
+              {t("deleteBatch")}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("deleteConfirmBody")}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="flex flex-col gap-1 border-y border-border-hairline py-3 text-secondary">
+                <span>{t("deleteTransactionCount", { count: reversal.transactions })}</span>
+                <span>{t("deleteMarkerCount", { count: reversal.markers })}</span>
+                <strong className="font-medium text-status-negative-text">
+                  {reversal.splits > 0
+                    ? t("deleteSplitCount", {
+                        count: reversal.splits,
+                        tickers: reversal.splitTickers.join(", "),
+                      })
+                    : t("deleteNoSplits")}
+                </strong>
+              </div>
+              {deleteError && <p className={errorClass}>{translateError(deleteError)}</p>}
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={pending}>{t("deleteCancel")}</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={deleteBatch} disabled={pending}>
+                  <Trash2 absoluteStrokeWidth strokeWidth={1.5} />
+                  {pending ? t("deletingBatch") : t("deleteConfirm")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </section>
+      )}
     </div>
   );
 }

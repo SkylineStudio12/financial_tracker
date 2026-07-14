@@ -3,6 +3,7 @@ export {
   createTransaction,
   updateTransaction,
   softDeleteTransaction,
+  softDeleteRevolutBatchTransaction,
   type LedgerTx,
 } from "./service";
 export {

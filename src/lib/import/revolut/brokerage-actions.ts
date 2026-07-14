@@ -8,6 +8,7 @@ import { LedgerValidationError } from "@/lib/ledger";
 import {
   approveRevolutBatch,
   createRevolutImportBatch,
+  deleteBookedRevolutBatch,
   setRevolutRowExcluded,
   type ApproveRevolutBatchResult,
 } from "./brokerage-service";
@@ -79,6 +80,29 @@ export async function approveRevolutBatchAction(payload: {
       revalidatePath(`/p/${payload.profileSlug}/${path}`);
     }
     return { summary };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function deleteBookedRevolutBatchAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+}): Promise<{ error: AppError } | undefined> {
+  try {
+    const profile = validatedGregProfile(payload.profileSlug, payload.entityId);
+    await deleteBookedRevolutBatch({
+      batchId: payload.batchId,
+      entityId: payload.entityId,
+      owner: "greg",
+    });
+    for (const path of ["imports", "transactions", "investments", "dashboard"]) {
+      revalidatePath(`/p/${payload.profileSlug}/${path}`);
+    }
+    redirect(`/p/${profile.slug}/imports`);
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };

@@ -52,29 +52,19 @@ i18n extraction chunks 3a–3f are complete; 3f landed at `37a81a5`. Romanian
 editorial terminology and force review remain gated by the accountant answers
 described below, not by unfinished extraction.
 
-## Temporary standing guard
-
-> **Do NOT delete imported investment transactions through the normal UI.** The
-> delete path does not clear `revolut_booked_rows` markers and does not handle
-> stock-split adjustment records. Deleting leaves inconsistent state and blocks
-> re-import.
-
-This is a temporary manual guard around a real correctness hole. Follow-up items
-1 and 2 close it; until both land, the guard remains load-bearing.
-
 ## Follow-up queue
 
-1. **Close guard:** make normal soft-delete reconcile booked-row markers
-   (`revolut_booked_rows` and inbox state). L-0012 family.
-2. **Close guard:** define and implement deletion behavior for stock-split
-   adjustments referencing a soft-deleted buy. L-0012 family.
-3. Serialize row exclusions against batch approval; today two sessions can race.
-4. Make a failed optimistic exclusion preserve other successful local exclusions.
-5. Show row timestamps in the review inbox so booking chronology is visible.
-6. Collapse row groups by default; 285 expanded rows is an audit dump on mobile.
-7. Fix migration 0006's stale comment claiming accounts are provisioned in `0007`;
+1. Serialize row exclusions against batch approval; today two sessions can race.
+2. Make a failed optimistic exclusion preserve other successful local exclusions.
+3. Show row timestamps in the review inbox so booking chronology is visible.
+4. Collapse row groups by default; 285 expanded rows is an audit dump on mobile.
+5. Fix migration 0006's stale comment claiming accounts are provisioned in `0007`;
    provisioning now lives in `npm run db:provision-revolut`.
-8. Decide cleanup for ticker-only securities left by an abandoned staged batch.
+6. Decide cleanup for ticker-only securities left by an abandoned staged batch.
+7. Serialize manual sells against batch reversal / buy-delete with a shared
+   advisory lock; documented concurrency race, low practical risk.
+8. Migrate the remaining live-DB test suites onto `TEST_DATABASE_URL` (item 9
+   remainder); the reversal suite established the mechanism.
 
 No manual stock-split UI exists. The split service is test-covered and currently
 has only the Revolut importer as a production caller; that is acceptable until a

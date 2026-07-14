@@ -1,6 +1,13 @@
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { revolutImportBatches, revolutImportRows } from "@/db/schema";
+import { revolutBookedRows, revolutImportBatches, revolutImportRows } from "@/db/schema";
+
+export interface RevolutBatchReversalPreview {
+  transactions: number;
+  splits: number;
+  markers: number;
+  splitTickers: string[];
+}
 
 export async function listRevolutImportBatches(entityId: string, owner: "greg") {
   return db
@@ -42,5 +49,29 @@ export async function getRevolutImportBatch(batchId: string, entityId: string, o
     .from(revolutImportRows)
     .where(eq(revolutImportRows.batchId, batchId))
     .orderBy(asc(revolutImportRows.lineNo));
-  return { batch, rows };
+  let reversal: RevolutBatchReversalPreview | null = null;
+  if (batch.bookedAt) {
+    const markers = await db
+      .select({
+        transactionId: revolutBookedRows.transactionId,
+        stockSplitId: revolutBookedRows.stockSplitId,
+        ticker: revolutImportRows.ticker,
+      })
+      .from(revolutBookedRows)
+      .innerJoin(revolutImportRows, eq(revolutImportRows.id, revolutBookedRows.sourceRowId))
+      .where(eq(revolutImportRows.batchId, batchId));
+    reversal = {
+      transactions: new Set(
+        markers.flatMap((marker) => (marker.transactionId ? [marker.transactionId] : [])),
+      ).size,
+      splits: new Set(
+        markers.flatMap((marker) => (marker.stockSplitId ? [marker.stockSplitId] : [])),
+      ).size,
+      markers: markers.length,
+      splitTickers: markers.flatMap((marker) =>
+        marker.stockSplitId && marker.ticker ? [marker.ticker] : [],
+      ),
+    };
+  }
+  return { batch, rows, reversal };
 }

@@ -222,8 +222,9 @@ interface LotState {
  * live consumed state and its position leg (RON basis source).
  * Exported for the valuation module: open quantity/basis derive from the
  * SAME lot machinery that books — never a parallel computation.
- * MAINTENANCE: Keep lot shape and assembly aligned with loadLotsAsOf; changing
- * either reader without the other breaks the today-equality guarantee.
+ * MAINTENANCE: Keep lot shape and assembly aligned with loadLotsAsOf, and keep
+ * its stored-before convention aligned with deleteBookedRevolutBatch; changing
+ * any of these three readers can break reversal or the today-equality guarantee.
  */
 export async function loadLots(tx: LedgerTx, accountId: string, securityId: string): Promise<LotState[]> {
   // The trade date lives on the TRANSACTION (trades carry no date of their
@@ -321,8 +322,9 @@ function splitCalendarDate(occurredAt: string): string {
  * FIFO lots as they stood at the end of `date`. Current-state callers keep
  * using loadLots; today's request delegates to it exactly. Historical reads
  * filter later trades and invert later split adjustments from newest to oldest.
- * MAINTENANCE: Keep lot shape and assembly aligned with loadLots; changing
- * either reader without the other breaks the today-equality guarantee.
+ * MAINTENANCE: Keep lot shape and assembly aligned with loadLots, and keep
+ * this stored-before convention aligned with deleteBookedRevolutBatch; changing
+ * any of these three readers can break reversal or the today-equality guarantee.
  */
 export async function loadLotsAsOf(
   tx: LedgerTx,

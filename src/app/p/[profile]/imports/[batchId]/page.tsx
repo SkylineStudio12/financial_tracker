@@ -59,6 +59,7 @@ export default async function ImportBatchPage({
           batchId={revolut.batch.id}
           report={revolut.batch.verification as StoredRevolutVerification}
           booked={revolut.batch.bookedAt !== null}
+          reversal={revolut.reversal}
           rows={revolut.rows.map((row) => {
             const payload = row.payload as StoredRevolutRow;
             return {

@@ -24,6 +24,8 @@ import {
   categories,
   lotConsumptions,
   postings,
+  revolutBookedRows,
+  revolutImportRows,
   taxAccruals,
   trades,
   transactions,
@@ -243,13 +245,13 @@ async function insertTransactionRows(
 }
 
 /** Full prior state of a transaction, stored in audit_log on update/delete. */
-async function snapshotTransaction(id: string) {
-  const [transaction] = await db.select().from(transactions).where(eq(transactions.id, id));
+async function snapshotTransaction(id: string, reader: DbOrTx = db) {
+  const [transaction] = await reader.select().from(transactions).where(eq(transactions.id, id));
   if (!transaction || transaction.deletedAt) {
     throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
   }
-  const postingRows = await db.select().from(postings).where(eq(postings.transactionId, id));
-  const tagRows = await db
+  const postingRows = await reader.select().from(postings).where(eq(postings.transactionId, id));
+  const tagRows = await reader
     .select()
     .from(transactionTags)
     .where(eq(transactionTags.transactionId, id));
@@ -378,57 +380,89 @@ export function assertBatchExternalRefsUnique(
   }
 }
 
-export async function softDeleteTransaction(id: string): Promise<void> {
-  const prior = await snapshotTransaction(id);
+async function writeSoftDeleteTransaction(
+  tx: DbOrTx,
+  id: string,
+  allowedRevolutBatchId?: string,
+): Promise<void> {
+  const prior = await snapshotTransaction(id, tx);
   const deletedAt = new Date();
-  await db.transaction(async (tx) => {
-    // TRADE INTEGRITY (Phase 4 Stage 2). Lot accounting is append-only:
-    // remaining quantity = buy.quantity − Σ LIVE consumptions, so deleting a
-    // SELL must soft-delete its consumptions (restoring the lots — the same
-    // live-row unwind as L-0011), and deleting a BUY whose lot a live sell
-    // has consumed must be refused (the sell's booked basis would dangle and
-    // the position account would go negative). Lives here, in the single
-    // write path, so no caller can bypass it.
-    const tradeRows = await tx
-      .select()
-      .from(trades)
-      .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)));
-    if (tradeRows.length > 0) {
-      const buyIds = tradeRows.filter((t) => t.kind === "buy").map((t) => t.id);
-      if (buyIds.length > 0) {
-        const [dependent] = await tx
-          .select({ id: lotConsumptions.id })
-          .from(lotConsumptions)
-          .where(
-            and(inArray(lotConsumptions.buyTradeId, buyIds), isNull(lotConsumptions.deletedAt)),
-          )
-          .limit(1);
-        if (dependent) {
-          throw new LedgerValidationError("ledger.consumedBuyCannotBeDeleted");
-        }
-      }
-      const sellIds = tradeRows.filter((t) => t.kind === "sell").map((t) => t.id);
-      if (sellIds.length > 0) {
-        await tx
-          .update(lotConsumptions)
-          .set({ deletedAt })
-          .where(
-            and(inArray(lotConsumptions.sellTradeId, sellIds), isNull(lotConsumptions.deletedAt)),
-          );
-      }
-      await tx
-        .update(trades)
-        .set({ deletedAt })
-        .where(inArray(trades.id, tradeRows.map((t) => t.id)));
-    }
+  const markerRows = await tx
+    .select({ batchId: revolutImportRows.batchId })
+    .from(revolutBookedRows)
+    .innerJoin(revolutImportRows, eq(revolutImportRows.id, revolutBookedRows.sourceRowId))
+    .where(eq(revolutBookedRows.transactionId, id));
+  if (allowedRevolutBatchId === undefined && markerRows.length > 0) {
+    throw new LedgerValidationError("ledger.importedInvestmentTransactionRequiresBatchDelete");
+  }
+  if (
+    allowedRevolutBatchId !== undefined &&
+    (markerRows.length === 0 ||
+      markerRows.some((marker) => marker.batchId !== allowedRevolutBatchId))
+  ) {
+    throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+  }
 
-    await tx.update(transactions).set({ deletedAt }).where(eq(transactions.id, id));
-    await tx.update(postings).set({ deletedAt }).where(eq(postings.transactionId, id));
-    await tx.insert(auditLog).values({
-      tableName: "transactions",
-      rowId: id,
-      action: "delete",
-      previousValues: prior,
-    });
+  // TRADE INTEGRITY (Phase 4 Stage 2). Lot accounting is append-only:
+  // remaining quantity = buy.quantity − Σ LIVE consumptions, so deleting a
+  // SELL must soft-delete its consumptions (restoring the lots — the same
+  // live-row unwind as L-0011), and deleting a BUY whose lot a live sell
+  // has consumed must be refused (the sell's booked basis would dangle and
+  // the position account would go negative). Lives here, in the single
+  // write path, so no caller can bypass it.
+  const tradeRows = await tx
+    .select()
+    .from(trades)
+    .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)));
+  if (tradeRows.length > 0) {
+    const buyIds = tradeRows.filter((t) => t.kind === "buy").map((t) => t.id);
+    if (buyIds.length > 0) {
+      const [dependent] = await tx
+        .select({ id: lotConsumptions.id })
+        .from(lotConsumptions)
+        .where(
+          and(inArray(lotConsumptions.buyTradeId, buyIds), isNull(lotConsumptions.deletedAt)),
+        )
+        .limit(1);
+      if (dependent) {
+        throw new LedgerValidationError("ledger.consumedBuyCannotBeDeleted");
+      }
+    }
+    const sellIds = tradeRows.filter((t) => t.kind === "sell").map((t) => t.id);
+    if (sellIds.length > 0) {
+      await tx
+        .update(lotConsumptions)
+        .set({ deletedAt })
+        .where(
+          and(inArray(lotConsumptions.sellTradeId, sellIds), isNull(lotConsumptions.deletedAt)),
+        );
+    }
+    await tx
+      .update(trades)
+      .set({ deletedAt })
+      .where(inArray(trades.id, tradeRows.map((t) => t.id)));
+  }
+
+  await tx.update(transactions).set({ deletedAt }).where(eq(transactions.id, id));
+  await tx.update(postings).set({ deletedAt }).where(eq(postings.transactionId, id));
+  await tx.insert(auditLog).values({
+    tableName: "transactions",
+    rowId: id,
+    action: "delete",
+    previousValues: prior,
   });
+}
+
+export async function softDeleteTransaction(id: string): Promise<void> {
+  await db.transaction((tx) => writeSoftDeleteTransaction(tx, id));
+}
+
+/** Batch-owned entry to the same guarded delete core. The marker-to-batch
+ * check prevents this composition seam from becoming a generic bypass. */
+export async function softDeleteRevolutBatchTransaction(
+  id: string,
+  batchId: string,
+  tx: LedgerTx,
+): Promise<void> {
+  await writeSoftDeleteTransaction(tx, id, batchId);
 }

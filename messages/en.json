@@ -531,7 +531,12 @@
     "tax": {
       "companyTaxLiabilityMissing": "Company has no tax_liability account.",
       "taxesCategoryMissing": "Company needs a \"Taxes\" category for the micro revenue tax accrual.",
-      "taxRuleMissing": "No active {type} tax rule for {date}."
+      "taxRuleMissing": "No active {type} tax rule for {date}.",
+      "configCoverageMissing": "No {parameter} tax configuration covers {date}.",
+      "configWindowInvalid": "The {parameter} tax configuration windows are invalid.",
+      "configValueInvalid": "The tax configuration value for {field} is invalid ({value}).",
+      "calculationInputInvalid": "The tax calculation input {field} is invalid ({value}).",
+      "personalDeductionContextUnsupported": "The confirmed personal deduction does not cover this salary context."
     }
   }
 }

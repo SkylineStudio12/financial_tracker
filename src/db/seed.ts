@@ -8,9 +8,17 @@
  */
 import "dotenv/config";
 import { db, pool } from "./index";
-import { accounts, entities, categories, taxRules } from "./schema";
+import {
+  accounts,
+  entities,
+  categories,
+  taxConfig,
+  taxConfigCassInvestmentBrackets,
+  taxRules,
+} from "./schema";
 import { bookSkylineOpeningBalance } from "./opening-balances";
 import { GREG_REVOLUT_ACCOUNTS } from "./revolut-accounts";
+import { seedConfirmedTaxConfig } from "./tax-config-seed";
 
 const PLACEHOLDER_NOTE =
   "PLACEHOLDER — rate must be confirmed against current Romanian legislation before any tax calculation is trusted.";
@@ -172,6 +180,10 @@ async function main() {
         notes: `${PLACEHOLDER_NOTE} CAM employer work insurance contribution (2.25%).`,
       },
     ].map((rule) => ({ ...rule, validFrom: "2026-01-01" })));
+
+    // Confirmed temporal parameters are separate from the legacy tax_rules
+    // accrual source until its dependent ledger links get their own Tier-3 unit.
+    await seedConfirmedTaxConfig(tx);
   });
 
   // --- Opening balances (after commit) ------------------------------------
@@ -186,9 +198,11 @@ async function main() {
     db.$count(accounts),
     db.$count(categories),
     db.$count(taxRules),
+    db.$count(taxConfig),
+    db.$count(taxConfigCassInvestmentBrackets),
   ]);
   console.log(
-    `Seeded: ${summary[0]} entities, ${summary[1]} accounts, ${summary[2]} categories, ${summary[3]} tax rules.`,
+    `Seeded: ${summary[0]} entities, ${summary[1]} accounts, ${summary[2]} categories, ${summary[3]} legacy tax rules, ${summary[4]} confirmed tax config rows, ${summary[5]} investment CASS brackets.`,
   );
 }
 

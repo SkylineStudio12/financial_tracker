@@ -531,7 +531,12 @@
     "tax": {
       "companyTaxLiabilityMissing": "Compania nu are cont tax_liability.",
       "taxesCategoryMissing": "Compania are nevoie de o categorie \"Taxes\" pentru acumularea taxei pe venitul micro.",
-      "taxRuleMissing": "Nu există regulă fiscală activă {type} pentru {date}."
+      "taxRuleMissing": "Nu există regulă fiscală activă {type} pentru {date}.",
+      "configCoverageMissing": "Nicio configurație fiscală {parameter} nu acoperă data {date}.",
+      "configWindowInvalid": "Intervalele configurației fiscale {parameter} sunt invalide.",
+      "configValueInvalid": "Valoarea configurației fiscale pentru {field} este invalidă ({value}).",
+      "calculationInputInvalid": "Valoarea de intrare {field} pentru calculul fiscal este invalidă ({value}).",
+      "personalDeductionContextUnsupported": "Deducerea personală confirmată nu acoperă acest context salarial."
     }
   }
 }

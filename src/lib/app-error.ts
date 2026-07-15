@@ -125,6 +125,11 @@ export const ERROR_CODES = [
   "tax.companyTaxLiabilityMissing",
   "tax.taxesCategoryMissing",
   "tax.taxRuleMissing",
+  "tax.configCoverageMissing",
+  "tax.configWindowInvalid",
+  "tax.configValueInvalid",
+  "tax.calculationInputInvalid",
+  "tax.personalDeductionContextUnsupported",
 ] as const satisfies readonly ErrorCatalogKey[];
 
 export type AppErrorCode = (typeof ERROR_CODES)[number];

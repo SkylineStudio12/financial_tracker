@@ -60,6 +60,25 @@ export const taxRuleType = pgEnum("tax_rule_type", [
   "cam",
 ]);
 
+export const taxConfigParameter = pgEnum("tax_config_parameter", [
+  "cas_employee_rate",
+  "cass_employee_rate",
+  "cam_employer_rate",
+  "income_tax_rate",
+  "dividend_tax_rate",
+  "minimum_wage",
+  "personal_deduction",
+  "cass_investment_brackets",
+]);
+
+export const taxConfigValueKind = pgEnum("tax_config_value_kind", [
+  "rate_bps",
+  "amount_minor",
+  "bracket_set",
+]);
+
+export const taxConfigStatus = pgEnum("tax_config_status", ["confirmed", "estimate"]);
+
 export const auditAction = pgEnum("audit_action", ["insert", "update", "delete"]);
 
 /**

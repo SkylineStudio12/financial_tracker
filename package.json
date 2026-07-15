@@ -21,6 +21,7 @@
     "prices:verify-seam": "tsx scripts/verify-price-seam.ts",
     "test:reversal": "tsx scripts/run-reversal-test.ts",
     "test:tax-config": "tsx scripts/run-tax-config-test.ts",
+    "test:crud": "tsx scripts/run-crud-test.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

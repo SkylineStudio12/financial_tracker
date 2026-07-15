@@ -1,12 +1,7 @@
 /**
- * REGRESSION TEST for migration 0003's index amendment (Stage 4 amendment 3,
- * L-0011): the partial unique index on postings.external_ref now carries
- * `AND deleted_at IS NULL`. This proves the full lifecycle works —
- *   book an imported row → soft-delete it → re-import the SAME row → it
- *   books cleanly again —
- * which the old predicate (external_ref IS NOT NULL only) made impossible:
- * the soft-deleted posting kept the ref reserved and blocked re-creation
- * forever.
+ * Import ownership lifecycle regression: soft-delete removes the row from the
+ * ledger but retains duplicate ownership; permanent purge deliberately
+ * releases that ownership and makes the source row bookable again.
  *
  * Runs on the dev DB against a throwaway company entity.
  * Run: npx tsx src/lib/import/delete-reimport.regression.test.ts
@@ -18,7 +13,7 @@ import { join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { importRows, postings } from "@/db/schema";
-import { softDeleteTransaction } from "@/lib/ledger";
+import { purgeTransaction, softDeleteNonInvestmentTransaction } from "@/lib/ledger";
 import { bookImportRow, createImportBatch } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
 
@@ -67,7 +62,7 @@ async function main() {
     ok("while live, re-import marks the same fee row duplicate");
 
     // 3. Soft-delete the booked transaction.
-    await softDeleteTransaction(firstTxId);
+    await softDeleteNonInvestmentTransaction(firstTxId);
     const live = await db
       .select({ id: postings.id })
       .from(postings)
@@ -81,7 +76,7 @@ async function main() {
     assert.equal(live.length, 0, "soft-delete leaves no LIVE posting on that ref");
     ok("soft-deleting the transaction frees the ref among live postings");
 
-    // 4. Re-import the SAME row — it must book cleanly (the whole point).
+    // 4. Trash retains durable identity even though the posting ref is free.
     const reimport = await createImportBatch({
       entityId: env.entityId,
       bankAccountId: env.bankAccountId,
@@ -92,12 +87,27 @@ async function main() {
       .select()
       .from(importRows)
       .where(and(eq(importRows.batchId, reimport.batchId), eq(importRows.lineNo, FEE_LINE)));
-    assert.equal(reRow.status, "pending", "after delete, the row is no longer a live duplicate");
+    assert.equal(reRow.status, "duplicate", "trash retains duplicate ownership");
     assert.equal(reRow.resolvedExternalRef, firstRow.resolvedExternalRef, "same identity");
-    const rebooked = await bookImportRow({ rowId: reRow.id });
+    ok("soft-delete keeps the imported row duplicate-protected");
+
+    // 5. Purge is the explicit identity-release action.
+    await purgeTransaction(firstTxId);
+    const afterPurge = await createImportBatch({
+      entityId: env.entityId,
+      bankAccountId: env.bankAccountId,
+      text: fixture + "   ",
+      ownerNames: ["Grigore Filimon"],
+    });
+    const [releasedRow] = await db
+      .select()
+      .from(importRows)
+      .where(and(eq(importRows.batchId, afterPurge.batchId), eq(importRows.lineNo, FEE_LINE)));
+    assert.equal(releasedRow.status, "pending", "purge releases duplicate ownership");
+    const rebooked = await bookImportRow({ rowId: releasedRow.id });
     assert.equal(rebooked.status, "booked", "delete-then-reimport books cleanly");
     assert.notEqual(rebooked.transactionId, firstTxId, "a genuinely new transaction");
-    ok("delete → re-import → books cleanly (index predicate regression fixed)");
+    ok("purge → re-import → books cleanly with a new transaction");
 
     console.log(`\nAll ${checks} regression checks passed.`);
   } finally {

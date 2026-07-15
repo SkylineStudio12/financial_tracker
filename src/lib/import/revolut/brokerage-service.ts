@@ -18,6 +18,7 @@ import {
   transactions,
 } from "@/db/schema";
 import {
+  acquireImportOwnershipLock,
   createTransaction,
   LedgerValidationError,
   softDeleteRevolutBatchTransaction,
@@ -42,6 +43,13 @@ import {
 import { buildRevolutVerification, type RevolutVerification } from "./report";
 import { simulateRevolut, type RevolutSimulation } from "./simulate";
 import { findExclusionDependencies } from "./dependencies";
+import {
+  findActiveSourceClaim,
+  insertSourceClaim,
+  insertTransactionImportLink,
+  releaseBatchImportOwnership,
+  revolutRowIdentity,
+} from "../ownership";
 
 export const REVOLUT_ACCOUNT_NAMES = {
   cash: {
@@ -176,13 +184,10 @@ export async function createRevolutImportBatch(params: {
     });
   }
   const rawTextHash = createHash("sha256").update(params.text).digest("hex");
-  const [existingBatch] = await db
-    .select({ id: revolutImportBatches.id })
-    .from(revolutImportBatches)
-    .where(eq(revolutImportBatches.rawTextHash, rawTextHash));
-  if (existingBatch) {
+  const existingClaim = await findActiveSourceClaim("revolut", rawTextHash);
+  if (existingClaim) {
     return {
-      batchId: existingBatch.id,
+      batchId: existingClaim.sourceBatchId,
       parsed: parsed.length,
       staged: parsed.length - verification.correctionPairs.length * 2,
       correctionPairsDropped: verification.correctionPairs.length,
@@ -268,6 +273,11 @@ export async function createRevolutImportBatch(params: {
         verification,
       })
       .returning({ id: revolutImportBatches.id });
+    await insertSourceClaim(tx, {
+      provider: "revolut",
+      rawTextHash,
+      sourceBatchId: batch.id,
+    });
     await tx.insert(revolutImportRows).values(
       stagedRows.map((row) => {
         const exact = byContent.get(row.contentHash);
@@ -485,7 +495,9 @@ async function assertBookedState(
     const [taxCount] = await tx
       .select({ count: sql<number>`count(*)::int`.mapWith(Number) })
       .from(taxAccruals)
-      .where(inArray(taxAccruals.transactionId, transactionIds));
+      .where(
+        and(inArray(taxAccruals.transactionId, transactionIds), isNull(taxAccruals.deletedAt)),
+      );
     if (taxCount.count !== 0) throw new LedgerValidationError("revolut.taxAccrualAssertionFailed");
   }
 }
@@ -542,7 +554,7 @@ export async function approveRevolutBatch(
   if (securityIds.size !== tickers.length) throw new LedgerValidationError("revolut.securityMissing");
 
   const write = async (tx: LedgerTx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(734920260711)`);
+    await acquireImportOwnershipLock(tx);
     const [lockedBatch] = await tx
       .select({ bookedAt: revolutImportBatches.bookedAt })
       .from(revolutImportBatches)
@@ -619,13 +631,26 @@ export async function approveRevolutBatch(
         transactionId: result.transactionId,
         stockSplitId: result.stockSplitId,
       });
+      const bookedAt = new Date();
+      if (result.transactionId) {
+        await insertTransactionImportLink(tx, {
+          transactionId: result.transactionId,
+          provider: "revolut",
+          sourceBatchId: batch.id,
+          sourceRowId: stored.id,
+          sourceLabel: batch.sourceFileName,
+          rowIdentity: revolutRowIdentity(row.contentHash),
+          rawTextHash: batch.rawTextHash,
+          originalBookedAt: bookedAt,
+        });
+      }
       await tx
         .update(revolutImportRows)
         .set({
           status: "booked",
           transactionId: result.transactionId,
           stockSplitId: result.stockSplitId,
-          bookedAt: new Date(),
+          bookedAt,
         })
         .where(eq(revolutImportRows.id, stored.id));
       booked += 1;
@@ -664,7 +689,7 @@ export async function deleteBookedRevolutBatch(params: {
   owner: "greg";
 }): Promise<DeleteBookedRevolutBatchResult> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(734920260711)`);
+    await acquireImportOwnershipLock(tx);
     const [batch] = await tx
       .select()
       .from(revolutImportBatches)
@@ -685,6 +710,7 @@ export async function deleteBookedRevolutBatch(params: {
         transactionId: revolutBookedRows.transactionId,
         stockSplitId: revolutBookedRows.stockSplitId,
         lineNo: revolutImportRows.lineNo,
+        status: revolutImportRows.status,
         payload: revolutImportRows.payload,
       })
       .from(revolutBookedRows)
@@ -696,7 +722,7 @@ export async function deleteBookedRevolutBatch(params: {
       .where(
         and(
           eq(revolutImportRows.batchId, params.batchId),
-          eq(revolutImportRows.status, "booked"),
+          inArray(revolutImportRows.status, ["booked", "trashed"]),
         ),
       );
     if (
@@ -714,16 +740,34 @@ export async function deleteBookedRevolutBatch(params: {
     const splitIds = [
       ...new Set(markerRows.flatMap((marker) => (marker.stockSplitId ? [marker.stockSplitId] : []))),
     ];
-    const liveTransactions = transactionIds.length
+    // Lock EVERY batch-owned transaction FOR UPDATE before validating or
+    // skipping it. Without this a concurrent restore could flip an
+    // already-deleted row live after we read it but before we release its
+    // claims and delete its marker, stranding a live transaction with no
+    // ownership. The shared advisory lock above already serializes reversal
+    // against restore/purge; this FOR UPDATE also serializes against row-level
+    // CRUD soft-delete/edit, which do not take the advisory lock.
+    const transactionRows = transactionIds.length
       ? await tx
-          .select({ id: transactions.id })
+          .select({ id: transactions.id, deletedAt: transactions.deletedAt })
           .from(transactions)
-          .where(and(inArray(transactions.id, transactionIds), isNull(transactions.deletedAt)))
+          .where(inArray(transactions.id, transactionIds))
+          .for("update")
       : [];
     const existingSplits = splitIds.length
       ? await tx.select({ id: stockSplits.id }).from(stockSplits).where(inArray(stockSplits.id, splitIds))
       : [];
-    if (liveTransactions.length !== transactionIds.length || existingSplits.length !== splitIds.length) {
+    const transactionById = new Map(transactionRows.map((row) => [row.id, row]));
+    const invalidDeletedMarker = markerRows.some((marker) => {
+      if (!marker.transactionId) return false;
+      const transaction = transactionById.get(marker.transactionId);
+      return !transaction || (transaction.deletedAt !== null && marker.status !== "trashed");
+    });
+    if (
+      transactionRows.length !== transactionIds.length ||
+      existingSplits.length !== splitIds.length ||
+      invalidDeletedMarker
+    ) {
       throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
     }
 
@@ -836,6 +880,7 @@ export async function deleteBookedRevolutBatch(params: {
     });
     for (const marker of ordered) {
       if (marker.transactionId) {
+        if (transactionById.get(marker.transactionId)?.deletedAt !== null) continue;
         await softDeleteRevolutBatchTransaction(marker.transactionId, params.batchId, tx);
         continue;
       }
@@ -874,6 +919,7 @@ export async function deleteBookedRevolutBatch(params: {
         markers: markerRows.length,
       },
     });
+    await releaseBatchImportOwnership(tx, "revolut", params.batchId, "batch_reversal");
     if (markerRows.length > 0) {
       await tx
         .delete(revolutBookedRows)

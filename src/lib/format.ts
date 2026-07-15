@@ -57,6 +57,15 @@ export function formatDate(isoDate: string, locale: Locale): string {
   return `${day}.${month}.${year}`;
 }
 
+/** Audit timestamp in the owner's Bucharest timezone. */
+export function formatDateTime(value: Date | string, locale: Locale): string {
+  return new Intl.DateTimeFormat(CLDR[locale], {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Bucharest",
+  }).format(typeof value === "string" ? new Date(value) : value);
+}
+
 /**
  * Basis points as a display percent: locale-formatted number + literal "%"
  * with no space (owner ruling — CLDR ro would insert one; identical shape

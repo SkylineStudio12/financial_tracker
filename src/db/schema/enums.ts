@@ -79,7 +79,21 @@ export const taxConfigValueKind = pgEnum("tax_config_value_kind", [
 
 export const taxConfigStatus = pgEnum("tax_config_status", ["confirmed", "estimate"]);
 
-export const auditAction = pgEnum("audit_action", ["insert", "update", "delete"]);
+export const auditAction = pgEnum("audit_action", [
+  "insert",
+  "update",
+  "delete",
+  "restore",
+  "purge",
+]);
+
+export const importProvider = pgEnum("import_provider", ["ing", "revolut"]);
+
+export const importLinkLifecycle = pgEnum("import_link_lifecycle", [
+  "active",
+  "trashed",
+  "released",
+]);
 
 /**
  * Review-inbox lifecycle of one staged statement row. `duplicate` means the
@@ -91,4 +105,6 @@ export const importRowStatus = pgEnum("import_row_status", [
   "booked",
   "skipped",
   "duplicate",
+  "trashed",
+  "purged",
 ]);

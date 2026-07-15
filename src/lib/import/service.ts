@@ -8,7 +8,14 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, importBatches, importRows, postings } from "@/db/schema";
+import {
+  accounts,
+  categories,
+  importBatches,
+  importRows,
+  postings,
+  transactionImportLinks,
+} from "@/db/schema";
 import {
   assertBatchExternalRefsUnique,
   createTransaction,
@@ -25,6 +32,13 @@ import {
 import { normalizeStatementNumber, parseStatementPeriod, resolveExternalRef } from "./ing/identity";
 import { parseIngStatement } from "./ing/parse";
 import { isIngCsv, parseIngCsvStatement } from "./ing/parse-csv";
+import {
+  findActiveImportLink,
+  findActiveSourceClaim,
+  ingRowIdentity,
+  insertSourceClaim,
+  insertTransactionImportLink,
+} from "./ownership";
 
 export interface CreateBatchResult {
   batchId: string;
@@ -89,11 +103,8 @@ export async function createImportBatch(params: {
   // Exact-re-paste convenience guard (NOT the dedup guarantee — that is the
   // row-level partial unique index; see the schema comment on rawTextHash).
   const rawTextHash = createHash("sha256").update(params.text).digest("hex");
-  const [existingBatch] = await db
-    .select({ id: importBatches.id })
-    .from(importBatches)
-    .where(eq(importBatches.rawTextHash, rawTextHash));
-  if (existingBatch) {
+  const existingClaim = await findActiveSourceClaim("ing", rawTextHash);
+  if (existingClaim) {
     throw new LedgerValidationError("imports.statementTextAlreadyImported");
   }
 
@@ -151,6 +162,20 @@ export async function createImportBatch(params: {
       ),
     );
   const existingByRef = new Map(existingPostings.map((p) => [p.externalRef!, p.transactionId]));
+  const rowIdentities = allRefs.map((ref) => ingRowIdentity(params.bankAccountId, ref));
+  const existingLinks = rowIdentities.length
+    ? await db
+        .select({ rowIdentity: transactionImportLinks.rowIdentity, transactionId: transactionImportLinks.transactionId })
+        .from(transactionImportLinks)
+        .where(
+          and(
+            eq(transactionImportLinks.provider, "ing"),
+            inArray(transactionImportLinks.rowIdentity, rowIdentities),
+            isNull(transactionImportLinks.releasedAt),
+          ),
+        )
+    : [];
+  const linkedByIdentity = new Map(existingLinks.map((link) => [link.rowIdentity, link.transactionId]));
 
   let duplicates = 0;
   let overlapSuspects = 0;
@@ -170,11 +195,15 @@ export async function createImportBatch(params: {
         rawTextHash,
       })
       .returning({ id: importBatches.id });
+    await insertSourceClaim(tx, { provider: "ing", rawTextHash, sourceBatchId: batch.id });
 
     await tx.insert(importRows).values(
       classified.map((c) => {
         const ref = refByLineNo.get(c.row.lineNo)!;
-        const existingTransactionId = existingByRef.get(ref) ?? null;
+        const existingTransactionId =
+          linkedByIdentity.get(ingRowIdentity(params.bankAccountId, ref)) ??
+          existingByRef.get(ref) ??
+          null;
         const overlapSuspect =
           !existingTransactionId && c.row.bankReference === null && inOverlap(c.row.bookDate);
         if (existingTransactionId) duplicates += 1;
@@ -204,7 +233,11 @@ export async function createImportBatch(params: {
 function isExternalRefUniqueViolation(error: unknown): boolean {
   for (let e = error; e; e = (e as { cause?: unknown }).cause) {
     const pg = e as { code?: string; constraint?: string };
-    if (pg.code === "23505" && pg.constraint === "postings_account_external_ref_uidx") {
+    if (
+      pg.code === "23505" &&
+      (pg.constraint === "postings_account_external_ref_uidx" ||
+        pg.constraint === "transaction_import_links_active_identity_uidx")
+    ) {
       return true;
     }
   }
@@ -283,27 +316,54 @@ export async function bookImportRow(params: {
     },
   });
 
-  try {
-    const transactionId = await createTransaction(input);
+  const rowIdentity = ingRowIdentity(batch.bankAccountId, row.resolvedExternalRef);
+  const alreadyClaimed = await findActiveImportLink("ing", rowIdentity);
+  if (alreadyClaimed) {
     await db
       .update(importRows)
-      .set({ status: "booked", transactionId, bookedAt: new Date() })
+      .set({ status: "duplicate", transactionId: alreadyClaimed.transactionId })
       .where(eq(importRows.id, row.id));
+    return { status: "duplicate", transactionId: alreadyClaimed.transactionId };
+  }
+
+  try {
+    const transactionId = await db.transaction(async (tx) => {
+      const transactionId = await createTransaction(input, tx);
+      const bookedAt = new Date();
+      await insertTransactionImportLink(tx, {
+        transactionId,
+        provider: "ing",
+        sourceBatchId: batch.id,
+        sourceRowId: row.id,
+        sourceLabel: batch.statementNumber,
+        rowIdentity,
+        rawTextHash: batch.rawTextHash,
+        originalBookedAt: bookedAt,
+      });
+      await tx
+        .update(importRows)
+        .set({ status: "booked", transactionId, bookedAt })
+        .where(eq(importRows.id, row.id));
+      return transactionId;
+    });
     return { status: "booked", transactionId };
   } catch (error) {
     if (!isExternalRefUniqueViolation(error)) throw error;
     // Already in the ledger (booked between staging and now, or via an
     // overlapping batch): link the existing transaction, never book twice.
-    const [existing] = await db
-      .select({ transactionId: postings.transactionId })
-      .from(postings)
-      .where(
-        and(
-          eq(postings.accountId, batch.bankAccountId),
-          eq(postings.externalRef, row.resolvedExternalRef),
-          isNull(postings.deletedAt),
-        ),
-      );
+    const claimed = await findActiveImportLink("ing", rowIdentity);
+    const [existing] = claimed
+      ? [{ transactionId: claimed.transactionId }]
+      : await db
+          .select({ transactionId: postings.transactionId })
+          .from(postings)
+          .where(
+            and(
+              eq(postings.accountId, batch.bankAccountId),
+              eq(postings.externalRef, row.resolvedExternalRef),
+              isNull(postings.deletedAt),
+            ),
+          );
     const transactionId = existing?.transactionId ?? null;
     await db
       .update(importRows)

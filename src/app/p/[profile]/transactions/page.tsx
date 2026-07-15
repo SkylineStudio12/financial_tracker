@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { transactionKind } from "@/db/schema";
@@ -6,6 +7,7 @@ import { getProfile } from "@/lib/profiles";
 import { formatDate, formatMinor, formatMinorNumber } from "@/lib/format";
 import {
   getFilterOptions,
+  listDeletedTransactions,
   listTransactions,
   type TransactionFilters,
 } from "@/lib/ledger/queries";
@@ -13,6 +15,7 @@ import { getFormOptions } from "@/lib/ledger/form-options";
 import type { TransactionKind } from "@/lib/ledger";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
 import { RowLink } from "@/components/row-link";
+import { TransactionRowActions } from "@/components/transaction-row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +77,11 @@ export default async function TransactionsPage({
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
 
-  const [{ rows, total, pageSize }, options, formOptions] = await Promise.all([
+  const [{ rows, total, pageSize }, options, formOptions, deletedRows] = await Promise.all([
     listTransactions(entityId, filters, page, owner),
     getFilterOptions(entityId, owner),
     getFormOptions(entityId, owner),
+    listDeletedTransactions(entityId, owner),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -95,7 +99,16 @@ export default async function TransactionsPage({
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
       <div className="flex items-center justify-between">
         <h1 className="text-title text-text-primary">{t("title")}</h1>
-        <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/p/${profile.slug}/transactions/trash`}
+            className="inline-flex h-[var(--density-control-height)] items-center gap-1.5 rounded-input border border-border-input bg-surface px-3 text-secondary text-text-primary outline-none hover:border-accent focus-visible:ring-3 focus-visible:ring-focus-ring"
+          >
+            <Trash2 absoluteStrokeWidth strokeWidth={1.5} className="size-4" />
+            {t("trash")} ({deletedRows.length})
+          </Link>
+          <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
+        </div>
       </div>
 
       <form method="get" className="flex flex-wrap items-center gap-2">
@@ -186,12 +199,13 @@ export default async function TransactionsPage({
               <th className={`${cellClass} font-normal`}>{t("colAccount")}</th>
               <th className={`${cellClass} font-normal text-right`}>{t("colAmount")}</th>
               <th className={`${cellClass} font-normal text-right`}>RON</th>
+              <th className={`${cellClass} w-20 font-normal text-right`}>{t("colActions")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className={`${cellClass} py-8 text-center text-text-muted`}>
+                <td colSpan={8} className={`${cellClass} py-8 text-center text-text-muted`}>
                   {t("noMatch")}
                 </td>
               </tr>
@@ -225,6 +239,17 @@ export default async function TransactionsPage({
                   className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums text-text-muted`}
                 >
                   {formatMinor(row.amountRon, "RON", locale)}
+                </td>
+                <td className={`${cellClass} w-20`}>
+                  <TransactionRowActions
+                    transactionId={row.id}
+                    entityId={entityId}
+                    profileSlug={profile.slug}
+                    crudAvailable={row.crudAvailable}
+                    importBatchId={row.importBatchId}
+                    importSourceLabel={row.importSourceLabel}
+                    options={formOptions}
+                  />
                 </td>
               </RowLink>
             ))}

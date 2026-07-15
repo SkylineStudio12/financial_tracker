@@ -18,13 +18,27 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function DividendFlow({
   companyId,
   personalAccounts,
+  initial,
+  onSaved,
+  cancelSlot,
 }: {
   companyId: string;
   personalAccounts: AccountOption[];
+  initial?: {
+    transactionId: string;
+    expectedRevision: number;
+    date: string;
+    gross: string;
+    personalAccountId: string;
+  };
+  onSaved?: () => void;
+  cancelSlot?: React.ReactNode;
 }) {
-  const [date, setDate] = useState(today());
-  const [gross, setGross] = useState("");
-  const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
+  const [date, setDate] = useState(initial?.date ?? today());
+  const [gross, setGross] = useState(initial?.gross ?? "");
+  const [personalAccountId, setPersonalAccountId] = useState(
+    initial?.personalAccountId ?? personalAccounts[0]?.id ?? "",
+  );
   const locale = useLocale();
   const t = useTranslations("flows");
   const tForms = useTranslations("forms");
@@ -58,8 +72,17 @@ export function DividendFlow({
   const confirm = () => {
     if (!inputsValid || grossMinor === null) return;
     startTransition(async () => {
-      const result = await saveDividend({ companyId, date, grossMinor, personalAccountId });
-      if (result?.error) setError(result.error);
+      const result = await saveDividend({
+        transactionId: initial?.transactionId,
+        expectedRevision: initial?.expectedRevision,
+        stay: Boolean(initial),
+        companyId,
+        date,
+        grossMinor,
+        personalAccountId,
+      });
+      if (result && "error" in result) setError(result.error);
+      else if (result && "ok" in result) onSaved?.();
     });
   };
 
@@ -164,6 +187,7 @@ export function DividendFlow({
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>
           {pending ? t("working") : preview ? t("confirmSave") : t("previewBreakdown")}
         </button>
+        {cancelSlot}
       </div>
     </form>
   );

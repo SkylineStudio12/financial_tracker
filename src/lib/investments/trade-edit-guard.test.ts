@@ -57,7 +57,7 @@ async function main() {
           },
         ],
       }),
-      (e) => e instanceof LedgerValidationError && e.code === "ledger.tradeTransactionCannotBeEdited",
+      (e) => e instanceof LedgerValidationError && e.code === "ledger.investmentCrudUnavailable",
     );
     const [unchanged] = await db
       .select()

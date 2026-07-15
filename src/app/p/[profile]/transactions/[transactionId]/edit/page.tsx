@@ -66,6 +66,7 @@ export default async function EditTransactionPage({
     if (!from || !to) notFound();
     const initial: TransferFormInitial = {
       transactionId,
+      expectedRevision: transaction.currentRevision,
       fromAccountId: from.accountId,
       toAccountId: to.accountId,
       date: transaction.date,
@@ -112,6 +113,8 @@ export default async function EditTransactionPage({
 
   const initial: StandardFormInitial = {
     transactionId,
+    expectedRevision: transaction.currentRevision,
+    storedKind: "standard",
     accountId: bankLeg.accountId,
     date: transaction.date,
     description: transaction.description,

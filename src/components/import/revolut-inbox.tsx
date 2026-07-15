@@ -39,7 +39,7 @@ interface InboxRow {
   currency: "USD" | "EUR";
   totalMinor: number;
   quantityText: string | null;
-  status: "pending" | "booked" | "skipped" | "duplicate";
+  status: "pending" | "booked" | "skipped" | "duplicate" | "trashed" | "purged";
   suspectedDuplicate: boolean;
 }
 

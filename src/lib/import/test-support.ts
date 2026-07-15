@@ -5,9 +5,16 @@
  * money-grade and regression tests exercise the real write path without
  * touching seeded data. Teardown removes everything it created.
  */
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, entities, importBatches, transactions } from "@/db/schema";
+import {
+  accounts,
+  categories,
+  entities,
+  importBatches,
+  importSourceClaims,
+  transactions,
+} from "@/db/schema";
 
 export interface ImportTestEntity {
   entityId: string;
@@ -66,6 +73,11 @@ export async function teardownImportTestEntity(entityId: string): Promise<void> 
     .select({ id: importBatches.id })
     .from(importBatches)
     .where(eq(importBatches.entityId, entityId));
+  if (batchIds.length > 0) {
+    await db
+      .delete(importSourceClaims)
+      .where(inArray(importSourceClaims.sourceBatchId, batchIds.map((batch) => batch.id)));
+  }
   for (const b of batchIds) {
     await db.delete(importBatches).where(eq(importBatches.id, b.id));
   }

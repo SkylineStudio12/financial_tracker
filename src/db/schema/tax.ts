@@ -143,7 +143,9 @@ export const taxAccruals = pgTable(
       .references(() => taxRules.id),
     year: integer("year").notNull(),
     quarter: integer("quarter"),
+    revision: integer("revision").notNull().default(1),
     ...timestamps,
+    ...softDelete,
   },
   (table) => [
     index("tax_accruals_transaction_id_idx").on(table.transactionId),

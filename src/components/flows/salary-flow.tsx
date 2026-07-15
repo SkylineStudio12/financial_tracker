@@ -18,14 +18,29 @@ const currentMonth = () => new Date().toISOString().slice(0, 7);
 export function SalaryFlow({
   companyId,
   personalAccounts,
+  initial,
+  onSaved,
+  cancelSlot,
 }: {
   companyId: string;
   personalAccounts: AccountOption[];
+  initial?: {
+    transactionId: string;
+    expectedRevision: number;
+    employeeName: string;
+    month: string;
+    gross: string;
+    personalAccountId: string;
+  };
+  onSaved?: () => void;
+  cancelSlot?: React.ReactNode;
 }) {
-  const [employeeName, setEmployeeName] = useState("");
-  const [month, setMonth] = useState(currentMonth());
-  const [gross, setGross] = useState("");
-  const [personalAccountId, setPersonalAccountId] = useState(personalAccounts[0]?.id ?? "");
+  const [employeeName, setEmployeeName] = useState(initial?.employeeName ?? "");
+  const [month, setMonth] = useState(initial?.month ?? currentMonth());
+  const [gross, setGross] = useState(initial?.gross ?? "");
+  const [personalAccountId, setPersonalAccountId] = useState(
+    initial?.personalAccountId ?? personalAccounts[0]?.id ?? "",
+  );
   const locale = useLocale();
   const t = useTranslations("flows");
   const tForms = useTranslations("forms");
@@ -65,13 +80,17 @@ export function SalaryFlow({
     if (!inputsValid || grossMinor === null) return;
     startTransition(async () => {
       const result = await saveSalary({
+        transactionId: initial?.transactionId,
+        expectedRevision: initial?.expectedRevision,
+        stay: Boolean(initial),
         companyId,
         employeeName,
         month,
         grossMinor,
         personalAccountId,
       });
-      if (result?.error) setError(result.error);
+      if (result && "error" in result) setError(result.error);
+      else if (result && "ok" in result) onSaved?.();
     });
   };
 
@@ -191,6 +210,7 @@ export function SalaryFlow({
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>
           {pending ? t("working") : preview ? t("confirmSave") : t("previewBreakdown")}
         </button>
+        {cancelSlot}
       </div>
     </form>
   );

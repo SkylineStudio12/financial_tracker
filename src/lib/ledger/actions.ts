@@ -13,7 +13,9 @@ import { accounts, tags } from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
 import {
   createTransaction,
-  softDeleteTransaction,
+  purgeTransaction,
+  restoreTransaction,
+  softDeleteNonInvestmentTransaction,
   updateTransaction,
   LedgerValidationError,
   type AccrualInput,
@@ -23,6 +25,11 @@ import {
 import { toAppError, type AppError } from "@/lib/app-error";
 import { getProfile, profileForEntity } from "@/lib/profiles";
 import { planMicroTaxAccrual } from "@/lib/tax/micro-tax";
+import { getTransactionEditDraft } from "./edit-drafts";
+import { getFlowPageData } from "./flow-page-data";
+import { hasLikelyRestoreCollision } from "./queries";
+import type { AccountOption } from "@/components/forms/option-types";
+import type { TransactionEditDraft } from "./edit-drafts";
 
 /**
  * Post-save destination: the caller's profile view. The slug comes from the
@@ -40,6 +47,8 @@ function transactionsPath(entityId: string, profileSlug?: string): string {
 
 export interface StandardPayload {
   transactionId?: string;
+  expectedRevision?: number;
+  storedKind?: "standard" | "trade";
   /** When true, skip the redirect on success and return { ok } instead —
    * used by the modal so the list stays put and the form can repeat-enter. */
   stay?: boolean;
@@ -60,6 +69,7 @@ export interface StandardPayload {
 
 export interface TransferPayload {
   transactionId?: string;
+  expectedRevision?: number;
   /** See StandardPayload.stay. */
   stay?: boolean;
   /** See StandardPayload.profileSlug. */
@@ -76,7 +86,38 @@ export interface TransferPayload {
   note?: string;
 }
 
+export interface OpeningBalancePayload {
+  transactionId: string;
+  expectedRevision: number;
+  entityId: string;
+  accountId: string;
+  date: string;
+  description: string;
+  amountMinor: number;
+}
+
 type ActionResult = { error: AppError } | { ok: true };
+
+export async function loadTransactionEditDraftAction(
+  transactionId: string,
+  entityId: string,
+): Promise<
+  | { draft: TransactionEditDraft; personalAccounts: AccountOption[]; error?: never }
+  | { error: AppError; draft?: never; personalAccounts?: never }
+> {
+  try {
+    const draft = await getTransactionEditDraft(transactionId, entityId);
+    const personalAccounts =
+      draft.type === "salary" || draft.type === "dividend"
+        ? (await getFlowPageData(entityId)).personalAccounts
+        : [];
+    return { draft, personalAccounts };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
 
 async function loadAccount(accountId: string) {
   const [account] = await db
@@ -120,9 +161,9 @@ async function resolveTagIds(names: string[]): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-async function persist(input: TransactionInput, transactionId?: string) {
+async function persist(input: TransactionInput, transactionId?: string, expectedRevision?: number) {
   if (transactionId) {
-    await updateTransaction(transactionId, input);
+    await updateTransaction(transactionId, input, expectedRevision);
   } else {
     await createTransaction(input);
   }
@@ -197,12 +238,13 @@ export async function saveStandardTransaction(
         entityId: payload.entityId,
         date: payload.date,
         description: payload.description,
-        kind: "standard",
+        kind: payload.storedKind ?? "standard",
         postings: postingInputs,
         tagIds: await resolveTagIds(payload.tagNames),
         accruals,
       },
       payload.transactionId,
+      payload.expectedRevision,
     );
   } catch (error) {
     const appError = toAppError(error);
@@ -259,6 +301,7 @@ export async function saveTransferTransaction(
         postings: [fromLeg, toLeg],
       },
       payload.transactionId,
+      payload.expectedRevision,
     );
   } catch (error) {
     const appError = toAppError(error);
@@ -269,17 +312,86 @@ export async function saveTransferTransaction(
   redirect(transactionsPath(payload.entityId, payload.profileSlug));
 }
 
-export async function deleteTransactionAction(
-  transactionId: string,
-  entityId: string,
-  profileSlug?: string,
-): Promise<ActionResult | undefined> {
+export async function saveOpeningBalanceTransaction(
+  payload: OpeningBalancePayload,
+): Promise<ActionResult> {
   try {
-    await softDeleteTransaction(transactionId);
+    if (!Number.isSafeInteger(payload.amountMinor) || payload.amountMinor <= 0) {
+      throw new LedgerValidationError("forms.amountPositive");
+    }
+    const account = await loadAccount(payload.accountId);
+    const equity = await findEquityAccount(payload.entityId);
+    const amountRon =
+      account.currency === "RON"
+        ? payload.amountMinor
+        : convertMinorToRon(
+            payload.amountMinor,
+            (await resolveRonRate(payload.date, account.currency)).rate,
+          );
+    await updateTransaction(
+      payload.transactionId,
+      {
+        entityId: payload.entityId,
+        date: payload.date,
+        description: payload.description,
+        kind: "opening_balance",
+        postings: [
+          { accountId: account.id, amount: payload.amountMinor, amountRon },
+          { accountId: equity.id, amount: -amountRon, amountRon: -amountRon },
+        ],
+      },
+      payload.expectedRevision,
+    );
+    return { ok: true };
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };
     throw error;
   }
+}
+
+export async function deleteTransactionAction(
+  transactionId: string,
+  entityId: string,
+  profileSlug?: string,
+  stay = false,
+): Promise<ActionResult | undefined> {
+  try {
+    await softDeleteNonInvestmentTransaction(transactionId);
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+  if (stay) return { ok: true };
   redirect(transactionsPath(entityId, profileSlug));
+}
+
+export async function restoreTransactionAction(
+  transactionId: string,
+  expectedRevision: number,
+): Promise<ActionResult> {
+  try {
+    await restoreTransaction(transactionId, expectedRevision);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function checkRestoreCollisionAction(transactionId: string) {
+  return { collision: await hasLikelyRestoreCollision(transactionId) };
+}
+
+export async function purgeTransactionAction(transactionId: string): Promise<ActionResult> {
+  try {
+    await purgeTransaction(transactionId);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
 }

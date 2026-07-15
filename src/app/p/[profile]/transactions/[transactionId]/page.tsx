@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { DeleteTransactionButton } from "@/components/delete-transaction-button";
+import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { formatBpsPercent, formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
+import { getFormOptions } from "@/lib/ledger/form-options";
 import { getTransactionDetail } from "@/lib/ledger/queries";
 import { getProfile } from "@/lib/profiles";
 
@@ -29,7 +30,8 @@ export default async function TransactionDetailPage({
   const detail = await getTransactionDetail(transactionId);
   // Guard the transaction to the profile's entity (cross-entity ids 404).
   if (!detail || detail.transaction.entityId !== profile.entityId) notFound();
-  const { transaction, postings, tagNames, accruals } = detail;
+  const { transaction, postings, tagNames, accruals, crudAvailable, importLink } = detail;
+  const formOptions = await getFormOptions(profile.entityId, profile.owner);
 
   // BNR rates applied at the transaction date, one per non-RON currency.
   const currencies = [...new Set(postings.map((p) => p.currency).filter((c) => c !== "RON"))];
@@ -51,17 +53,15 @@ export default async function TransactionDetailPage({
         >
           {t("backToList")}
         </Link>
-        <div className="flex items-center gap-2">
-          {(transaction.kind === "standard" || transaction.kind === "transfer") && (
-            <Link
-              href={`/p/${profile.slug}/transactions/${transaction.id}/edit`}
-              className="inline-flex items-center rounded-input border border-border-input bg-surface px-3 h-[var(--density-control-height)] text-secondary text-text-primary hover:border-accent"
-            >
-              {t("edit")}
-            </Link>
-          )}
-          <DeleteTransactionButton transactionId={transaction.id} entityId={profile.entityId} profileSlug={profile.slug} />
-        </div>
+        <TransactionRowActions
+          transactionId={transaction.id}
+          entityId={profile.entityId}
+          profileSlug={profile.slug}
+          crudAvailable={crudAvailable}
+          importBatchId={importLink?.sourceBatchId ?? null}
+          importSourceLabel={importLink?.sourceLabel ?? null}
+          options={formOptions}
+        />
       </div>
 
       <div className="flex flex-col gap-1">

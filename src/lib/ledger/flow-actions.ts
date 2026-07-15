@@ -16,6 +16,7 @@ import { db } from "@/db";
 import { accounts, categories, entities } from "@/db/schema";
 import {
   createTransaction,
+  updateTransaction,
   LedgerValidationError,
   type AccrualInput,
   type PostingInput,
@@ -33,6 +34,9 @@ function companyTransactionsPath(companyId: string): string {
 }
 
 export interface SalaryFlowPayload {
+  transactionId?: string;
+  expectedRevision?: number;
+  stay?: boolean;
   companyId: string;
   employeeName: string;
   /** YYYY-MM */
@@ -43,13 +47,16 @@ export interface SalaryFlowPayload {
 }
 
 export interface DividendFlowPayload {
+  transactionId?: string;
+  expectedRevision?: number;
+  stay?: boolean;
   companyId: string;
   date: string;
   grossMinor: number;
   personalAccountId: string;
 }
 
-type ActionResult = { error: AppError };
+type ActionResult = { error: AppError } | { ok: true };
 
 /** Salaries are dated on the last day of the selected month. */
 function monthEndDate(month: string): string {
@@ -106,7 +113,7 @@ export interface SalaryPreview {
 
 export async function previewSalary(
   payload: Pick<SalaryFlowPayload, "month" | "grossMinor">,
-): Promise<SalaryPreview | ActionResult> {
+): Promise<SalaryPreview | { error: AppError }> {
   try {
     const date = monthEndDate(payload.month);
     const rules = await loadSalaryRules(date);
@@ -191,19 +198,25 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
       quarter: quarterOf(date),
     }));
 
-    await createTransaction({
+    const input = {
       entityId: payload.companyId,
       date,
       description: `Salary ${payload.employeeName.trim()} ${payload.month}`,
       kind: "salary",
       postings: postingInputs,
       accruals,
-    });
+    } as const;
+    if (payload.transactionId) {
+      await updateTransaction(payload.transactionId, input, payload.expectedRevision);
+    } else {
+      await createTransaction(input);
+    }
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };
     throw error;
   }
+  if (payload.stay) return { ok: true };
   redirect(companyTransactionsPath(payload.companyId));
 }
 
@@ -217,7 +230,7 @@ export interface DividendPreview {
 
 export async function previewDividend(
   payload: Pick<DividendFlowPayload, "date" | "grossMinor">,
-): Promise<DividendPreview | ActionResult> {
+): Promise<DividendPreview | { error: AppError }> {
   try {
     const dividendRule = await getActiveRule("dividend_tax", payload.date);
     const cassRule = await getActiveRule("cass_dividend", payload.date);
@@ -272,18 +285,24 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
       },
     ];
 
-    await createTransaction({
+    const input = {
       entityId: payload.companyId,
       date: payload.date,
       description: `Dividend distribution ${payload.date}`,
       kind: "dividend",
       postings: postingInputs,
       accruals,
-    });
+    } as const;
+    if (payload.transactionId) {
+      await updateTransaction(payload.transactionId, input, payload.expectedRevision);
+    } else {
+      await createTransaction(input);
+    }
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };
     throw error;
   }
+  if (payload.stay) return { ok: true };
   redirect(companyTransactionsPath(payload.companyId));
 }

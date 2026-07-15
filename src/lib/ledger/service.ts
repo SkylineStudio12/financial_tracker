@@ -29,9 +29,17 @@ import {
   taxAccruals,
   trades,
   transactions,
+  transactionImportLinks,
   transactionTags,
 } from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
+import {
+  markTransactionImportEdited,
+  markTransactionImportRestored,
+  markTransactionImportTrashed,
+  releaseTransactionImportOwnership,
+} from "@/lib/import/ownership";
+import { acquireImportOwnershipLock } from "./locks";
 import { LedgerValidationError, type PostingInput, type TransactionInput } from "./types";
 
 type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -46,7 +54,10 @@ interface PreparedPosting extends PostingInput {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-async function validateAndPrepare(input: TransactionInput): Promise<PreparedPosting[]> {
+async function validateAndPrepare(
+  input: TransactionInput,
+  reader: DbOrTx = db,
+): Promise<PreparedPosting[]> {
   if (!DATE_RE.test(input.date)) {
     throw new LedgerValidationError("ledger.invalidTransactionDate", { date: input.date });
   }
@@ -66,7 +77,7 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
   }
 
   const accountIds = [...new Set(input.postings.map((p) => p.accountId))];
-  const accountRows = await db
+  const accountRows = await reader
     .select()
     .from(accounts)
     .where(and(inArray(accounts.id, accountIds), isNull(accounts.deletedAt)));
@@ -83,7 +94,7 @@ async function validateAndPrepare(input: TransactionInput): Promise<PreparedPost
     ...new Set(input.postings.flatMap((p) => (p.categoryId ? [p.categoryId] : []))),
   ];
   const categoryRows = categoryIds.length
-    ? await db
+    ? await reader
         .select()
         .from(categories)
         .where(and(inArray(categories.id, categoryIds), isNull(categories.deletedAt)))
@@ -183,6 +194,7 @@ async function insertTransactionRows(
   input: TransactionInput,
   prepared: PreparedPosting[],
   existingId?: string,
+  revision = 1,
 ) {
   const [transaction] = existingId
     ? await tx
@@ -193,6 +205,7 @@ async function insertTransactionRows(
           description: input.description,
           kind: input.kind,
           notes: input.notes ?? null,
+          currentRevision: revision,
         })
         .where(eq(transactions.id, existingId))
         .returning()
@@ -204,6 +217,7 @@ async function insertTransactionRows(
           description: input.description,
           kind: input.kind,
           notes: input.notes ?? null,
+          currentRevision: revision,
         })
         .returning();
 
@@ -220,6 +234,7 @@ async function insertTransactionRows(
         counterparty: p.counterparty ?? null,
         counterpartyIban: p.counterpartyIban ?? null,
         externalRef: p.externalRef ?? null,
+        revision,
       })),
     )
     .returning({ id: postings.id });
@@ -232,6 +247,7 @@ async function insertTransactionRows(
         taxRuleId: accrual.taxRuleId,
         year: accrual.year,
         quarter: accrual.quarter,
+        revision,
       })),
     );
   }
@@ -244,18 +260,59 @@ async function insertTransactionRows(
   return transaction.id;
 }
 
-/** Full prior state of a transaction, stored in audit_log on update/delete. */
-async function snapshotTransaction(id: string, reader: DbOrTx = db) {
+/** Full current revision, stored in audit_log on mutation. */
+async function snapshotTransaction(
+  id: string,
+  reader: DbOrTx = db,
+  state: "live" | "deleted" = "live",
+) {
   const [transaction] = await reader.select().from(transactions).where(eq(transactions.id, id));
-  if (!transaction || transaction.deletedAt) {
+  if (
+    !transaction ||
+    (state === "live" && transaction.deletedAt !== null) ||
+    (state === "deleted" && transaction.deletedAt === null)
+  ) {
     throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
   }
-  const postingRows = await reader.select().from(postings).where(eq(postings.transactionId, id));
+  const postingRows = await reader
+    .select()
+    .from(postings)
+    .where(
+      and(
+        eq(postings.transactionId, id),
+        eq(postings.revision, transaction.currentRevision),
+        state === "live"
+          ? isNull(postings.deletedAt)
+          : eq(postings.deletedAt, transaction.deletedAt!),
+      ),
+    );
+  const accrualRows = await reader
+    .select()
+    .from(taxAccruals)
+    .where(
+      and(
+        eq(taxAccruals.transactionId, id),
+        eq(taxAccruals.revision, transaction.currentRevision),
+        state === "live"
+          ? isNull(taxAccruals.deletedAt)
+          : eq(taxAccruals.deletedAt, transaction.deletedAt!),
+      ),
+    );
   const tagRows = await reader
     .select()
     .from(transactionTags)
     .where(eq(transactionTags.transactionId, id));
-  return { transaction, postings: postingRows, tagIds: tagRows.map((t) => t.tagId) };
+  const importLinks = await reader
+    .select()
+    .from(transactionImportLinks)
+    .where(eq(transactionImportLinks.transactionId, id));
+  return {
+    transaction,
+    postings: postingRows,
+    accruals: accrualRows,
+    tagIds: tagRows.map((t) => t.tagId),
+    importLinks,
+  };
 }
 
 /**
@@ -269,82 +326,103 @@ async function snapshotTransaction(id: string, reader: DbOrTx = db) {
  * test. A rollback of the caller's transaction fully unwinds everything
  * written here.
  *
- * NOTE: account/category validation reads via the POOL, not the passed `tx`,
- * so referenced accounts must already exist and be COMMITTED before the call —
- * a composed transaction cannot create-and-immediately-reference an account
- * (the constraint the opening-balance seed hit; it books after commit).
+ * Account/category validation uses the caller transaction when supplied, so
+ * validation and every sibling write observe one atomic database state.
  */
-export async function createTransaction(input: TransactionInput, tx?: LedgerTx): Promise<string> {
-  const prepared = await validateAndPrepare(input);
+type ExistingTransactionMode = {
+  existingTransactionId: string;
+  revision: number;
+};
+
+export async function createTransaction(
+  input: TransactionInput,
+  tx?: LedgerTx,
+  existing?: ExistingTransactionMode,
+): Promise<string> {
+  const prepared = await validateAndPrepare(input, tx ?? db);
   const write = async (t: DbOrTx) => {
-    const id = await insertTransactionRows(t, input, prepared);
-    await t.insert(auditLog).values({
-      tableName: "transactions",
-      rowId: id,
-      action: "insert",
-      previousValues: null,
-    });
+    const id = await insertTransactionRows(
+      t,
+      input,
+      prepared,
+      existing?.existingTransactionId,
+      existing?.revision ?? 1,
+    );
+    if (!existing) {
+      await t.insert(auditLog).values({
+        tableName: "transactions",
+        rowId: id,
+        action: "insert",
+        previousValues: null,
+      });
+    }
     return id;
   };
   return tx ? write(tx) : db.transaction(write);
 }
 
 /**
- * IMPORTED-TRANSACTION EDIT GUARD (Stage 4 decision, docs/parked-plan.md):
- * updateTransaction hard-replaces postings, and the manual forms never carry
- * external_ref — so a form edit of an imported transaction would silently
- * strip its statement reference and make the row re-importable as a
- * duplicate. The guard is the rule "an update may not DROP an existing
- * external_ref": every (account, external_ref) pair on the prior postings
- * must survive into the replacement set. This blocks the forms naturally
- * while leaving importer-driven corrections (which resend the ref) and
- * soft-delete free. It lives here, in the single write path, so no caller
- * can bypass it.
+ * CRUD-1 structural boundary. Historical trade rows count too: a previously
+ * deleted investment transaction still owns lot/audit topology and remains a
+ * CRUD-2 concern.
  */
-function assertExternalRefsPreserved(
-  prior: { accountId: string; externalRef: string | null }[],
-  next: PostingInput[],
-): void {
-  const nextRefs = new Set(
-    next.flatMap((p) => (p.externalRef ? [`${p.accountId} ${p.externalRef}`] : [])),
-  );
-  for (const posting of prior) {
-    if (posting.externalRef && !nextRefs.has(`${posting.accountId} ${posting.externalRef}`)) {
-      throw new LedgerValidationError("ledger.importedRefsMustBePreserved");
-    }
-  }
-}
-
-/**
- * TRADE EDIT GUARD (Phase 4 Stage 3, L-0012 CORRUPTION check): a trade's
- * postings, trades row, and lot consumptions are ONE structure — the generic
- * edit path would hard-replace the postings while the trade rows stand,
- * orphaning booked basis. Editing a trade is therefore refused outright;
- * the correction path is delete (which cascades + guards, Stage 2) and
- * re-enter.
- */
-async function assertNotTradeTransaction(id: string): Promise<void> {
-  const [trade] = await db
+async function assertNotTradeTransaction(id: string, reader: DbOrTx = db): Promise<void> {
+  const [trade] = await reader
     .select({ id: trades.id })
     .from(trades)
-    .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)))
+    .where(eq(trades.transactionId, id))
     .limit(1);
   if (trade) {
-    throw new LedgerValidationError("ledger.tradeTransactionCannotBeEdited");
+    throw new LedgerValidationError("ledger.investmentCrudUnavailable");
   }
 }
 
-export async function updateTransaction(id: string, input: TransactionInput): Promise<void> {
-  const prior = await snapshotTransaction(id);
-  await assertNotTradeTransaction(id);
-  assertExternalRefsPreserved(prior.postings, input.postings);
-  const prepared = await validateAndPrepare(input);
+export async function updateTransaction(
+  id: string,
+  input: TransactionInput,
+  expectedRevision?: number,
+): Promise<void> {
   await db.transaction(async (tx) => {
-    // Hard-replace postings: the prior state lives in audit_log, and
-    // dependent rows (tax_accruals) cascade so no orphans remain.
-    await tx.delete(postings).where(eq(postings.transactionId, id));
+    const [locked] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .for("update");
+    if (!locked || locked.deletedAt !== null) {
+      throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
+    }
+    await assertNotTradeTransaction(id, tx);
+    if (expectedRevision !== undefined && locked.currentRevision !== expectedRevision) {
+      throw new LedgerValidationError("ledger.transactionRevisionConflict");
+    }
+    const prior = await snapshotTransaction(id, tx);
+    const deletedAt = new Date();
+    await tx
+      .update(postings)
+      .set({ deletedAt })
+      .where(
+        and(
+          eq(postings.transactionId, id),
+          eq(postings.revision, locked.currentRevision),
+          isNull(postings.deletedAt),
+        ),
+      );
+    await tx
+      .update(taxAccruals)
+      .set({ deletedAt })
+      .where(
+        and(
+          eq(taxAccruals.transactionId, id),
+          eq(taxAccruals.revision, locked.currentRevision),
+          isNull(taxAccruals.deletedAt),
+        ),
+      );
     await tx.delete(transactionTags).where(eq(transactionTags.transactionId, id));
-    await insertTransactionRows(tx, input, prepared, id);
+    await createTransaction(input, tx, {
+      existingTransactionId: id,
+      revision: locked.currentRevision + 1,
+    });
+    await markTransactionImportEdited(tx, id);
     await tx.insert(auditLog).values({
       tableName: "transactions",
       rowId: id,
@@ -384,23 +462,44 @@ async function writeSoftDeleteTransaction(
   tx: DbOrTx,
   id: string,
   allowedRevolutBatchId?: string,
+  allowManualInvestment = true,
 ): Promise<void> {
+  const [locked] = await tx
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id))
+    .for("update");
+  if (!locked || locked.deletedAt !== null) {
+    throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
+  }
   const prior = await snapshotTransaction(id, tx);
+  if (prior.postings.length < 2) {
+    throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+  }
+  const ronSum = prior.postings.reduce((sum, posting) => sum + posting.amountRon, 0);
+  if (ronSum !== 0) throw new LedgerValidationError("ledger.ronZeroSum", { sum: ronSum });
   const deletedAt = new Date();
   const markerRows = await tx
     .select({ batchId: revolutImportRows.batchId })
     .from(revolutBookedRows)
     .innerJoin(revolutImportRows, eq(revolutImportRows.id, revolutBookedRows.sourceRowId))
     .where(eq(revolutBookedRows.transactionId, id));
-  if (allowedRevolutBatchId === undefined && markerRows.length > 0) {
-    throw new LedgerValidationError("ledger.importedInvestmentTransactionRequiresBatchDelete");
-  }
   if (
     allowedRevolutBatchId !== undefined &&
     (markerRows.length === 0 ||
       markerRows.some((marker) => marker.batchId !== allowedRevolutBatchId))
   ) {
     throw new LedgerValidationError("revolut.batchReversalTopologyChanged");
+  }
+  const tradeRows = await tx
+    .select()
+    .from(trades)
+    .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)));
+  if (allowedRevolutBatchId === undefined && tradeRows.length > 0 && markerRows.length > 0) {
+    throw new LedgerValidationError("ledger.importedInvestmentTransactionRequiresBatchDelete");
+  }
+  if (allowedRevolutBatchId === undefined && tradeRows.length > 0 && !allowManualInvestment) {
+    throw new LedgerValidationError("ledger.investmentCrudUnavailable");
   }
 
   // TRADE INTEGRITY (Phase 4 Stage 2). Lot accounting is append-only:
@@ -410,10 +509,6 @@ async function writeSoftDeleteTransaction(
   // has consumed must be refused (the sell's booked basis would dangle and
   // the position account would go negative). Lives here, in the single
   // write path, so no caller can bypass it.
-  const tradeRows = await tx
-    .select()
-    .from(trades)
-    .where(and(eq(trades.transactionId, id), isNull(trades.deletedAt)));
   if (tradeRows.length > 0) {
     const buyIds = tradeRows.filter((t) => t.kind === "buy").map((t) => t.id);
     if (buyIds.length > 0) {
@@ -444,7 +539,27 @@ async function writeSoftDeleteTransaction(
   }
 
   await tx.update(transactions).set({ deletedAt }).where(eq(transactions.id, id));
-  await tx.update(postings).set({ deletedAt }).where(eq(postings.transactionId, id));
+  await tx
+    .update(postings)
+    .set({ deletedAt })
+    .where(
+      and(
+        eq(postings.transactionId, id),
+        eq(postings.revision, locked.currentRevision),
+        isNull(postings.deletedAt),
+      ),
+    );
+  await tx
+    .update(taxAccruals)
+    .set({ deletedAt })
+    .where(
+      and(
+        eq(taxAccruals.transactionId, id),
+        eq(taxAccruals.revision, locked.currentRevision),
+        isNull(taxAccruals.deletedAt),
+      ),
+    );
+  await markTransactionImportTrashed(tx as LedgerTx, id);
   await tx.insert(auditLog).values({
     tableName: "transactions",
     rowId: id,
@@ -455,6 +570,140 @@ async function writeSoftDeleteTransaction(
 
 export async function softDeleteTransaction(id: string): Promise<void> {
   await db.transaction((tx) => writeSoftDeleteTransaction(tx, id));
+}
+
+/** CRUD-1 entry point: the shared delete core with investment topology excluded. */
+export async function softDeleteNonInvestmentTransaction(id: string): Promise<void> {
+  await db.transaction((tx) => writeSoftDeleteTransaction(tx, id, undefined, false));
+}
+
+export async function restoreTransaction(id: string, expectedRevision?: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Serialize against full batch reversal and purge (shared lock order).
+    await acquireImportOwnershipLock(tx);
+    const [locked] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .for("update");
+    if (!locked) {
+      throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
+    }
+    if (locked.deletedAt === null) throw new LedgerValidationError("ledger.transactionNotDeleted");
+    if (expectedRevision !== undefined && locked.currentRevision !== expectedRevision) {
+      throw new LedgerValidationError("ledger.transactionRevisionConflict");
+    }
+    await assertNotTradeTransaction(id, tx);
+    const prior = await snapshotTransaction(id, tx, "deleted");
+    if (prior.postings.length < 2) {
+      throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+    }
+    const [allRevisionPostings, allRevisionAccruals] = await Promise.all([
+      tx
+        .select({ id: postings.id, deletedAt: postings.deletedAt })
+        .from(postings)
+        .where(
+          and(eq(postings.transactionId, id), eq(postings.revision, locked.currentRevision)),
+        ),
+      tx
+        .select({ id: taxAccruals.id, deletedAt: taxAccruals.deletedAt })
+        .from(taxAccruals)
+        .where(
+          and(eq(taxAccruals.transactionId, id), eq(taxAccruals.revision, locked.currentRevision)),
+        ),
+    ]);
+    const tombstone = locked.deletedAt.getTime();
+    if (
+      allRevisionPostings.length !== prior.postings.length ||
+      allRevisionAccruals.length !== prior.accruals.length ||
+      allRevisionPostings.some((posting) => posting.deletedAt?.getTime() !== tombstone) ||
+      allRevisionAccruals.some((accrual) => accrual.deletedAt?.getTime() !== tombstone)
+    ) {
+      throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+    }
+    const ronSum = prior.postings.reduce((sum, posting) => sum + posting.amountRon, 0);
+    if (ronSum !== 0) throw new LedgerValidationError("ledger.ronZeroSum", { sum: ronSum });
+    const postingIds = new Set(prior.postings.map((posting) => posting.id));
+    if (prior.accruals.some((accrual) => !postingIds.has(accrual.postingId))) {
+      throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+    }
+    // Reactivate ONLY the exact posting/accrual ids in the validated snapshot,
+    // never "every row at this revision" — a drifted or orphaned same-revision
+    // row must not be silently reactivated into a non-zero-sum state. The
+    // returned-row counts must match the snapshot size exactly; a mismatch
+    // means a concurrent mutation moved a row out from under us — fail loud.
+    await tx.update(transactions).set({ deletedAt: null }).where(eq(transactions.id, id));
+    const reactivatedPostings = await tx
+      .update(postings)
+      .set({ deletedAt: null })
+      .where(inArray(postings.id, prior.postings.map((posting) => posting.id)))
+      .returning({ id: postings.id });
+    if (reactivatedPostings.length !== prior.postings.length) {
+      throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+    }
+    if (prior.accruals.length > 0) {
+      const reactivatedAccruals = await tx
+        .update(taxAccruals)
+        .set({ deletedAt: null })
+        .where(inArray(taxAccruals.id, prior.accruals.map((accrual) => accrual.id)))
+        .returning({ id: taxAccruals.id });
+      if (reactivatedAccruals.length !== prior.accruals.length) {
+        throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+      }
+    }
+    // Assert the now-live revision is a complete zero-sum posting set before
+    // the transaction commits.
+    const liveAfter = await tx
+      .select({ amountRon: postings.amountRon })
+      .from(postings)
+      .where(
+        and(
+          eq(postings.transactionId, id),
+          eq(postings.revision, locked.currentRevision),
+          isNull(postings.deletedAt),
+        ),
+      );
+    if (liveAfter.length !== prior.postings.length) {
+      throw new LedgerValidationError("ledger.transactionRestoreTopologyChanged");
+    }
+    const liveSum = liveAfter.reduce((sum, posting) => sum + posting.amountRon, 0);
+    if (liveSum !== 0) throw new LedgerValidationError("ledger.ronZeroSum", { sum: liveSum });
+    await markTransactionImportRestored(tx, id);
+    await tx.insert(auditLog).values({
+      tableName: "transactions",
+      rowId: id,
+      action: "restore",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function purgeTransaction(id: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Serialize against full batch reversal and restore (shared lock order).
+    await acquireImportOwnershipLock(tx);
+    const [locked] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .for("update");
+    if (!locked) {
+      throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
+    }
+    if (locked.deletedAt === null) {
+      throw new LedgerValidationError("ledger.transactionPurgeRequiresTrash");
+    }
+    await assertNotTradeTransaction(id, tx);
+    const prior = await snapshotTransaction(id, tx, "deleted");
+    await releaseTransactionImportOwnership(tx, id, "transaction_purge");
+    await tx.insert(auditLog).values({
+      tableName: "transactions",
+      rowId: id,
+      action: "purge",
+      previousValues: prior,
+    });
+    await tx.delete(transactions).where(eq(transactions.id, id));
+  });
 }
 
 /** Batch-owned entry to the same guarded delete core. The marker-to-batch

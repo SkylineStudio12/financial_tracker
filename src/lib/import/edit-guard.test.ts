@@ -1,9 +1,7 @@
 /**
- * Edit-guard test (Stage 4, docs/parked-plan.md): updateTransaction must
- * reject an update that would DROP an existing external_ref — the case a
- * manual form edit of an imported transaction triggers (forms never carry
- * the ref). A form-shaped update (no refs) is refused; an importer-shaped
- * update that preserves the ref is allowed.
+ * Imported-edit ownership test: a manual edit may replace posting refs, but
+ * the durable import link and source claim remain active and the staging row
+ * is marked as owner-modified.
  *
  * Run: npx tsx src/lib/import/edit-guard.test.ts
  */
@@ -13,8 +11,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
-import { importRows, postings } from "@/db/schema";
-import { LedgerValidationError, updateTransaction, type TransactionInput } from "@/lib/ledger";
+import { importRows, postings, transactionImportLinks } from "@/db/schema";
+import { updateTransaction, type TransactionInput } from "@/lib/ledger";
 import { bookImportRow, createImportBatch } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
 
@@ -46,8 +44,8 @@ async function main() {
     const equityLeg = booked.find((p) => p.accountId === env.equityAccountId)!;
     assert.ok(bankLeg.externalRef, "booked bank leg carries the ref");
 
-    // Form-shaped update: same amounts, but no external_ref on any leg
-    // (exactly what the manual edit form sends). Must be refused.
+    // Form-shaped update: posting refs are revision-local, while import
+    // identity remains in transaction_import_links.
     const formShaped: TransactionInput = {
       entityId: env.entityId,
       date: "2026-06-15",
@@ -58,11 +56,17 @@ async function main() {
         { accountId: env.equityAccountId, amount: equityLeg.amount, categoryId: equityLeg.categoryId },
       ],
     };
-    await assert.rejects(
-      () => updateTransaction(txId, formShaped),
-      (e) => e instanceof LedgerValidationError && e.code === "ledger.importedRefsMustBePreserved",
-    );
-    ok("form-shaped edit (drops external_ref) is rejected at the service");
+    await updateTransaction(txId, formShaped, 1);
+    const [link] = await db
+      .select()
+      .from(transactionImportLinks)
+      .where(eq(transactionImportLinks.transactionId, txId));
+    const [staging] = await db.select().from(importRows).where(eq(importRows.id, row.id));
+    assert.equal(link.lifecycle, "active");
+    assert.ok(link.modifiedAfterImport);
+    assert.equal(staging.status, "booked");
+    assert.equal(staging.modifiedAfterImport, true);
+    ok("form-shaped edit preserves durable import ownership and marks provenance modified");
 
     // Importer-shaped update: preserves the ref on the bank leg. Allowed.
     const preserving: TransactionInput = {
@@ -73,13 +77,13 @@ async function main() {
         { accountId: env.equityAccountId, amount: equityLeg.amount, categoryId: equityLeg.categoryId },
       ],
     };
-    await updateTransaction(txId, preserving);
+    await updateTransaction(txId, preserving, 2);
     const after = await db
       .select()
       .from(postings)
       .where(and(eq(postings.transactionId, txId), isNull(postings.deletedAt)));
     assert.ok(after.some((p) => p.externalRef === bankLeg.externalRef), "ref survives the allowed edit");
-    ok("ref-preserving edit (importer correction) is allowed");
+    ok("a later correction may still carry the original posting ref");
 
     console.log(`\nAll ${checks} edit-guard checks passed.`);
   } finally {

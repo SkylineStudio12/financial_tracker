@@ -59,7 +59,7 @@ export const importBatches = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("import_batches_raw_text_hash_uidx").on(table.rawTextHash),
+    index("import_batches_raw_text_hash_idx").on(table.rawTextHash),
     index("import_batches_account_period_idx").on(
       table.bankAccountId,
       table.periodStart,
@@ -106,6 +106,8 @@ export const importRows = pgTable(
     /** Set when booked (the ledger transaction) or duplicate (the existing one). */
     transactionId: uuid("transaction_id").references(() => transactions.id),
     bookedAt: timestamp("booked_at", { withTimezone: true }),
+    modifiedAfterImport: boolean("modified_after_import").notNull().default(false),
+    modifiedAt: timestamp("modified_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [

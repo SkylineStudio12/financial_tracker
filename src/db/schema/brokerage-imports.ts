@@ -33,7 +33,7 @@ export const revolutImportBatches = pgTable(
     bookedAt: timestamp("booked_at", { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [uniqueIndex("revolut_import_batches_raw_text_hash_uidx").on(table.rawTextHash)],
+  (table) => [index("revolut_import_batches_raw_text_hash_idx").on(table.rawTextHash)],
 );
 
 export const revolutImportRows = pgTable(
@@ -57,6 +57,8 @@ export const revolutImportRows = pgTable(
     transactionId: uuid("transaction_id").references(() => transactions.id),
     stockSplitId: uuid("stock_split_id").references(() => stockSplits.id),
     bookedAt: timestamp("booked_at", { withTimezone: true }),
+    modifiedAfterImport: boolean("modified_after_import").notNull().default(false),
+    modifiedAt: timestamp("modified_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [

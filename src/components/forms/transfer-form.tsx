@@ -19,6 +19,7 @@ import { errorClass, fieldClass, labelClass } from "./ui";
 
 export interface TransferFormInitial {
   transactionId: string;
+  expectedRevision: number;
   fromAccountId: string;
   toAccountId: string;
   date: string;
@@ -111,6 +112,7 @@ export function TransferForm({
     if (!valid || amountMinor === null) return;
     const payload: TransferPayload = {
       transactionId: initial?.transactionId,
+      expectedRevision: initial?.expectedRevision,
       stay,
       profileSlug,
       entityId,

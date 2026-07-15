@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   date,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -24,6 +25,7 @@ export const transactions = pgTable(
     description: text("description").notNull(),
     kind: transactionKind("kind").notNull().default("standard"),
     notes: text("notes"),
+    currentRevision: integer("current_revision").notNull().default(1),
     ...timestamps,
     ...softDelete,
   },
@@ -69,11 +71,13 @@ export const postings = pgTable(
      * is why this lives on the posting, not the transaction.
      */
     externalRef: text("external_ref"),
+    revision: integer("revision").notNull().default(1),
     ...timestamps,
     ...softDelete,
   },
   (table) => [
     index("postings_transaction_id_idx").on(table.transactionId),
+    index("postings_transaction_revision_idx").on(table.transactionId, table.revision),
     index("postings_account_id_idx").on(table.accountId),
     index("postings_category_id_idx").on(table.categoryId),
     // Import dedup: the same bank reference may exist at most once per

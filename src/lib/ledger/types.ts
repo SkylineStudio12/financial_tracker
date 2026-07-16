@@ -37,6 +37,8 @@ export interface AccrualInput {
 }
 
 export interface SalaryDetailInput {
+  /** First day of the fiscal pay month, YYYY-MM-01. */
+  payMonth: string;
   personalDeductionMinor: number;
 }
 

@@ -1,7 +1,4 @@
-import { SalaryFlow } from "@/components/flows/salary-flow";
-import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
-import { getFlowPageData } from "@/lib/ledger/flow-page-data";
+import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@/lib/profiles";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +10,6 @@ export default async function SalaryFlowPage({
 }) {
   const { profile: slug } = await params;
   const profile = getProfile(slug);
-  // Visibility derives from the PROFILES config: company profiles only.
   if (!profile || !profile.companyFlows) notFound();
-  const entityId = profile.entityId;
-  const t = await getTranslations("flows");
-  const { isCompany, personalAccounts } = await getFlowPageData(entityId);
-
-  if (!isCompany) {
-    return <p className="text-secondary text-text-muted">{t("salaryCompaniesOnly")}</p>;
-  }
-  return (
-    <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
-      <h1 className="text-title text-text-primary">{t("salaryTitle")}</h1>
-      <SalaryFlow companyId={entityId} personalAccounts={personalAccounts} />
-    </div>
-  );
+  redirect(`/p/${profile.slug}/transactions?entry=salary`);
 }

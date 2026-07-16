@@ -31,6 +31,10 @@ import {
   type SalaryFlowPayload,
 } from "./flow-actions";
 import { getTransactionEditDraft } from "./edit-drafts";
+import {
+  defaultSalaryPaymentDate,
+  salaryPaymentDateAfterPayMonthChange,
+} from "./salary-dates";
 
 let fixtureNumber = 0;
 async function fixture(name: string, work: () => Promise<void>): Promise<void> {
@@ -41,14 +45,15 @@ async function fixture(name: string, work: () => Promise<void>): Promise<void> {
 
 function entered(
   employeeName: string,
-  month = "2026-06",
+  payMonth = "2026-06",
   overrides: Partial<SalaryFlowPayload> = {},
 ): SalaryFlowPayload {
   return {
     stay: true,
     companyId: ENTITY_IDS.skyline,
     employeeName,
-    month,
+    payMonth,
+    paymentDate: defaultSalaryPaymentDate(payMonth),
     grossMinor: 450_000,
     casMinor: 112_500,
     cassMinor: 45_000,
@@ -163,15 +168,30 @@ async function main(): Promise<void> {
     assert.ok(row, `missing tax rule ${type}`);
     return row.id;
   };
+  const boundaryRules = await db
+    .insert(taxRules)
+    .values(
+      (["salary_cas", "salary_cass", "salary_income_tax", "cam"] as const).map(
+        (ruleType) => ({
+          ruleType,
+          rateBps: 1,
+          validFrom: "2026-07-01",
+          notes: "__test__ payment-date rule boundary",
+        }),
+      ),
+    )
+    .returning({ id: taxRules.id });
+  const boundaryRuleIds = new Set(boundaryRules.map((row) => row.id));
 
   try {
-    await fixture("payslip values book seven exact legs, four accruals, and deduction 450 RON", async () => {
+    await fixture("June paid 10 July books exact legs but accrues to 2026 Q2", async () => {
       const payload = entered("__test__ Payslip Employee", "2026-06", {
         personalAccountId: personalAccount.id,
       });
       assert.deepEqual(await saveSalary(payload), { ok: true });
       const transaction = await salaryByDescription("Salary __test__ Payslip Employee 2026-06");
       track(transaction.id);
+      assert.equal(transaction.date, "2026-07-10");
       const legs = await db
         .select({ amount: postings.amount, accountType: accounts.type })
         .from(postings)
@@ -184,7 +204,13 @@ async function main(): Promise<void> {
       );
       assert.equal(legs.reduce((sum, row) => sum + row.amount, 0), 0);
       const accruals = await db
-        .select({ ruleType: taxRules.ruleType, amount: postings.amount })
+        .select({
+          taxRuleId: taxAccruals.taxRuleId,
+          ruleType: taxRules.ruleType,
+          amount: postings.amount,
+          year: taxAccruals.year,
+          quarter: taxAccruals.quarter,
+        })
         .from(taxAccruals)
         .innerJoin(taxRules, eq(taxRules.id, taxAccruals.taxRuleId))
         .innerJoin(postings, eq(postings.id, taxAccruals.postingId))
@@ -200,14 +226,104 @@ async function main(): Promise<void> {
           ["salary_income_tax", -23_000],
         ],
       );
+      assert.ok(accruals.every((row) => row.year === 2026 && row.quarter === 2));
+      assert.ok(accruals.every((row) => !boundaryRuleIds.has(row.taxRuleId)));
       const [detail] = await db
         .select()
         .from(salaryTransactionDetails)
         .where(eq(salaryTransactionDetails.transactionId, transaction.id));
       assert.equal(detail.revision, 1);
+      assert.equal(detail.payMonth, "2026-06-01");
       assert.equal(detail.personalDeductionMinor, 45_000);
       console.log(
-        "  values gross=450000 cas=112500 cass=45000 incomeTax=23000 cam=10100 net=269500 deduction=45000 legs=7 accruals=4 sum=0",
+        "  payMonth=2026-06 paymentDate=2026-07-10 accrual=2026-Q2 rules=June-anchor gross=450000 cas=112500 cass=45000 incomeTax=23000 cam=10100 net=269500 deduction=45000 legs=7 sum=0",
+      );
+    });
+
+    await fixture("December paid in January stays in the prior year's Q4", async () => {
+      const payload = entered("__test__ Year Boundary Employee", "2026-12", {
+        personalAccountId: personalAccount.id,
+        paymentDate: "2027-01-10",
+      });
+      assert.deepEqual(await saveSalary(payload), { ok: true });
+      const transaction = await salaryByDescription(
+        "Salary __test__ Year Boundary Employee 2026-12",
+      );
+      track(transaction.id);
+      assert.equal(transaction.date, "2027-01-10");
+      const periods = await db
+        .select({ year: taxAccruals.year, quarter: taxAccruals.quarter })
+        .from(taxAccruals)
+        .where(and(eq(taxAccruals.transactionId, transaction.id), isNull(taxAccruals.deletedAt)));
+      assert.equal(periods.length, 4);
+      assert.ok(periods.every((row) => row.year === 2026 && row.quarter === 4));
+      const [detail] = await db
+        .select()
+        .from(salaryTransactionDetails)
+        .where(eq(salaryTransactionDetails.transactionId, transaction.id));
+      assert.equal(detail.payMonth, "2026-12-01");
+      console.log("  payMonth=2026-12 paymentDate=2027-01-10 accruals=4 period=2026-Q4");
+    });
+
+    await fixture("invalid calendar payment date fails preview and save with zero writes", async () => {
+      const payload = entered("__test__ Invalid Date Employee", "2026-02", {
+        personalAccountId: personalAccount.id,
+        paymentDate: "2026-02-30",
+      });
+      const before = {
+        transactions: await db.$count(transactions),
+        postings: await db.$count(postings),
+        accruals: await db.$count(taxAccruals),
+        details: await db.$count(salaryTransactionDetails),
+        audit: await db.$count(auditLog),
+      };
+      const preview = await previewSalary(payload);
+      assert.ok("error" in preview);
+      assert.equal(preview.error.code, "flows.invalidPaymentDate");
+      assert.deepEqual(preview.error.params, { date: "2026-02-30" });
+      const saved = await saveSalary(payload);
+      assert.ok(saved && "error" in saved);
+      assert.equal(saved.error.code, "flows.invalidPaymentDate");
+      assert.deepEqual(
+        {
+          transactions: await db.$count(transactions),
+          postings: await db.$count(postings),
+          accruals: await db.$count(taxAccruals),
+          details: await db.$count(salaryTransactionDetails),
+          audit: await db.$count(auditLog),
+        },
+        before,
+      );
+      console.log("  paymentDate=2026-02-30 code=flows.invalidPaymentDate writes=0");
+    });
+
+    await fixture("valid arbitrary payment date is accepted without a 10th-of-month rule", async () => {
+      const payload = entered("__test__ Arbitrary Date Employee", "2026-06", {
+        personalAccountId: personalAccount.id,
+        paymentDate: "2026-08-23",
+      });
+      assert.deepEqual(await saveSalary(payload), { ok: true });
+      const transaction = await salaryByDescription(
+        "Salary __test__ Arbitrary Date Employee 2026-06",
+      );
+      track(transaction.id);
+      assert.equal(transaction.date, "2026-08-23");
+      console.log("  payMonth=2026-06 paymentDate=2026-08-23 accepted=true");
+    });
+
+    await fixture("payment-date default rolls year and never overwrites a touched value", async () => {
+      assert.equal(defaultSalaryPaymentDate("2026-06"), "2026-07-10");
+      assert.equal(defaultSalaryPaymentDate("2026-12"), "2027-01-10");
+      assert.equal(
+        salaryPaymentDateAfterPayMonthChange("2026-07", "2026-07-17", true),
+        "2026-07-17",
+      );
+      assert.equal(
+        salaryPaymentDateAfterPayMonthChange("2026-07", "2026-07-10", false),
+        "2026-08-10",
+      );
+      console.log(
+        "  defaults 2026-06->2026-07-10 2026-12->2027-01-10 touched=2026-07-17 preserved untouchedJuly->2026-08-10",
       );
     });
 
@@ -289,9 +405,11 @@ async function main(): Promise<void> {
       const first = entered("__test__ Repeat Employee", "2026-05", {
         personalAccountId: personalAccount.id,
         personalDeductionMinor: 44_000,
+        paymentDate: "2026-08-20",
       });
       const second = entered("__test__ Repeat Employee", "2026-06", {
         personalAccountId: personalAccount.id,
+        paymentDate: "2026-07-10",
         grossMinor: 460_000,
         casMinor: 115_000,
         cassMinor: 46_000,
@@ -311,11 +429,12 @@ async function main(): Promise<void> {
       track((await salaryByDescription("Salary __test__ Other Employee 2026-07")).id);
       const repeated = await repeatLastSalary(ENTITY_IDS.skyline, "  __TEST__ repeat employee ");
       assert.ok(repeated && !("error" in repeated));
-      assert.equal(repeated.month, "2026-06");
+      assert.equal(repeated.payMonth, "2026-06");
+      assert.equal(repeated.paymentDate, "2026-07-10");
       assert.equal(repeated.gross, "4600,00");
       assert.equal(repeated.net, "2750,00");
       assert.equal(repeated.personalDeduction, "450,00");
-      console.log("  matched=__test__ Repeat Employee newestMonth=2026-06 gross=460000 net=275000 deduction=45000");
+      console.log("  paymentOrder May=2026-08-20 June=2026-07-10 selectedPayMonth=2026-06 storedPaymentDate=2026-07-10 gross=460000 net=275000 deduction=45000");
     });
 
     let legacyId = "";
@@ -358,8 +477,10 @@ async function main(): Promise<void> {
       );
       const draft = await getTransactionEditDraft(legacyId, ENTITY_IDS.skyline);
       assert.equal(draft.type, "salary");
+      assert.equal(draft.payMonth, "2026-04");
+      assert.equal(draft.paymentDate, "2026-04-30");
       assert.equal(draft.personalDeduction, "");
-      console.log("  legacy detail rows=0 repeatResult=null editDeduction=blank");
+      console.log("  legacy detail rows=0 repeatResult=null payMonth=2026-04 paymentDate=2026-04-30 editDeduction=blank");
     });
 
     await fixture("legacy edit requires entered deduction and creates revision-2 detail", async () => {
@@ -367,6 +488,7 @@ async function main(): Promise<void> {
         await saveSalary({
           ...entered("__test__ Legacy Employee", "2026-04", {
             personalAccountId: personalAccount.id,
+            paymentDate: "2026-04-30",
           }),
           transactionId: legacyId,
           expectedRevision: 1,
@@ -380,9 +502,10 @@ async function main(): Promise<void> {
         .from(salaryTransactionDetails)
         .where(eq(salaryTransactionDetails.transactionId, legacyId));
       assert.deepEqual(
-        details.map((row) => [row.revision, row.personalDeductionMinor]),
-        [[2, 45_000]],
+        details.map((row) => [row.revision, row.payMonth, row.personalDeductionMinor]),
+        [[2, "2026-04-01", 45_000]],
       );
+      assert.equal(transaction.date, "2026-04-30");
       const oldLive = await db
         .select()
         .from(postings)
@@ -394,7 +517,7 @@ async function main(): Promise<void> {
           ),
         );
       assert.equal(oldLive.length, 0);
-      console.log("  currentRevision=2 details=[[2,45000]] revision1LivePostings=0");
+      console.log("  currentRevision=2 paymentDate=2026-04-30 details=[[2,2026-04-01,45000]] revision1LivePostings=0");
     });
 
     await fixture("entered salary edit appends detail and preserves prior revision", async () => {
@@ -419,16 +542,18 @@ async function main(): Promise<void> {
         .where(eq(salaryTransactionDetails.transactionId, transaction.id))
         .orderBy(salaryTransactionDetails.revision);
       assert.deepEqual(
-        details.map((row) => [row.revision, row.personalDeductionMinor]),
+        details.map((row) => [row.revision, row.payMonth, row.personalDeductionMinor]),
         [
-          [1, 45_000],
-          [2, 46_000],
+          [1, "2026-06-01", 45_000],
+          [2, "2026-06-01", 46_000],
         ],
       );
       const draft = await getTransactionEditDraft(transaction.id, ENTITY_IDS.skyline);
       assert.equal(draft.type, "salary");
+      assert.equal(draft.payMonth, "2026-06");
+      assert.equal(draft.paymentDate, "2026-07-10");
       assert.equal(draft.personalDeduction, "460,00");
-      console.log("  details revision1=45000 revision2=46000 currentDraftDeduction=46000");
+      console.log("  details revision1=2026-06-01/45000 revision2=2026-06-01/46000 currentDraftPaymentDate=2026-07-10");
     });
 
     await fixture("detail survives delete/restore exactly and purge removes it", async () => {
@@ -511,6 +636,7 @@ async function main(): Promise<void> {
         .where(and(eq(auditLog.tableName, "transactions"), inArray(auditLog.rowId, ids)));
       await db.delete(transactions).where(inArray(transactions.id, ids));
     }
+    await db.delete(taxRules).where(inArray(taxRules.id, [...boundaryRuleIds]));
     assert.equal(
       await db.$count(
         transactions,

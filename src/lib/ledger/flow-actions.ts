@@ -26,6 +26,7 @@ import { computeDividend } from "@/lib/tax/compute";
 import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
 import { profileForEntity } from "@/lib/profiles";
 import { getLastCompleteSalaryDraft, type SalaryDraft } from "./edit-drafts";
+import { salaryPeriod, validateSalaryPaymentDate } from "./salary-dates";
 
 /** Companies map 1:1 to profiles, so the post-save view derives from the id. */
 function companyTransactionsPath(companyId: string): string {
@@ -41,7 +42,9 @@ export interface SalaryFlowPayload {
   companyId: string;
   employeeName: string;
   /** YYYY-MM */
-  month: string;
+  payMonth: string;
+  /** YYYY-MM-DD; cash movement date, distinct from the fiscal pay month. */
+  paymentDate: string;
   grossMinor: number;
   casMinor: number;
   cassMinor: number;
@@ -64,16 +67,6 @@ export interface DividendFlowPayload {
 }
 
 type ActionResult = { error: AppError } | { ok: true };
-
-/** Salaries are dated on the last day of the selected month. */
-function monthEndDate(month: string): string {
-  if (!/^\d{4}-\d{2}$/.test(month)) {
-    throw new LedgerValidationError("flows.invalidMonth", { month });
-  }
-  const [year, monthNumber] = [Number(month.slice(0, 4)), Number(month.slice(5, 7))];
-  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-  return `${month}-${String(lastDay).padStart(2, "0")}`;
-}
 
 async function loadCompanyAccounts(companyId: string) {
   const [company] = await db
@@ -120,7 +113,10 @@ async function loadSalaryRuleIds(date: string): Promise<Record<SalaryRuleType, S
 }
 
 export interface SalaryPreview {
-  date: string;
+  payMonth: string;
+  paymentDate: string;
+  accrualYear: number;
+  accrualQuarter: number;
   gross: number;
   cas: number;
   cass: number;
@@ -189,7 +185,8 @@ function validateEnteredSalary(payload: EnteredSalaryAmounts) {
 export async function previewSalary(
   payload: Pick<
     SalaryFlowPayload,
-    | "month"
+    | "payMonth"
+    | "paymentDate"
     | "grossMinor"
     | "casMinor"
     | "cassMinor"
@@ -200,10 +197,14 @@ export async function previewSalary(
   >,
 ): Promise<SalaryPreview | { error: AppError }> {
   try {
-    const date = monthEndDate(payload.month);
+    const period = salaryPeriod(payload.payMonth);
+    const paymentDate = validateSalaryPaymentDate(payload.paymentDate);
     const b = validateEnteredSalary(payload);
     return {
-      date,
+      payMonth: payload.payMonth,
+      paymentDate,
+      accrualYear: period.year,
+      accrualQuarter: period.quarter,
       gross: b.grossMinor,
       cas: b.casMinor,
       cass: b.cassMinor,
@@ -224,7 +225,8 @@ export async function previewSalary(
 export type SalaryRepeatPrefill = Pick<
   SalaryDraft,
   | "employeeName"
-  | "month"
+  | "payMonth"
+  | "paymentDate"
   | "gross"
   | "cas"
   | "cass"
@@ -244,7 +246,8 @@ export async function repeatLastSalary(
     if (!draft) return null;
     return {
       employeeName: draft.employeeName,
-      month: draft.month,
+      payMonth: draft.payMonth,
+      paymentDate: draft.paymentDate,
       gross: draft.gross,
       cas: draft.cas,
       cass: draft.cass,
@@ -264,9 +267,10 @@ export async function repeatLastSalary(
 export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResult | undefined> {
   try {
     if (!payload.employeeName.trim()) throw new LedgerValidationError("flows.employeeNameRequired");
-    const date = monthEndDate(payload.month);
+    const period = salaryPeriod(payload.payMonth);
+    const paymentDate = validateSalaryPaymentDate(payload.paymentDate);
     const { company, bank, taxLiability, equity } = await loadCompanyAccounts(payload.companyId);
-    const rules = await loadSalaryRuleIds(date);
+    const rules = await loadSalaryRuleIds(period.anchorDate);
     const b = validateEnteredSalary(payload);
 
     // Salaries category for the equity (expense) leg, if the company has one.
@@ -305,18 +309,21 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
     const accruals: AccrualInput[] = taxLegs.map((leg, index) => ({
       postingIndex: 2 + index,
       taxRuleId: leg.rule.id,
-      year: yearOf(date),
-      quarter: quarterOf(date),
+      // Salary accruals belong to the fiscal pay month, even when cash moves
+      // in the following month or year.
+      year: period.year,
+      quarter: period.quarter,
     }));
 
     const input = {
       entityId: payload.companyId,
-      date,
-      description: `Salary ${payload.employeeName.trim()} ${payload.month}`,
+      date: paymentDate,
+      description: `Salary ${payload.employeeName.trim()} ${payload.payMonth}`,
       kind: "salary",
       postings: postingInputs,
       accruals,
       salaryDetail: {
+        payMonth: period.payMonthDate,
         personalDeductionMinor: payload.personalDeductionMinor,
       },
     } as const;

@@ -164,7 +164,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
     { href: `${base}/dashboard`, label: t("dashboard"), icon: LayoutDashboardIcon },
   ];
   const flows = [
-    { href: `${base}/flows/salary`, label: t("newSalary"), icon: BanknoteIcon },
+    { href: `${base}/transactions?entry=salary`, label: t("newSalary"), icon: BanknoteIcon },
     { href: `${base}/flows/dividend`, label: t("newDividend"), icon: CoinsIcon },
     { href: `${base}/imports`, label: t("importStatement"), icon: ImportIcon },
   ];

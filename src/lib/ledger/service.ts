@@ -41,6 +41,7 @@ import {
   releaseTransactionImportOwnership,
 } from "@/lib/import/ownership";
 import { acquireImportOwnershipLock } from "./locks";
+import { salaryPeriod } from "./salary-dates";
 import { LedgerValidationError, type PostingInput, type TransactionInput } from "./types";
 
 type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -192,6 +193,14 @@ async function validateAndPrepare(
       throw new LedgerValidationError("flows.salaryShapeUnavailable");
     }
     if (
+      salaryPeriod(input.salaryDetail.payMonth.slice(0, 7)).payMonthDate !==
+      input.salaryDetail.payMonth
+    ) {
+      throw new LedgerValidationError("flows.invalidMonth", {
+        month: input.salaryDetail.payMonth.slice(0, 7),
+      });
+    }
+    if (
       !Number.isSafeInteger(input.salaryDetail.personalDeductionMinor) ||
       input.salaryDetail.personalDeductionMinor < 0
     ) {
@@ -270,6 +279,7 @@ async function insertTransactionRows(
     await tx.insert(salaryTransactionDetails).values({
       transactionId: transaction.id,
       revision,
+      payMonth: input.salaryDetail.payMonth,
       personalDeductionMinor: input.salaryDetail.personalDeductionMinor,
     });
   }

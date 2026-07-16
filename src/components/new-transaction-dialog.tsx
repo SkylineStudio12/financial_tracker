@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,10 @@ import {
 } from "@/components/ui/dialog";
 import { StandardForm } from "@/components/forms/standard-form";
 import { TransferForm } from "@/components/forms/transfer-form";
-import type { FormOptions } from "@/components/forms/option-types";
+import { SalaryFlow } from "@/components/flows/salary-flow";
+import type { AccountOption, FormOptions } from "@/components/forms/option-types";
+
+type EntryType = "standard" | "transfer" | "salary";
 
 /**
  * Everyday transaction entry as a modal over the transaction list.
@@ -37,19 +40,28 @@ export function NewTransactionDialog({
   entityId,
   profileSlug,
   options,
+  personalAccounts = [],
+  salaryAvailable = false,
+  initialType,
 }: {
   entityId: string;
   /** Active profile view; forwarded to the forms (modal saves stay put). */
   profileSlug?: string;
   options: FormOptions;
+  personalAccounts?: AccountOption[];
+  salaryAvailable?: boolean;
+  initialType?: Extract<EntryType, "salary">;
 }) {
   const t = useTranslations("forms");
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<"standard" | "transfer">("standard");
+  const tFlows = useTranslations("flows");
+  const [open, setOpen] = useState(Boolean(initialType));
+  const [type, setType] = useState<EntryType>(initialType ?? "standard");
   // Token-styled discard prompt (replaces window.confirm): an intercepted
   // close parks here until the user picks Discard or Keep editing.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   // Refresh only after the close animation completes: refreshing in the same
   // batch as setOpen(false) cancels the exit animation and Base UI never
   // finishes unmounting the popup.
@@ -90,10 +102,16 @@ export function NewTransactionDialog({
   };
 
   const handleOpenChangeComplete = (nowOpen: boolean) => {
-    if (!nowOpen && refreshAfterClose.current) {
-      refreshAfterClose.current = false;
-      router.refresh();
+    if (nowOpen) return;
+    if (initialType) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("entry");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     }
+    if (!refreshAfterClose.current) return;
+    refreshAfterClose.current = false;
+    router.refresh();
   };
 
   const cancelSlot = (
@@ -104,11 +122,11 @@ export function NewTransactionDialog({
     <>
     <Dialog open={open} onOpenChange={handleOpenChange} onOpenChangeComplete={handleOpenChangeComplete}>
       <DialogTrigger render={<Button />}>{t("newTransaction")}</DialogTrigger>
-      <DialogContent className="density-compact sm:max-w-xl">
+      <DialogContent className="density-compact max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{t("newTransaction")}</DialogTitle>
+          <DialogTitle>{type === "salary" ? tFlows("salaryTitle") : t("newTransaction")}</DialogTitle>
         </DialogHeader>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant={type === "standard" ? "default" : "secondary"}
@@ -123,8 +141,17 @@ export function NewTransactionDialog({
           >
             {t("typeTransfer")}
           </Button>
+          {salaryAvailable && (
+            <Button
+              type="button"
+              variant={type === "salary" ? "default" : "secondary"}
+              onClick={() => setType("salary")}
+            >
+              {t("typeSalary")}
+            </Button>
+          )}
         </div>
-        {type === "standard" ? (
+        {type === "standard" && (
           <StandardForm
             entityId={entityId}
             profileSlug={profileSlug}
@@ -134,12 +161,22 @@ export function NewTransactionDialog({
             cancelSlot={cancelSlot}
             onDirtyChange={handleDirtyChange}
           />
-        ) : (
+        )}
+        {type === "transfer" && (
           <TransferForm
             entityId={entityId}
             profileSlug={profileSlug}
             options={options}
             stay
+            onSaved={handleSaved}
+            cancelSlot={cancelSlot}
+            onDirtyChange={handleDirtyChange}
+          />
+        )}
+        {type === "salary" && (
+          <SalaryFlow
+            companyId={entityId}
+            personalAccounts={personalAccounts}
             onSaved={handleSaved}
             cancelSlot={cancelSlot}
             onDirtyChange={handleDirtyChange}

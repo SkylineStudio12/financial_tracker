@@ -9,12 +9,25 @@ import {
   saveSalary,
   type SalaryPreview,
 } from "@/lib/ledger/flow-actions";
+import {
+  defaultSalaryPaymentDate,
+  salaryPaymentDateAfterPayMonthChange,
+} from "@/lib/ledger/salary-dates";
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
-import { errorClass, fieldClass, labelClass, primaryButtonClass } from "@/components/forms/ui";
+import { Button } from "@/components/ui/button";
+import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+function formatPayMonth(payMonth: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${payMonth}-01T00:00:00.000Z`));
+}
 
 export function SalaryFlow({
   companyId,
@@ -22,6 +35,7 @@ export function SalaryFlow({
   initial,
   onSaved,
   cancelSlot,
+  onDirtyChange,
 }: {
   companyId: string;
   personalAccounts: AccountOption[];
@@ -29,7 +43,8 @@ export function SalaryFlow({
     transactionId: string;
     expectedRevision: number;
     employeeName: string;
-    month: string;
+    payMonth: string;
+    paymentDate: string;
     gross: string;
     cas: string;
     cass: string;
@@ -41,9 +56,15 @@ export function SalaryFlow({
   };
   onSaved?: () => void;
   cancelSlot?: React.ReactNode;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const initialPayMonth = initial?.payMonth ?? currentMonth();
   const [employeeName, setEmployeeName] = useState(initial?.employeeName ?? "");
-  const [month, setMonth] = useState(initial?.month ?? currentMonth());
+  const [payMonth, setPayMonth] = useState(initialPayMonth);
+  const [paymentDate, setPaymentDate] = useState(
+    initial?.paymentDate ?? defaultSalaryPaymentDate(initialPayMonth),
+  );
+  const paymentDateTouched = useRef(Boolean(initial));
   const [gross, setGross] = useState(initial?.gross ?? "");
   const [cas, setCas] = useState(initial?.cas ?? "");
   const [cass, setCass] = useState(initial?.cass ?? "");
@@ -58,6 +79,7 @@ export function SalaryFlow({
   );
   const locale = useLocale();
   const t = useTranslations("flows");
+  const tCommon = useTranslations("common");
   const tForms = useTranslations("forms");
   const translateError = useTranslatedError();
   const [preview, setPreview] = useState<SalaryPreview | null>(null);
@@ -65,9 +87,29 @@ export function SalaryFlow({
   const [repeatMissing, setRepeatMissing] = useState(false);
   const [pending, startTransition] = useTransition();
   const grossRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     grossRef.current?.focus();
   }, []);
+
+  const valuesSnapshot = JSON.stringify({
+    employeeName,
+    payMonth,
+    paymentDate,
+    gross,
+    cas,
+    cass,
+    incomeTax,
+    cam,
+    net,
+    personalDeduction,
+    personalAccountId,
+  });
+  const [initialSnapshot] = useState(valuesSnapshot);
+  const dirty = valuesSnapshot !== initialSnapshot;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const grossMinor = parseAmountToMinor(gross);
   const casMinor = parseAmountToMinor(cas);
@@ -78,7 +120,8 @@ export function SalaryFlow({
   const personalDeductionMinor = parseAmountToMinor(personalDeduction);
   const inputsValid =
     employeeName.trim() !== "" &&
-    /^\d{4}-\d{2}$/.test(month) &&
+    /^\d{4}-\d{2}$/.test(payMonth) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) &&
     grossMinor !== null &&
     grossMinor > 0 &&
     casMinor !== null &&
@@ -95,7 +138,6 @@ export function SalaryFlow({
     personalDeductionMinor >= 0 &&
     personalAccountId !== "";
 
-  // Any input change invalidates a previously computed breakdown.
   const invalidate = () => {
     setPreview(null);
     setError(null);
@@ -117,7 +159,8 @@ export function SalaryFlow({
     }
     startTransition(async () => {
       const result = await previewSalary({
-        month,
+        payMonth,
+        paymentDate,
         grossMinor,
         casMinor,
         cassMinor,
@@ -127,7 +170,10 @@ export function SalaryFlow({
         personalDeductionMinor,
       });
       if ("error" in result) setError(result.error);
-      else setPreview(result);
+      else {
+        setError(null);
+        setPreview(result);
+      }
     });
   };
 
@@ -148,10 +194,11 @@ export function SalaryFlow({
       const result = await saveSalary({
         transactionId: initial?.transactionId,
         expectedRevision: initial?.expectedRevision,
-        stay: Boolean(initial),
+        stay: true,
         companyId,
         employeeName,
-        month,
+        payMonth,
+        paymentDate,
         grossMinor,
         casMinor,
         cassMinor,
@@ -166,8 +213,6 @@ export function SalaryFlow({
     });
   };
 
-  // [stable row id, label, amount] — the id keys the row (labels translate,
-  // keys never do; same split as periodKey/periodLabel).
   const rows: [string, string, number][] = preview
     ? [
         ["gross", t("rowGross"), preview.gross],
@@ -184,128 +229,186 @@ export function SalaryFlow({
 
   return (
     <form
-      className="flex flex-col gap-4 max-w-xl"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (preview) confirm();
         else runPreview();
       }}
     >
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className={labelClass}>
-            {t("employeeName")}
-            <input
-              className={fieldClass}
-              value={employeeName}
-              onChange={(e) => {
-                setEmployeeName(e.target.value);
-                invalidate();
-              }}
-            />
-          </label>
-          {!initial && (
-            <button
-              type="button"
-              className="self-start rounded-input px-2 py-1 text-caption text-accent outline-none hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50"
-              disabled={!employeeName.trim() || pending}
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await repeatLastSalary(companyId, employeeName);
-                  if (result && "error" in result) {
-                    setError(result.error);
-                    return;
-                  }
-                  if (!result) {
-                    setRepeatMissing(true);
-                    setError(null);
-                    return;
-                  }
-                  setEmployeeName(result.employeeName);
-                  setMonth(result.month);
-                  setGross(result.gross);
-                  setCas(result.cas);
-                  setCass(result.cass);
-                  setIncomeTax(result.incomeTax);
-                  setCam(result.cam);
-                  setNet(result.net);
-                  setPersonalDeduction(result.personalDeduction);
-                  setPersonalAccountId(result.personalAccountId);
-                  setPreview(null);
-                  setError(null);
-                  setRepeatMissing(false);
-                });
-              }}
-            >
-              {t("repeatLastSalary")}
-            </button>
-          )}
-        </div>
-        <label className={labelClass}>
-          {t("month")}
-          <input
-            type="month"
-            className={fieldClass}
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              invalidate();
-            }}
-          />
-        </label>
-      </div>
+      <p className="text-caption text-text-muted">
+        {preview ? t("stepReview") : t("stepEntry")}
+      </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          [t("grossSalary"), gross, setGross, grossRef],
-          [t("rowCas"), cas, setCas, null],
-          [t("rowCass"), cass, setCass, null],
-          [t("rowIncomeTax"), incomeTax, setIncomeTax, null],
-          [t("rowCam"), cam, setCam, null],
-          [t("rowNet"), net, setNet, null],
-          [t("rowPersonalDeduction"), personalDeduction, setPersonalDeduction, null],
-        ].map(([label, value, setter, ref]) => (
-          <label key={label as string} className={labelClass}>
-            {label as string}
-            <input
-              ref={ref as React.RefObject<HTMLInputElement> | undefined}
-              inputMode="decimal"
-              placeholder={tForms("amountPlaceholder")}
-              className={fieldClass}
-              value={value as string}
-              onChange={(event) => {
-                (setter as (next: string) => void)(event.target.value);
-                invalidate();
-              }}
-            />
-          </label>
-        ))}
-        <label className={labelClass}>
-          {t("personalAccount")}
-          <select
-            className={fieldClass}
-            value={personalAccountId}
-            onChange={(e) => {
-              setPersonalAccountId(e.target.value);
-              invalidate();
-            }}
-          >
-            {personalAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} ({account.currency})
-              </option>
+      {!preview ? (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className={labelClass}>
+                {t("employeeName")}
+                <input
+                  className={fieldClass}
+                  value={employeeName}
+                  onChange={(event) => {
+                    setEmployeeName(event.target.value);
+                    invalidate();
+                  }}
+                />
+              </label>
+              {!initial && (
+                <button
+                  type="button"
+                  className="self-start rounded-input px-2 py-1 text-caption text-accent outline-none hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50"
+                  disabled={!employeeName.trim() || pending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      const result = await repeatLastSalary(companyId, employeeName);
+                      if (result && "error" in result) {
+                        setError(result.error);
+                        return;
+                      }
+                      if (!result) {
+                        setRepeatMissing(true);
+                        setError(null);
+                        return;
+                      }
+                      setEmployeeName(result.employeeName);
+                      setPayMonth(result.payMonth);
+                      setPaymentDate(result.paymentDate);
+                      paymentDateTouched.current = true;
+                      setGross(result.gross);
+                      setCas(result.cas);
+                      setCass(result.cass);
+                      setIncomeTax(result.incomeTax);
+                      setCam(result.cam);
+                      setNet(result.net);
+                      setPersonalDeduction(result.personalDeduction);
+                      setPersonalAccountId(result.personalAccountId);
+                      setPreview(null);
+                      setError(null);
+                      setRepeatMissing(false);
+                    });
+                  }}
+                >
+                  {t("repeatLastSalary")}
+                </button>
+              )}
+            </div>
+            <label className={labelClass}>
+              {t("payMonth")}
+              <input
+                type="month"
+                className={fieldClass}
+                value={payMonth}
+                onChange={(event) => {
+                  const nextPayMonth = event.target.value;
+                  setPayMonth(nextPayMonth);
+                  setPaymentDate((current) =>
+                    salaryPaymentDateAfterPayMonthChange(
+                      nextPayMonth,
+                      current,
+                      paymentDateTouched.current,
+                    ),
+                  );
+                  invalidate();
+                }}
+              />
+            </label>
+            <label className={labelClass}>
+              {t("paymentDate")}
+              <input
+                type="date"
+                className={fieldClass}
+                value={paymentDate}
+                onFocus={() => {
+                  paymentDateTouched.current = true;
+                }}
+                onChange={(event) => {
+                  paymentDateTouched.current = true;
+                  setPaymentDate(event.target.value);
+                  invalidate();
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[
+              [t("grossSalary"), gross, setGross, grossRef],
+              [t("rowCas"), cas, setCas, null],
+              [t("rowCass"), cass, setCass, null],
+              [t("rowIncomeTax"), incomeTax, setIncomeTax, null],
+              [t("rowCam"), cam, setCam, null],
+              [t("rowNet"), net, setNet, null],
+              [t("rowPersonalDeduction"), personalDeduction, setPersonalDeduction, null],
+            ].map(([label, value, setter, ref]) => (
+              <label key={label as string} className={labelClass}>
+                {label as string}
+                <input
+                  ref={ref as React.RefObject<HTMLInputElement> | undefined}
+                  inputMode="decimal"
+                  placeholder={tForms("amountPlaceholder")}
+                  className={fieldClass}
+                  value={value as string}
+                  onChange={(event) => {
+                    (setter as (next: string) => void)(event.target.value);
+                    invalidate();
+                  }}
+                />
+              </label>
             ))}
-          </select>
-        </label>
-      </div>
+            <label className={labelClass}>
+              {t("personalAccount")}
+              <select
+                className={fieldClass}
+                value={personalAccountId}
+                onChange={(event) => {
+                  setPersonalAccountId(event.target.value);
+                  invalidate();
+                }}
+              >
+                {personalAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} ({account.currency})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </>
+      ) : (
+        <>
+          <dl className="grid grid-cols-1 gap-3 border-y border-border-hairline py-3 sm:grid-cols-3">
+            <div>
+              <dt className="text-caption text-text-muted">{t("payMonth")}</dt>
+              <dd className="text-secondary text-text-primary">
+                {formatPayMonth(preview.payMonth, locale)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-caption text-text-muted">{t("accrualPeriod")}</dt>
+              <dd className="text-secondary text-text-primary">
+                {tCommon("periodQuarter", {
+                  year: preview.accrualYear,
+                  quarter: preview.accrualQuarter,
+                })}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-caption text-text-muted">{t("paymentDate")}</dt>
+              <dd className="text-secondary text-text-primary">
+                {formatDate(preview.paymentDate, locale)}
+              </dd>
+            </div>
+          </dl>
 
-      {preview && (
-        <div className="rounded-card border border-border-hairline bg-surface">
           <table className="w-full text-secondary">
             <tbody>
               {rows.map(([id, label, amount]) => (
                 <tr key={id} className="border-t border-border-hairline first:border-t-0">
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{label}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
+                    {label}
+                  </td>
                   <td
                     className={`px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right font-numeric tabular-nums ${
                       amount < 0 ? "text-status-negative-text" : "text-text-primary"
@@ -315,23 +418,31 @@ export function SalaryFlow({
                   </td>
                 </tr>
               ))}
-              <tr className="border-t border-border-hairline">
-                <td colSpan={2} className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-caption text-status-warning-text">
-                  {t("transactionDate", { date: formatDate(preview.date, locale) })}
-                </td>
-              </tr>
             </tbody>
           </table>
-        </div>
+        </>
       )}
 
       {error && <p className={errorClass}>{translateError(error)}</p>}
       {repeatMissing && <p className="text-secondary text-text-muted">{t("noPreviousSalary")}</p>}
 
-      <div className="flex gap-2">
-        <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>
-          {pending ? t("working") : preview ? t("confirmSave") : t("previewBreakdown")}
-        </button>
+      <div className="flex flex-wrap gap-2">
+        {preview && (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={pending}
+            onClick={() => {
+              setPreview(null);
+              setError(null);
+            }}
+          >
+            {t("back")}
+          </Button>
+        )}
+        <Button type="submit" disabled={!inputsValid || pending}>
+          {pending ? t("working") : preview ? t("confirmSave") : t("continue")}
+        </Button>
         {cancelSlot}
       </div>
     </form>

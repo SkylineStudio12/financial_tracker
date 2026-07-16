@@ -12,6 +12,7 @@ import {
   type TransactionFilters,
 } from "@/lib/ledger/queries";
 import { getFormOptions } from "@/lib/ledger/form-options";
+import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import type { TransactionKind } from "@/lib/ledger";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
 import { RowLink } from "@/components/row-link";
@@ -77,11 +78,14 @@ export default async function TransactionsPage({
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
 
-  const [{ rows, total, pageSize }, options, formOptions, deletedRows] = await Promise.all([
+  const [{ rows, total, pageSize }, options, formOptions, deletedRows, flowData] = await Promise.all([
     listTransactions(entityId, filters, page, owner),
     getFilterOptions(entityId, owner),
     getFormOptions(entityId, owner),
     listDeletedTransactions(entityId, owner),
+    profile.companyFlows
+      ? getFlowPageData(entityId)
+      : Promise.resolve({ isCompany: false, personalAccounts: [] }),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -107,7 +111,17 @@ export default async function TransactionsPage({
             <Trash2 absoluteStrokeWidth strokeWidth={1.5} className="size-4" />
             {t("trash")} ({deletedRows.length})
           </Link>
-          <NewTransactionDialog entityId={entityId} profileSlug={profile.slug} options={formOptions} />
+          <NewTransactionDialog
+            key={single(query.entry) === "salary" ? "salary-entry" : "standard-entry"}
+            entityId={entityId}
+            profileSlug={profile.slug}
+            options={formOptions}
+            personalAccounts={flowData.personalAccounts}
+            salaryAvailable={flowData.isCompany}
+            initialType={
+              flowData.isCompany && single(query.entry) === "salary" ? "salary" : undefined
+            }
+          />
         </div>
       </div>
 

@@ -52,6 +52,7 @@ export const ERROR_CODES = [
   "forms.amountPositive",
   "forms.receivedAmountRequired",
   "flows.invalidMonth",
+  "flows.invalidPaymentDate",
   "flows.notCompanyEntity",
   "flows.companyAccountsMissing",
   "flows.employeeNameRequired",

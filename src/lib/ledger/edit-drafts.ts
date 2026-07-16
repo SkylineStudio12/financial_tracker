@@ -46,7 +46,8 @@ export type SalaryDraft = {
   transactionId: string;
   expectedRevision: number;
   employeeName: string;
-  month: string;
+  payMonth: string;
+  paymentDate: string;
   gross: string;
   cas: string;
   cass: string;
@@ -137,7 +138,11 @@ export async function getLastCompleteSalaryDraft(
         sql`lower(btrim(${postings.counterparty})) = ${normalized}`,
       ),
     )
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .orderBy(
+      desc(salaryTransactionDetails.payMonth),
+      desc(transactions.date),
+      desc(transactions.createdAt),
+    )
     .limit(1);
   if (!candidate) return null;
   const draft = await getTransactionEditDraft(candidate.transactionId, entityId);
@@ -290,7 +295,10 @@ export async function getTransactionEditDraft(
         throw new LedgerValidationError("flows.salaryShapeUnavailable");
       }
       const [detail] = await db
-        .select({ personalDeductionMinor: salaryTransactionDetails.personalDeductionMinor })
+        .select({
+          payMonth: salaryTransactionDetails.payMonth,
+          personalDeductionMinor: salaryTransactionDetails.personalDeductionMinor,
+        })
         .from(salaryTransactionDetails)
         .where(
           and(
@@ -303,7 +311,8 @@ export async function getTransactionEditDraft(
         transactionId,
         expectedRevision: transaction.currentRevision,
         employeeName: companyBank.counterparty ?? "",
-        month: transaction.date.slice(0, 7),
+        payMonth: detail?.payMonth.slice(0, 7) ?? transaction.date.slice(0, 7),
+        paymentDate: transaction.date,
         gross: minorToInput(net + cas + cass + incomeTax),
         cas: minorToInput(cas),
         cass: minorToInput(cass),

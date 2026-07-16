@@ -1,0 +1,2 @@
+ALTER TABLE "salary_transaction_details" ADD COLUMN "pay_month" date NOT NULL;--> statement-breakpoint
+ALTER TABLE "salary_transaction_details" ADD CONSTRAINT "salary_transaction_details_pay_month_first_day_check" CHECK (extract(day from "salary_transaction_details"."pay_month") = 1);

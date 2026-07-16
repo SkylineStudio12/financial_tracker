@@ -43,11 +43,16 @@ export const salaryTransactionDetails = pgTable(
       .notNull()
       .references(() => transactions.id, { onDelete: "cascade" }),
     revision: integer("revision").notNull(),
+    payMonth: date("pay_month").notNull(),
     personalDeductionMinor: moneyMinor("personal_deduction_minor").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.transactionId, table.revision] }),
+    check(
+      "salary_transaction_details_pay_month_first_day_check",
+      sql`extract(day from ${table.payMonth}) = 1`,
+    ),
     check(
       "salary_transaction_details_deduction_nonnegative_check",
       sql`${table.personalDeductionMinor} >= 0`,

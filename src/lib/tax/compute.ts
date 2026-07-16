@@ -29,6 +29,8 @@ export interface SalaryBreakdown {
   totalAccruedMinor: number;
 }
 
+/** @deprecated The live salary flow transcribes payslip values. Retained only
+ * for legacy/tests until the separately scoped salary-calculator cleanup. */
 export function computeSalary(grossMinor: number, rates: SalaryRates): SalaryBreakdown {
   const casMinor = bps(grossMinor, rates.casBps);
   const cassMinor = bps(grossMinor, rates.cassBps);

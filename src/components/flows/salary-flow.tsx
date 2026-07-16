@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDate, formatMinor, parseAmountToMinor } from "@/lib/format";
 import {
   previewSalary,
+  repeatLastSalary,
   saveSalary,
   type SalaryPreview,
 } from "@/lib/ledger/flow-actions";
@@ -30,6 +31,12 @@ export function SalaryFlow({
     employeeName: string;
     month: string;
     gross: string;
+    cas: string;
+    cass: string;
+    incomeTax: string;
+    cam: string;
+    net: string;
+    personalDeduction: string;
     personalAccountId: string;
   };
   onSaved?: () => void;
@@ -38,6 +45,14 @@ export function SalaryFlow({
   const [employeeName, setEmployeeName] = useState(initial?.employeeName ?? "");
   const [month, setMonth] = useState(initial?.month ?? currentMonth());
   const [gross, setGross] = useState(initial?.gross ?? "");
+  const [cas, setCas] = useState(initial?.cas ?? "");
+  const [cass, setCass] = useState(initial?.cass ?? "");
+  const [incomeTax, setIncomeTax] = useState(initial?.incomeTax ?? "");
+  const [cam, setCam] = useState(initial?.cam ?? "");
+  const [net, setNet] = useState(initial?.net ?? "");
+  const [personalDeduction, setPersonalDeduction] = useState(
+    initial?.personalDeduction ?? "",
+  );
   const [personalAccountId, setPersonalAccountId] = useState(
     initial?.personalAccountId ?? personalAccounts[0]?.id ?? "",
   );
@@ -47,6 +62,7 @@ export function SalaryFlow({
   const translateError = useTranslatedError();
   const [preview, setPreview] = useState<SalaryPreview | null>(null);
   const [error, setError] = useState<AppError | null>(null);
+  const [repeatMissing, setRepeatMissing] = useState(false);
   const [pending, startTransition] = useTransition();
   const grossRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -54,30 +70,80 @@ export function SalaryFlow({
   }, []);
 
   const grossMinor = parseAmountToMinor(gross);
+  const casMinor = parseAmountToMinor(cas);
+  const cassMinor = parseAmountToMinor(cass);
+  const incomeTaxMinor = parseAmountToMinor(incomeTax);
+  const camMinor = parseAmountToMinor(cam);
+  const netMinor = parseAmountToMinor(net);
+  const personalDeductionMinor = parseAmountToMinor(personalDeduction);
   const inputsValid =
     employeeName.trim() !== "" &&
     /^\d{4}-\d{2}$/.test(month) &&
     grossMinor !== null &&
     grossMinor > 0 &&
+    casMinor !== null &&
+    casMinor > 0 &&
+    cassMinor !== null &&
+    cassMinor > 0 &&
+    incomeTaxMinor !== null &&
+    incomeTaxMinor > 0 &&
+    camMinor !== null &&
+    camMinor > 0 &&
+    netMinor !== null &&
+    netMinor > 0 &&
+    personalDeductionMinor !== null &&
+    personalDeductionMinor >= 0 &&
     personalAccountId !== "";
 
   // Any input change invalidates a previously computed breakdown.
   const invalidate = () => {
     setPreview(null);
     setError(null);
+    setRepeatMissing(false);
   };
 
   const runPreview = () => {
-    if (!inputsValid || grossMinor === null) return;
+    if (
+      !inputsValid ||
+      grossMinor === null ||
+      casMinor === null ||
+      cassMinor === null ||
+      incomeTaxMinor === null ||
+      camMinor === null ||
+      netMinor === null ||
+      personalDeductionMinor === null
+    ) {
+      return;
+    }
     startTransition(async () => {
-      const result = await previewSalary({ month, grossMinor });
+      const result = await previewSalary({
+        month,
+        grossMinor,
+        casMinor,
+        cassMinor,
+        incomeTaxMinor,
+        camMinor,
+        netMinor,
+        personalDeductionMinor,
+      });
       if ("error" in result) setError(result.error);
       else setPreview(result);
     });
   };
 
   const confirm = () => {
-    if (!inputsValid || grossMinor === null) return;
+    if (
+      !inputsValid ||
+      grossMinor === null ||
+      casMinor === null ||
+      cassMinor === null ||
+      incomeTaxMinor === null ||
+      camMinor === null ||
+      netMinor === null ||
+      personalDeductionMinor === null
+    ) {
+      return;
+    }
     startTransition(async () => {
       const result = await saveSalary({
         transactionId: initial?.transactionId,
@@ -87,6 +153,12 @@ export function SalaryFlow({
         employeeName,
         month,
         grossMinor,
+        casMinor,
+        cassMinor,
+        incomeTaxMinor,
+        camMinor,
+        netMinor,
+        personalDeductionMinor,
         personalAccountId,
       });
       if (result && "error" in result) setError(result.error);
@@ -102,6 +174,7 @@ export function SalaryFlow({
         ["cas", t("rowCas"), -preview.cas],
         ["cass", t("rowCass"), -preview.cass],
         ["incomeTax", t("rowIncomeTax"), -preview.incomeTax],
+        ["personalDeduction", t("rowPersonalDeduction"), preview.personalDeduction],
         ["net", t("rowNet"), preview.net],
         ["cam", t("rowCam"), preview.cam],
         ["employerCost", t("rowEmployerCost"), preview.employerCost],
@@ -119,17 +192,55 @@ export function SalaryFlow({
       }}
     >
       <div className="grid grid-cols-2 gap-3">
-        <label className={labelClass}>
-          {t("employeeName")}
-          <input
-            className={fieldClass}
-            value={employeeName}
-            onChange={(e) => {
-              setEmployeeName(e.target.value);
-              invalidate();
-            }}
-          />
-        </label>
+        <div className="flex flex-col gap-1">
+          <label className={labelClass}>
+            {t("employeeName")}
+            <input
+              className={fieldClass}
+              value={employeeName}
+              onChange={(e) => {
+                setEmployeeName(e.target.value);
+                invalidate();
+              }}
+            />
+          </label>
+          {!initial && (
+            <button
+              type="button"
+              className="self-start rounded-input px-2 py-1 text-caption text-accent outline-none hover:text-accent-hover focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50"
+              disabled={!employeeName.trim() || pending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await repeatLastSalary(companyId, employeeName);
+                  if (result && "error" in result) {
+                    setError(result.error);
+                    return;
+                  }
+                  if (!result) {
+                    setRepeatMissing(true);
+                    setError(null);
+                    return;
+                  }
+                  setEmployeeName(result.employeeName);
+                  setMonth(result.month);
+                  setGross(result.gross);
+                  setCas(result.cas);
+                  setCass(result.cass);
+                  setIncomeTax(result.incomeTax);
+                  setCam(result.cam);
+                  setNet(result.net);
+                  setPersonalDeduction(result.personalDeduction);
+                  setPersonalAccountId(result.personalAccountId);
+                  setPreview(null);
+                  setError(null);
+                  setRepeatMissing(false);
+                });
+              }}
+            >
+              {t("repeatLastSalary")}
+            </button>
+          )}
+        </div>
         <label className={labelClass}>
           {t("month")}
           <input
@@ -145,20 +256,30 @@ export function SalaryFlow({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className={labelClass}>
-          {t("grossSalary")}
-          <input
-            ref={grossRef}
-            inputMode="decimal"
-            placeholder={tForms("amountPlaceholder")}
-            className={fieldClass}
-            value={gross}
-            onChange={(e) => {
-              setGross(e.target.value);
-              invalidate();
-            }}
-          />
-        </label>
+        {[
+          [t("grossSalary"), gross, setGross, grossRef],
+          [t("rowCas"), cas, setCas, null],
+          [t("rowCass"), cass, setCass, null],
+          [t("rowIncomeTax"), incomeTax, setIncomeTax, null],
+          [t("rowCam"), cam, setCam, null],
+          [t("rowNet"), net, setNet, null],
+          [t("rowPersonalDeduction"), personalDeduction, setPersonalDeduction, null],
+        ].map(([label, value, setter, ref]) => (
+          <label key={label as string} className={labelClass}>
+            {label as string}
+            <input
+              ref={ref as React.RefObject<HTMLInputElement> | undefined}
+              inputMode="decimal"
+              placeholder={tForms("amountPlaceholder")}
+              className={fieldClass}
+              value={value as string}
+              onChange={(event) => {
+                (setter as (next: string) => void)(event.target.value);
+                invalidate();
+              }}
+            />
+          </label>
+        ))}
         <label className={labelClass}>
           {t("personalAccount")}
           <select
@@ -196,7 +317,7 @@ export function SalaryFlow({
               ))}
               <tr className="border-t border-border-hairline">
                 <td colSpan={2} className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-caption text-status-warning-text">
-                  {preview.rateNote} · {t("transactionDate", { date: formatDate(preview.date, locale) })}
+                  {t("transactionDate", { date: formatDate(preview.date, locale) })}
                 </td>
               </tr>
             </tbody>
@@ -205,6 +326,7 @@ export function SalaryFlow({
       )}
 
       {error && <p className={errorClass}>{translateError(error)}</p>}
+      {repeatMissing && <p className="text-secondary text-text-muted">{t("noPreviousSalary")}</p>}
 
       <div className="flex gap-2">
         <button type="submit" className={primaryButtonClass} disabled={!inputsValid || pending}>

@@ -1,6 +1,16 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, postings, taxAccruals, taxRules, trades, transactions, transactionTags, tags } from "@/db/schema";
+import {
+  accounts,
+  postings,
+  salaryTransactionDetails,
+  taxAccruals,
+  taxRules,
+  trades,
+  transactions,
+  transactionTags,
+  tags,
+} from "@/db/schema";
 import { minorToInput } from "@/lib/format";
 import { LedgerValidationError } from "./types";
 
@@ -31,13 +41,19 @@ type TransferDraft = {
   note: string;
 };
 
-type SalaryDraft = {
+export type SalaryDraft = {
   type: "salary";
   transactionId: string;
   expectedRevision: number;
   employeeName: string;
   month: string;
   gross: string;
+  cas: string;
+  cass: string;
+  incomeTax: string;
+  cam: string;
+  net: string;
+  personalDeduction: string;
   personalAccountId: string;
 };
 
@@ -66,6 +82,70 @@ export type TransactionEditDraft =
   | SalaryDraft
   | DividendDraft
   | OpeningBalanceDraft;
+
+const SALARY_RULE_TYPES = [
+  "salary_cas",
+  "salary_cass",
+  "salary_income_tax",
+  "cam",
+] as const;
+
+function salaryRuleAmount(
+  rows: { ruleType: string; amount: number }[],
+  ruleType: (typeof SALARY_RULE_TYPES)[number],
+): number {
+  const matching = rows.filter((row) => row.ruleType === ruleType);
+  if (matching.length !== 1 || matching[0].amount >= 0) {
+    throw new LedgerValidationError("flows.salaryShapeUnavailable");
+  }
+  return Math.abs(matching[0].amount);
+}
+
+export async function getLastCompleteSalaryDraft(
+  entityId: string,
+  employeeName: string,
+): Promise<SalaryDraft | null> {
+  const normalized = employeeName.trim().toLowerCase();
+  if (!normalized) throw new LedgerValidationError("flows.employeeNameRequired");
+  const [candidate] = await db
+    .select({ transactionId: transactions.id })
+    .from(transactions)
+    .innerJoin(
+      postings,
+      and(
+        eq(postings.transactionId, transactions.id),
+        eq(postings.revision, transactions.currentRevision),
+        isNull(postings.deletedAt),
+      ),
+    )
+    .innerJoin(accounts, eq(accounts.id, postings.accountId))
+    .innerJoin(
+      salaryTransactionDetails,
+      and(
+        eq(salaryTransactionDetails.transactionId, transactions.id),
+        eq(salaryTransactionDetails.revision, transactions.currentRevision),
+      ),
+    )
+    .where(
+      and(
+        eq(transactions.entityId, entityId),
+        eq(transactions.kind, "salary"),
+        isNull(transactions.deletedAt),
+        eq(accounts.entityId, entityId),
+        eq(accounts.type, "bank"),
+        sql`${postings.amount} < 0`,
+        sql`lower(btrim(${postings.counterparty})) = ${normalized}`,
+      ),
+    )
+    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    .limit(1);
+  if (!candidate) return null;
+  const draft = await getTransactionEditDraft(candidate.transactionId, entityId);
+  if (draft.type !== "salary" || !draft.personalDeduction) {
+    throw new LedgerValidationError("flows.salaryShapeUnavailable");
+  }
+  return draft;
+}
 
 export async function getTransactionEditDraft(
   transactionId: string,
@@ -168,22 +248,69 @@ export async function getTransactionEditDraft(
     );
     if (!personal) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
     if (transaction.kind === "salary") {
-      const employeeTaxes = accrualRows
-        .filter((row) =>
-          ["salary_cas", "salary_cass", "salary_income_tax"].includes(row.ruleType),
+      if (
+        legs.length !== 7 ||
+        accrualRows.length !== 4 ||
+        accrualRows.some(
+          (row) =>
+            !SALARY_RULE_TYPES.includes(
+              row.ruleType as (typeof SALARY_RULE_TYPES)[number],
+            ),
         )
-        .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+      ) {
+        throw new LedgerValidationError("flows.salaryShapeUnavailable");
+      }
+      const cas = salaryRuleAmount(accrualRows, "salary_cas");
+      const cass = salaryRuleAmount(accrualRows, "salary_cass");
+      const incomeTax = salaryRuleAmount(accrualRows, "salary_income_tax");
+      const cam = salaryRuleAmount(accrualRows, "cam");
       const companyBank = legs.find(
         (leg) => leg.accountEntityId === entityId && leg.accountType === "bank" && leg.amount < 0,
       );
-      if (!companyBank) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+      const equity = legs.find(
+        (leg) =>
+          leg.accountEntityId === entityId &&
+          leg.accountType === "equity" &&
+          leg.amount > 0,
+      );
+      const taxLegs = legs.filter(
+        (leg) =>
+          leg.accountEntityId === entityId &&
+          leg.accountType === "tax_liability" &&
+          leg.amount < 0,
+      );
+      const net = personal.amount;
+      if (
+        !companyBank ||
+        !equity ||
+        taxLegs.length !== 4 ||
+        companyBank.amount !== -net ||
+        equity.amount !== cas + cass + incomeTax + cam
+      ) {
+        throw new LedgerValidationError("flows.salaryShapeUnavailable");
+      }
+      const [detail] = await db
+        .select({ personalDeductionMinor: salaryTransactionDetails.personalDeductionMinor })
+        .from(salaryTransactionDetails)
+        .where(
+          and(
+            eq(salaryTransactionDetails.transactionId, transactionId),
+            eq(salaryTransactionDetails.revision, transaction.currentRevision),
+          ),
+        );
       return {
         type: "salary",
         transactionId,
         expectedRevision: transaction.currentRevision,
         employeeName: companyBank.counterparty ?? "",
         month: transaction.date.slice(0, 7),
-        gross: minorToInput(personal.amount + employeeTaxes),
+        gross: minorToInput(net + cas + cass + incomeTax),
+        cas: minorToInput(cas),
+        cass: minorToInput(cass),
+        incomeTax: minorToInput(incomeTax),
+        cam: minorToInput(cam),
+        net: minorToInput(net),
+        personalDeduction: detail ? minorToInput(detail.personalDeductionMinor) : "",
         personalAccountId: personal.accountId,
       };
     }

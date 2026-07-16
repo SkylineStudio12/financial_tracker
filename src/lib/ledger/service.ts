@@ -26,6 +26,7 @@ import {
   postings,
   revolutBookedRows,
   revolutImportRows,
+  salaryTransactionDetails,
   taxAccruals,
   trades,
   transactions,
@@ -186,6 +187,19 @@ async function validateAndPrepare(
       throw new LedgerValidationError("ledger.accrualPostingNotTaxLiability");
     }
   }
+  if (input.salaryDetail) {
+    if (input.kind !== "salary") {
+      throw new LedgerValidationError("flows.salaryShapeUnavailable");
+    }
+    if (
+      !Number.isSafeInteger(input.salaryDetail.personalDeductionMinor) ||
+      input.salaryDetail.personalDeductionMinor < 0
+    ) {
+      throw new LedgerValidationError("flows.salaryAmountInvalid", {
+        field: "personalDeduction",
+      });
+    }
+  }
   return prepared;
 }
 
@@ -252,6 +266,14 @@ async function insertTransactionRows(
     );
   }
 
+  if (input.salaryDetail) {
+    await tx.insert(salaryTransactionDetails).values({
+      transactionId: transaction.id,
+      revision,
+      personalDeductionMinor: input.salaryDetail.personalDeductionMinor,
+    });
+  }
+
   if (input.tagIds?.length) {
     await tx
       .insert(transactionTags)
@@ -306,12 +328,22 @@ async function snapshotTransaction(
     .select()
     .from(transactionImportLinks)
     .where(eq(transactionImportLinks.transactionId, id));
+  const salaryDetails = await reader
+    .select()
+    .from(salaryTransactionDetails)
+    .where(
+      and(
+        eq(salaryTransactionDetails.transactionId, id),
+        eq(salaryTransactionDetails.revision, transaction.currentRevision),
+      ),
+    );
   return {
     transaction,
     postings: postingRows,
     accruals: accrualRows,
     tagIds: tagRows.map((t) => t.tagId),
     importLinks,
+    salaryDetails,
   };
 }
 

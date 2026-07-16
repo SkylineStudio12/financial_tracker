@@ -19,6 +19,8 @@ full review reports remain optional for heavy units.
 | 2026-07-15 | Tax config temporal table + as-of calculations (Tier-3) | B | approved with TEST_DATABASE_URL pin condition satisfied; dividend whole-leu rounding remains on the accountant follow-up list; btree_gist flagged for Phase 7 deployment checklist | 2026-07-15 (owner-confirmed date; exact time unavailable) |
 | 2026-07-15 | CRUD-1 non-investment edit/delete/trash/restore/purge (Tier-3) | A | approved with durable import ownership expanded into scope; investment transactions remain unavailable; live-clone migration, full-reversal regression, and ING recovery-state verification required | 2026-07-15 (owner-confirmed date; exact time unavailable) |
 | 2026-07-15 | CRUD-1 non-investment edit/delete/trash/restore/purge (Tier-3) | B | approved green after adversarial fixes and follow-up review; live clone verified one active claim per real ING/Revolut batch and showed ING transaction 2951fbcf-9d82-43ac-a59b-4c86c0217f33 is soft-deleted, not hard-deleted, so 0009 backfills it as trashed with its claim retained | 2026-07-15 (owner-confirmed date; exact time unavailable) |
+| 2026-07-16 | Salary payslip-entered values (Tier-3) | A | approved with two owner amendments: zero-leg boundary accepted as logged limitation; fixture deduction 45,000 (confirmed June-2026 payslip) | 2026-07-16 |
+| 2026-07-16 | Salary payslip-entered values (Tier-3) | B | approved green; one-ban mismatch writes nothing; legacy edit/lifecycle fixtures pass; live untouched, 0010 generated not applied | 2026-07-16 |
 
 *Both 3f rows are retroactive, reconstructed 2026-07-12 from the conversation
 record.*

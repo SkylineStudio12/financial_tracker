@@ -1,11 +1,13 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   date,
   index,
   integer,
   pgTable,
   primaryKey,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -30,6 +32,27 @@ export const transactions = pgTable(
     ...softDelete,
   },
   (table) => [index("transactions_entity_id_date_idx").on(table.entityId, table.date)],
+);
+
+/** Payslip-only metadata with no ledger leg. Rows are append-only by
+ * transaction revision so CRUD history never rewrites the prior payslip. */
+export const salaryTransactionDetails = pgTable(
+  "salary_transaction_details",
+  {
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    personalDeductionMinor: moneyMinor("personal_deduction_minor").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.transactionId, table.revision] }),
+    check(
+      "salary_transaction_details_deduction_nonnegative_check",
+      sql`${table.personalDeductionMinor} >= 0`,
+    ),
+  ],
 );
 
 /**

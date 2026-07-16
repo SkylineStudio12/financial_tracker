@@ -36,6 +36,10 @@ export interface AccrualInput {
   quarter: number | null;
 }
 
+export interface SalaryDetailInput {
+  personalDeductionMinor: number;
+}
+
 export interface TransactionInput {
   entityId: string;
   /** YYYY-MM-DD */
@@ -47,4 +51,6 @@ export interface TransactionInput {
   postings: PostingInput[];
   /** Tax accrual links for postings on tax_liability accounts. */
   accruals?: AccrualInput[];
+  /** Revision-keyed payslip metadata that intentionally has no posting leg. */
+  salaryDetail?: SalaryDetailInput;
 }

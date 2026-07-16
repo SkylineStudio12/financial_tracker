@@ -144,6 +144,8 @@ export interface SalaryTaxResult {
   appliedConfig: AppliedTaxConfig[];
 }
 
+/** @deprecated The live salary flow transcribes payslip values and never calls
+ * this calculator. Retained until the separately scoped tax-config cleanup. */
 export async function calculateSalary(input: {
   grossMinor: number;
   payPeriodDate: string;

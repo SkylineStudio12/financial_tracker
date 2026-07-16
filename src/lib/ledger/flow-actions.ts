@@ -11,9 +11,9 @@
  * liability account back toward zero.
  */
 import { redirect } from "next/navigation";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, entities } from "@/db/schema";
+import { accounts, categories, entities, taxRules } from "@/db/schema";
 import {
   createTransaction,
   updateTransaction,
@@ -22,9 +22,10 @@ import {
   type PostingInput,
 } from "@/lib/ledger";
 import { toAppError, type AppError } from "@/lib/app-error";
-import { computeDividend, computeSalary } from "@/lib/tax/compute";
-import { getActiveRule, quarterOf, yearOf, type ActiveRule } from "@/lib/tax/rules";
+import { computeDividend } from "@/lib/tax/compute";
+import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
 import { profileForEntity } from "@/lib/profiles";
+import { getLastCompleteSalaryDraft, type SalaryDraft } from "./edit-drafts";
 
 /** Companies map 1:1 to profiles, so the post-save view derives from the id. */
 function companyTransactionsPath(companyId: string): string {
@@ -42,6 +43,12 @@ export interface SalaryFlowPayload {
   /** YYYY-MM */
   month: string;
   grossMinor: number;
+  casMinor: number;
+  cassMinor: number;
+  incomeTaxMinor: number;
+  camMinor: number;
+  netMinor: number;
+  personalDeductionMinor: number;
   /** Household account that receives the net salary. */
   personalAccountId: string;
 }
@@ -88,14 +95,28 @@ async function loadCompanyAccounts(companyId: string) {
   return { company, bank, taxLiability, equity };
 }
 
-async function loadSalaryRules(date: string) {
-  const [incomeTax, cas, cass, cam] = await Promise.all([
-    getActiveRule("salary_income_tax", date),
-    getActiveRule("salary_cas", date),
-    getActiveRule("salary_cass", date),
-    getActiveRule("cam", date),
-  ]);
-  return { incomeTax, cas, cass, cam };
+type SalaryRuleType = "salary_income_tax" | "salary_cas" | "salary_cass" | "cam";
+type SalaryRuleId = { id: string; ruleType: SalaryRuleType };
+
+async function loadSalaryRuleIds(date: string): Promise<Record<SalaryRuleType, SalaryRuleId>> {
+  const rows = await db
+    .select({ id: taxRules.id, ruleType: taxRules.ruleType })
+    .from(taxRules)
+    .where(
+      and(
+        isNull(taxRules.deletedAt),
+        lte(taxRules.validFrom, date),
+        or(isNull(taxRules.validTo), gte(taxRules.validTo, date)),
+      ),
+    )
+    .orderBy(desc(taxRules.validFrom));
+  const result = {} as Record<SalaryRuleType, SalaryRuleId>;
+  for (const type of ["salary_income_tax", "salary_cas", "salary_cass", "cam"] as const) {
+    const row = rows.find((candidate) => candidate.ruleType === type);
+    if (!row) throw new LedgerValidationError("tax.taxRuleMissing", { type, date });
+    result[type] = { id: row.id, ruleType: type };
+  }
+  return result;
 }
 
 export interface SalaryPreview {
@@ -106,23 +127,81 @@ export interface SalaryPreview {
   incomeTax: number;
   net: number;
   cam: number;
+  personalDeduction: number;
   employerCost: number;
   totalAccrued: number;
-  rateNote: string;
+}
+
+type EnteredSalaryAmounts = Pick<
+  SalaryFlowPayload,
+  | "grossMinor"
+  | "casMinor"
+  | "cassMinor"
+  | "incomeTaxMinor"
+  | "camMinor"
+  | "netMinor"
+  | "personalDeductionMinor"
+>;
+
+function validateEnteredSalary(payload: EnteredSalaryAmounts) {
+  const positive = [
+    ["gross", payload.grossMinor],
+    ["cas", payload.casMinor],
+    ["cass", payload.cassMinor],
+    ["incomeTax", payload.incomeTaxMinor],
+    ["cam", payload.camMinor],
+    ["net", payload.netMinor],
+  ] as const;
+  for (const [field, value] of positive) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new LedgerValidationError("flows.salaryAmountInvalid", { field });
+    }
+  }
+  if (
+    !Number.isSafeInteger(payload.personalDeductionMinor) ||
+    payload.personalDeductionMinor < 0
+  ) {
+    throw new LedgerValidationError("flows.salaryAmountInvalid", {
+      field: "personalDeduction",
+    });
+  }
+  const expectedNet =
+    payload.grossMinor - payload.casMinor - payload.cassMinor - payload.incomeTaxMinor;
+  if (payload.netMinor !== expectedNet) {
+    throw new LedgerValidationError("flows.salaryNetMismatch", {
+      expected: expectedNet,
+      actual: payload.netMinor,
+    });
+  }
+  return {
+    grossMinor: payload.grossMinor,
+    casMinor: payload.casMinor,
+    cassMinor: payload.cassMinor,
+    incomeTaxMinor: payload.incomeTaxMinor,
+    netMinor: payload.netMinor,
+    camMinor: payload.camMinor,
+    employerCostMinor: payload.grossMinor + payload.camMinor,
+    totalAccruedMinor:
+      payload.casMinor + payload.cassMinor + payload.incomeTaxMinor + payload.camMinor,
+  };
 }
 
 export async function previewSalary(
-  payload: Pick<SalaryFlowPayload, "month" | "grossMinor">,
+  payload: Pick<
+    SalaryFlowPayload,
+    | "month"
+    | "grossMinor"
+    | "casMinor"
+    | "cassMinor"
+    | "incomeTaxMinor"
+    | "camMinor"
+    | "netMinor"
+    | "personalDeductionMinor"
+  >,
 ): Promise<SalaryPreview | { error: AppError }> {
   try {
     const date = monthEndDate(payload.month);
-    const rules = await loadSalaryRules(date);
-    const b = computeSalary(payload.grossMinor, {
-      incomeTaxBps: rules.incomeTax.rateBps,
-      casBps: rules.cas.rateBps,
-      cassBps: rules.cass.rateBps,
-      camBps: rules.cam.rateBps,
-    });
+    const b = validateEnteredSalary(payload);
     return {
       date,
       gross: b.grossMinor,
@@ -131,9 +210,49 @@ export async function previewSalary(
       incomeTax: b.incomeTaxMinor,
       net: b.netMinor,
       cam: b.camMinor,
+      personalDeduction: payload.personalDeductionMinor,
       employerCost: b.employerCostMinor,
       totalAccrued: b.totalAccruedMinor,
-      rateNote: `Rates: income tax ${rules.incomeTax.rateBps / 100}%, CAS ${rules.cas.rateBps / 100}%, CASS ${rules.cass.rateBps / 100}%, CAM ${rules.cam.rateBps / 100}% (placeholder values — confirm before relying on them)`,
+    };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export type SalaryRepeatPrefill = Pick<
+  SalaryDraft,
+  | "employeeName"
+  | "month"
+  | "gross"
+  | "cas"
+  | "cass"
+  | "incomeTax"
+  | "cam"
+  | "net"
+  | "personalDeduction"
+  | "personalAccountId"
+>;
+
+export async function repeatLastSalary(
+  companyId: string,
+  employeeName: string,
+): Promise<SalaryRepeatPrefill | { error: AppError } | null> {
+  try {
+    const draft = await getLastCompleteSalaryDraft(companyId, employeeName);
+    if (!draft) return null;
+    return {
+      employeeName: draft.employeeName,
+      month: draft.month,
+      gross: draft.gross,
+      cas: draft.cas,
+      cass: draft.cass,
+      incomeTax: draft.incomeTax,
+      cam: draft.cam,
+      net: draft.net,
+      personalDeduction: draft.personalDeduction,
+      personalAccountId: draft.personalAccountId,
     };
   } catch (error) {
     const appError = toAppError(error);
@@ -145,18 +264,10 @@ export async function previewSalary(
 export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResult | undefined> {
   try {
     if (!payload.employeeName.trim()) throw new LedgerValidationError("flows.employeeNameRequired");
-    if (!Number.isSafeInteger(payload.grossMinor) || payload.grossMinor <= 0) {
-      throw new LedgerValidationError("flows.grossAmountPositive");
-    }
     const date = monthEndDate(payload.month);
     const { company, bank, taxLiability, equity } = await loadCompanyAccounts(payload.companyId);
-    const rules = await loadSalaryRules(date);
-    const b = computeSalary(payload.grossMinor, {
-      incomeTaxBps: rules.incomeTax.rateBps,
-      casBps: rules.cas.rateBps,
-      cassBps: rules.cass.rateBps,
-      camBps: rules.cam.rateBps,
-    });
+    const rules = await loadSalaryRuleIds(date);
+    const b = validateEnteredSalary(payload);
 
     // Salaries category for the equity (expense) leg, if the company has one.
     const [salariesCategory] = await db
@@ -170,12 +281,12 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
         ),
       );
 
-    const taxLegs: { rule: ActiveRule; amount: number }[] = [
-      { rule: rules.cas, amount: b.casMinor },
-      { rule: rules.cass, amount: b.cassMinor },
-      { rule: rules.incomeTax, amount: b.incomeTaxMinor },
+    const taxLegs: { rule: SalaryRuleId; amount: number }[] = [
+      { rule: rules.salary_cas, amount: b.casMinor },
+      { rule: rules.salary_cass, amount: b.cassMinor },
+      { rule: rules.salary_income_tax, amount: b.incomeTaxMinor },
       { rule: rules.cam, amount: b.camMinor },
-    ].filter((leg) => leg.amount !== 0);
+    ];
 
     const postingInputs: PostingInput[] = [
       { accountId: bank.id, amount: -b.netMinor, counterparty: payload.employeeName.trim() },
@@ -205,6 +316,9 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
       kind: "salary",
       postings: postingInputs,
       accruals,
+      salaryDetail: {
+        personalDeductionMinor: payload.personalDeductionMinor,
+      },
     } as const;
     if (payload.transactionId) {
       await updateTransaction(payload.transactionId, input, payload.expectedRevision);

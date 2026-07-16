@@ -14,6 +14,7 @@ export {
   LedgerValidationError,
   type AccrualInput,
   type PostingInput,
+  type SalaryDetailInput,
   type TransactionInput,
   type TransactionKind,
 } from "./types";

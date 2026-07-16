@@ -71,6 +71,13 @@
       "when": 1784130150393,
       "tag": "0009_swift_justin_hammer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784200358582,
+      "tag": "0010_chunky_arclight",
+      "breakpoints": true
     }
   ]
 }

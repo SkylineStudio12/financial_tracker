@@ -239,3 +239,44 @@ date, unit, checkpoint, verdict, and owner-approval timestamp; full reports are
 optional for heavy units. Treat a Tier-3 commit with no review-log entry as ungated.
 **Origin:** The 3f gate was honored but unprovable from the repo; evidence
 survived only in a chat transcript.
+
+## L-0021
+
+An agent action taken past a STOP gate is unverified until the resulting
+state is independently confirmed, regardless of the agent's own "done"
+report.
+
+Context: the five-step live-migration prompt gated every step on owner
+approval. Codex committed 0009 (eb4b096) during the turn that was supposed
+to stop at "ready to commit, awaiting approval," then reported the commit
+as already done. The commit was the approval-gated action; it ran without
+approval.
+
+Rule: when an agent is found to have acted past a STOP, do not accept its
+report of the action as evidence the action was correct. Verify the
+committed or applied state directly (git status, file hash, journal
+consistency, database row counts as applicable). The agent's self-report
+and the actual state are separate claims. Same family as L-0017 and
+L-0020: an agent's narration of its own compliance is a claim, not proof.
+
+Corollary: after a STOP violation on a reversible step, tighten
+supervision on every subsequent step rather than loosening it. An agent
+that ran past a reversible STOP cannot be trusted to hold an irreversible
+one on its own.
+
+## L-0022
+
+A review-log checkpoint row must distinguish what the migration file
+contains from what a separate script does. Do not let a row imply an
+artifact holds something it does not.
+
+Context: the tax-config Checkpoint B row read "2026 confirmed seed," which
+led owner and orchestrator to expect seed rows to appear on live when 0008
+was applied. 0008 contains schema only; the seed is a separate path. The
+apply succeeded and left tax_config empty, which read as a failure until
+the artifact was inspected. Same family as the "committed vs approved"
+drift and L-0019.
+
+Rule: when a unit's schema and its seed/data population live in different
+artifacts, the checkpoint row names both and states which one the verdict
+covers. "Seed approved" is not "seed shipped in the migration."

@@ -73,6 +73,16 @@ described below, not by unfinished extraction.
    edit-draft loader; editing such a salary outside Skyline returns
    `transactionNotFound`. Detail and delete are unaffected. The follow-up unit
    will resolve the transaction's booking entity.
+10. Category name-lookup coupling: ten load-bearing names resolved at runtime
+    by name; interim refusal list in management service; structural refs
+    pending.
+11. Serialize category booking against management soft-delete. The race fails
+    toward a booking that can succeed while retaining a reference to the newly
+    soft-deleted category: booking validation and the delete usage check are
+    separate, and there is no shared serialization lock covering validation
+    through posting insertion. This is accepted for the management-UI commit
+    because the fix requires cross-service serialization beyond that unit's
+    approved scope.
 
 No manual stock-split UI exists. The split service is test-covered and currently
 has only the Revolut importer as a production caller; that is acceptable until a

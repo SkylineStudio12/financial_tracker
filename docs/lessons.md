@@ -313,3 +313,9 @@ to hit live.
 Context: fired twice in two days — the management-UI test on 2026-07-16 and
 the employee + July salary entry on 2026-07-17 both landed on the test DB
 because the dev server had been started with DATABASE_URL overridden.
+
+## L-0026
+
+Prompt tier must be derived from the path-defined tier of files the unit will
+plausibly touch, checked against review-standards.md at prompt-writing time,
+not estimated from perceived difficulty.

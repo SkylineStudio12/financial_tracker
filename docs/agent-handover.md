@@ -63,8 +63,16 @@ described below, not by unfinished extraction.
 6. Decide cleanup for ticker-only securities left by an abandoned staged batch.
 7. Serialize manual sells against batch reversal / buy-delete with a shared
    advisory lock; documented concurrency race, low practical risk.
-8. Migrate the remaining live-DB test suites onto `TEST_DATABASE_URL` (item 9
-   remainder); the reversal suite established the mechanism.
+8. Complete test isolation: an isolated `_test` runner exists since `e256a9d`
+   with an identity guard, `_test` suffix assertion, and drop/recreate + migrate
+   + seed lifecycle; five suites use it. Residual: pre-runner suites still run
+   against the live dev DB and remain to be migrated.
+9. Resolve the cross-entity edit dead-end: cross-entity salaries are visible
+   from Greg and Household with the correct profile-side amount, but the Edit
+   action still passes the viewing profile's entity ID into the entity-gated
+   edit-draft loader; editing such a salary outside Skyline returns
+   `transactionNotFound`. Detail and delete are unaffected. The follow-up unit
+   will resolve the transaction's booking entity.
 
 No manual stock-split UI exists. The split service is test-covered and currently
 has only the Revolut importer as a production caller; that is acceptable until a

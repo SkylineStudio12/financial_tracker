@@ -280,3 +280,16 @@ drift and L-0019.
 Rule: when a unit's schema and its seed/data population live in different
 artifacts, the checkpoint row names both and states which one the verdict
 covers. "Seed approved" is not "seed shipped in the migration."
+
+## L-0023
+
+Every agent prompt is addressed to exactly one named agent. Duplicate
+delivery of one prompt to two agents produces double execution: conflicting
+writes to shared files and context-switching inside in-flight units. When it
+happens, the surviving artifact must be verified against both reports, and
+the interrupted agent's unit state independently confirmed.
+
+Incident 2026-07-17: management-UI rulings prompt executed by both CC and
+Codex; CC misattributed an uncommitted file to commit 0845689, Codex's later
+rewrite corrected it. Contradiction caught only because both reports landed
+in the single orchestrator context.

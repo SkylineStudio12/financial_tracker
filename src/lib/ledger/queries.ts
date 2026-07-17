@@ -263,11 +263,21 @@ export async function listTransactions(
   return { rows, total, pageSize: PAGE_SIZE };
 }
 
-export async function getTransactionDetail(transactionId: string) {
+export async function getTransactionDetail(
+  transactionId: string,
+  profile?: ProfileAccountScope,
+) {
   const [transaction] = await db
     .select()
     .from(transactions)
-    .where(and(eq(transactions.id, transactionId), isNull(transactions.deletedAt)));
+    .where(
+      and(
+        eq(transactions.id, transactionId),
+        profile
+          ? profileVisibilityCondition(profile, "live")
+          : isNull(transactions.deletedAt),
+      ),
+    );
   if (!transaction) return null;
 
   const postingRows = await db

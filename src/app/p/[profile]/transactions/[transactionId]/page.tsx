@@ -27,9 +27,8 @@ export default async function TransactionDetailPage({
   const t = await getTranslations("transactions");
   const tEnums = await getTranslations("enums");
   const tCommon = await getTranslations("common");
-  const detail = await getTransactionDetail(transactionId);
-  // Guard the transaction to the profile's entity (cross-entity ids 404).
-  if (!detail || detail.transaction.entityId !== profile.entityId) notFound();
+  const detail = await getTransactionDetail(transactionId, profile);
+  if (!detail) notFound();
   const { transaction, postings, tagNames, accruals, crudAvailable, importLink } = detail;
   const formOptions = await getFormOptions(profile.entityId, profile.owner);
 

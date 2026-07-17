@@ -10,6 +10,7 @@ import {
 } from "@/lib/ledger";
 import { saveSalary } from "@/lib/ledger/flow-actions";
 import {
+  getTransactionDetail,
   listDeletedTransactions,
   listTransactions,
   profileAccountScopeCondition,
@@ -172,6 +173,23 @@ async function main() {
         [269_500, "Greg — bank"],
       );
       console.log("  Skyline=-269500 Company bank; Greg=+269500 Greg bank; Household=+269500 Greg bank");
+    });
+
+    await fixture("salary detail follows profile posting visibility", async () => {
+      const [skylineDetail, gregDetail, householdDetail, andraDetail, drmxDetail] =
+        await Promise.all([
+          getTransactionDetail(salaryId, skyline),
+          getTransactionDetail(salaryId, greg),
+          getTransactionDetail(salaryId, household),
+          getTransactionDetail(salaryId, andra),
+          getTransactionDetail(salaryId, drmx),
+        ]);
+      assert.equal(skylineDetail?.transaction.id, salaryId);
+      assert.equal(gregDetail?.transaction.id, salaryId);
+      assert.equal(householdDetail?.transaction.id, salaryId);
+      assert.equal(andraDetail, null);
+      assert.equal(drmxDetail, null);
+      console.log("  Skyline/Greg/Household=accessible; Andra/DRMX=not found");
     });
 
     const companyOnlyId = await createFixtureTransaction({

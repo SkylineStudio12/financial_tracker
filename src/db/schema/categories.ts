@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   pgTable,
@@ -31,7 +32,12 @@ export const categories = pgTable(
     ...timestamps,
     ...softDelete,
   },
-  (table) => [index("categories_parent_id_idx").on(table.parentId)],
+  (table) => [
+    index("categories_parent_id_idx").on(table.parentId),
+    uniqueIndex("categories_entity_lower_name_kind_live_uidx")
+      .on(table.entityId, sql`lower(${table.name})`, table.kind)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.entityId} IS NOT NULL`),
+  ],
 );
 
 /** Flat labels, attached to transactions via transaction_tags. */

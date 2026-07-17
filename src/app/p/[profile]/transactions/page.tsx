@@ -85,7 +85,7 @@ export default async function TransactionsPage({
     listDeletedTransactions(profile),
     profile.companyFlows
       ? getFlowPageData(entityId)
-      : Promise.resolve({ isCompany: false, personalAccounts: [] }),
+      : Promise.resolve({ isCompany: false, personalAccounts: [], employees: [] }),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
@@ -117,6 +117,7 @@ export default async function TransactionsPage({
             profileSlug={profile.slug}
             options={formOptions}
             personalAccounts={flowData.personalAccounts}
+            employees={flowData.employees}
             salaryAvailable={flowData.isCompany}
             initialType={
               flowData.isCompany && single(query.entry) === "salary" ? "salary" : undefined

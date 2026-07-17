@@ -17,6 +17,7 @@ import { OpeningBalanceForm } from "@/components/forms/opening-balance-form";
 import { SalaryFlow } from "@/components/flows/salary-flow";
 import { DividendFlow } from "@/components/flows/dividend-flow";
 import type { AccountOption, FormOptions } from "@/components/forms/option-types";
+import type { EmployeeOption } from "@/lib/management/service";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -63,6 +64,7 @@ export function TransactionRowActions({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [draft, setDraft] = useState<TransactionEditDraft | null>(null);
   const [personalAccounts, setPersonalAccounts] = useState<AccountOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
   const refreshAfterClose = useRef(false);
@@ -75,9 +77,10 @@ export function TransactionRowActions({
       const result = await loadTransactionEditDraftAction(transactionId, entityId);
       if (result?.error) setError(result.error);
       else {
-        if (!result?.draft || !result.personalAccounts) return;
+        if (!result?.draft || !result.personalAccounts || !result.employees) return;
         setDraft(result.draft);
         setPersonalAccounts(result.personalAccounts);
+        setEmployees(result.employees);
       }
     });
   };
@@ -182,6 +185,7 @@ export function TransactionRowActions({
             <SalaryFlow
               companyId={entityId}
               personalAccounts={personalAccounts}
+              employees={employees}
               initial={draft}
               onSaved={saved}
               cancelSlot={cancelSlot}

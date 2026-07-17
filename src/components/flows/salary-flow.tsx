@@ -11,8 +11,12 @@ import {
 } from "@/lib/ledger/flow-actions";
 import {
   defaultSalaryPaymentDate,
+  salaryPayMonthAfterPaymentDateChange,
   salaryPaymentDateAfterPayMonthChange,
 } from "@/lib/ledger/salary-dates";
+import { getEmployeeSalaryPrefillAction } from "@/lib/management/actions";
+import type { EmployeeOption } from "@/lib/management/service";
+import { resolveAutomaticSalaryPrefill } from "@/lib/management/salary-prefill";
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
@@ -32,6 +36,7 @@ function formatPayMonth(payMonth: string, locale: string): string {
 export function SalaryFlow({
   companyId,
   personalAccounts,
+  employees = [],
   initial,
   onSaved,
   cancelSlot,
@@ -39,6 +44,7 @@ export function SalaryFlow({
 }: {
   companyId: string;
   personalAccounts: AccountOption[];
+  employees?: EmployeeOption[];
   initial?: {
     transactionId: string;
     expectedRevision: number;
@@ -59,12 +65,19 @@ export function SalaryFlow({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const initialPayMonth = initial?.payMonth ?? currentMonth();
+  const initialEmployee = initial
+    ? employees.find(
+        (employee) => employee.name.trim().toLowerCase() === initial.employeeName.trim().toLowerCase(),
+      )
+    : undefined;
+  const [employeeId, setEmployeeId] = useState(initialEmployee?.id ?? (initial ? "legacy" : ""));
   const [employeeName, setEmployeeName] = useState(initial?.employeeName ?? "");
   const [payMonth, setPayMonth] = useState(initialPayMonth);
   const [paymentDate, setPaymentDate] = useState(
     initial?.paymentDate ?? defaultSalaryPaymentDate(initialPayMonth),
   );
   const paymentDateTouched = useRef(Boolean(initial));
+  const payMonthTouched = useRef(Boolean(initial));
   const [gross, setGross] = useState(initial?.gross ?? "");
   const [cas, setCas] = useState(initial?.cas ?? "");
   const [cass, setCass] = useState(initial?.cass ?? "");
@@ -87,12 +100,16 @@ export function SalaryFlow({
   const [repeatMissing, setRepeatMissing] = useState(false);
   const [pending, startTransition] = useTransition();
   const grossRef = useRef<HTMLInputElement>(null);
+  const employeeRef = useRef<HTMLSelectElement>(null);
+  const prefillRequest = useRef(0);
 
   useEffect(() => {
-    grossRef.current?.focus();
-  }, []);
+    if (initial) grossRef.current?.focus();
+    else employeeRef.current?.focus();
+  }, [initial]);
 
   const valuesSnapshot = JSON.stringify({
+    employeeId,
     employeeName,
     payMonth,
     paymentDate,
@@ -142,6 +159,26 @@ export function SalaryFlow({
     setPreview(null);
     setError(null);
     setRepeatMissing(false);
+  };
+
+  const applySalaryValues = (values: {
+    gross: string;
+    cas: string;
+    cass: string;
+    incomeTax: string;
+    cam: string;
+    net: string;
+    personalDeduction: string;
+    personalAccountId?: string;
+  }) => {
+    setGross(values.gross);
+    setCas(values.cas);
+    setCass(values.cass);
+    setIncomeTax(values.incomeTax);
+    setCam(values.cam);
+    setNet(values.net);
+    setPersonalDeduction(values.personalDeduction);
+    if (values.personalAccountId) setPersonalAccountId(values.personalAccountId);
   };
 
   const runPreview = () => {
@@ -246,15 +283,74 @@ export function SalaryFlow({
             <div className="flex flex-col gap-1">
               <label className={labelClass}>
                 {t("employeeName")}
-                <input
+                <select
+                  ref={employeeRef}
                   className={fieldClass}
-                  value={employeeName}
+                  value={employeeId}
                   onChange={(event) => {
-                    setEmployeeName(event.target.value);
+                    const nextEmployeeId = event.target.value;
+                    const request = prefillRequest.current + 1;
+                    prefillRequest.current = request;
+                    const selected = employees.find((employee) => employee.id === nextEmployeeId);
+                    setEmployeeId(nextEmployeeId);
+                    setEmployeeName(selected?.name ?? "");
                     invalidate();
+                    if (!selected || initial) return;
+                    startTransition(async () => {
+                      const prefill = await getEmployeeSalaryPrefillAction(
+                        companyId,
+                        nextEmployeeId,
+                      );
+                      if ("error" in prefill) {
+                        if (prefillRequest.current !== request) return;
+                        setError(prefill.error);
+                        return;
+                      }
+                      let repeatError: AppError | null = null;
+                      const resolved = await resolveAutomaticSalaryPrefill(
+                        prefill.value?.profile ?? null,
+                        async () => {
+                          const repeated = await repeatLastSalary(companyId, selected.name);
+                          if (repeated && "error" in repeated) {
+                            repeatError = repeated.error;
+                            return null;
+                          }
+                          return repeated ?? null;
+                        },
+                      );
+                      if (prefillRequest.current !== request) return;
+                      if (repeatError) {
+                        setError(repeatError);
+                        return;
+                      }
+                      if (resolved.values) applySalaryValues(resolved.values);
+                      else {
+                        setGross("");
+                        setCas("");
+                        setCass("");
+                        setIncomeTax("");
+                        setCam("");
+                        setNet("");
+                        setPersonalDeduction("");
+                      }
+                      setRepeatMissing(false);
+                    });
                   }}
-                />
+                >
+                  <option value="">{t("selectEmployee")}</option>
+                  {initial && !initialEmployee && (
+                    <option value="legacy">{initial.employeeName}</option>
+                  )}
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </option>
+                  ))}
+                </select>
               </label>
+              {!initial && employees.length === 0 && (
+                <p className="text-caption text-status-warning-text">{t("noEmployees")}</p>
+              )}
               {!initial && (
                 <button
                   type="button"
@@ -300,8 +396,12 @@ export function SalaryFlow({
                 type="month"
                 className={fieldClass}
                 value={payMonth}
+                onFocus={() => {
+                  payMonthTouched.current = true;
+                }}
                 onChange={(event) => {
                   const nextPayMonth = event.target.value;
+                  payMonthTouched.current = true;
                   setPayMonth(nextPayMonth);
                   setPaymentDate((current) =>
                     salaryPaymentDateAfterPayMonthChange(
@@ -324,8 +424,16 @@ export function SalaryFlow({
                   paymentDateTouched.current = true;
                 }}
                 onChange={(event) => {
+                  const nextPaymentDate = event.target.value;
                   paymentDateTouched.current = true;
-                  setPaymentDate(event.target.value);
+                  setPaymentDate(nextPaymentDate);
+                  setPayMonth((current) =>
+                    salaryPayMonthAfterPaymentDateChange(
+                      nextPaymentDate,
+                      current,
+                      payMonthTouched.current,
+                    ),
+                  );
                   invalidate();
                 }}
               />

@@ -18,6 +18,24 @@ export function defaultSalaryPaymentDate(payMonth: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+export function defaultSalaryPayMonth(paymentDate: string): string {
+  if (!DATE_RE.test(paymentDate)) return "";
+  const parsed = new Date(`${paymentDate}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== paymentDate) {
+    return "";
+  }
+  parsed.setUTCMonth(parsed.getUTCMonth() - 1);
+  return parsed.toISOString().slice(0, 7);
+}
+
+export function salaryPayMonthAfterPaymentDateChange(
+  paymentDate: string,
+  currentPayMonth: string,
+  payMonthTouched: boolean,
+): string {
+  return payMonthTouched ? currentPayMonth : defaultSalaryPayMonth(paymentDate);
+}
+
 export function salaryPaymentDateAfterPayMonthChange(
   payMonth: string,
   currentPaymentDate: string,

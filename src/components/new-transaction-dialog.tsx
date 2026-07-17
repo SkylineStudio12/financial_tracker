@@ -26,6 +26,7 @@ import { StandardForm } from "@/components/forms/standard-form";
 import { TransferForm } from "@/components/forms/transfer-form";
 import { SalaryFlow } from "@/components/flows/salary-flow";
 import type { AccountOption, FormOptions } from "@/components/forms/option-types";
+import type { EmployeeOption } from "@/lib/management/service";
 
 type EntryType = "standard" | "transfer" | "salary";
 
@@ -41,6 +42,7 @@ export function NewTransactionDialog({
   profileSlug,
   options,
   personalAccounts = [],
+  employees = [],
   salaryAvailable = false,
   initialType,
 }: {
@@ -49,6 +51,7 @@ export function NewTransactionDialog({
   profileSlug?: string;
   options: FormOptions;
   personalAccounts?: AccountOption[];
+  employees?: EmployeeOption[];
   salaryAvailable?: boolean;
   initialType?: Extract<EntryType, "salary">;
 }) {
@@ -177,6 +180,7 @@ export function NewTransactionDialog({
           <SalaryFlow
             companyId={entityId}
             personalAccounts={personalAccounts}
+            employees={employees}
             onSaved={handleSaved}
             cancelSlot={cancelSlot}
             onDirtyChange={handleDirtyChange}

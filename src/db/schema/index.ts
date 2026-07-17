@@ -9,3 +9,4 @@ export * from "./import-ownership";
 export * from "./investments";
 export * from "./tax";
 export * from "./audit";
+export * from "./employees";

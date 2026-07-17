@@ -15,6 +15,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:provision-revolut": "tsx scripts/provision-revolut-accounts.ts",
     "db:provision-price-mappings": "tsx scripts/provision-price-mappings.ts",
+    "db:scan-category-duplicates": "tsx scripts/scan-category-duplicates.ts",
+    "db:seed-revenue-categories": "tsx scripts/seed-revenue-categories.ts",
     "db:verify": "tsx src/db/verify-schema.ts",
     "fx:sync": "tsx scripts/fx-sync.ts",
     "prices:stooq": "tsx scripts/stooq-price-import.ts",
@@ -24,6 +26,7 @@
     "test:crud": "tsx scripts/run-crud-test.ts",
     "test:salary-payslip": "tsx scripts/run-salary-payslip-test.ts",
     "test:profile-visibility": "tsx scripts/run-profile-visibility-test.ts",
+    "test:management": "tsx scripts/run-management-test.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

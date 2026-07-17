@@ -21,6 +21,7 @@ import {
   HouseIcon,
   ImportIcon,
   LayoutDashboardIcon,
+  Settings2Icon,
   ReceiptIcon,
   TrendingUpIcon,
   UserRoundIcon,
@@ -162,6 +163,7 @@ export function AppSidebar({ activeProfileSlug }: { activeProfileSlug: string })
   const views = [
     { href: `${base}/transactions`, label: t("transactions"), icon: ReceiptIcon },
     { href: `${base}/dashboard`, label: t("dashboard"), icon: LayoutDashboardIcon },
+    { href: `${base}/manage`, label: t("manage"), icon: Settings2Icon },
   ];
   const flows = [
     { href: `${base}/transactions?entry=salary`, label: t("newSalary"), icon: BanknoteIcon },

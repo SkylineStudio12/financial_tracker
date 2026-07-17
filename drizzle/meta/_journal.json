@@ -85,6 +85,13 @@
       "when": 1784213040852,
       "tag": "0011_sparkling_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784275080355,
+      "tag": "0012_rapid_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

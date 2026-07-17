@@ -30,6 +30,7 @@ import { getFlowPageData } from "./flow-page-data";
 import { hasLikelyRestoreCollision } from "./queries";
 import type { AccountOption } from "@/components/forms/option-types";
 import type { TransactionEditDraft } from "./edit-drafts";
+import type { EmployeeOption } from "@/lib/management/service";
 
 /**
  * Post-save destination: the caller's profile view. The slug comes from the
@@ -102,16 +103,25 @@ export async function loadTransactionEditDraftAction(
   transactionId: string,
   entityId: string,
 ): Promise<
-  | { draft: TransactionEditDraft; personalAccounts: AccountOption[]; error?: never }
-  | { error: AppError; draft?: never; personalAccounts?: never }
+  | {
+      draft: TransactionEditDraft;
+      personalAccounts: AccountOption[];
+      employees: EmployeeOption[];
+      error?: never;
+    }
+  | { error: AppError; draft?: never; personalAccounts?: never; employees?: never }
 > {
   try {
     const draft = await getTransactionEditDraft(transactionId, entityId);
-    const personalAccounts =
+    const flowData =
       draft.type === "salary" || draft.type === "dividend"
-        ? (await getFlowPageData(entityId)).personalAccounts
-        : [];
-    return { draft, personalAccounts };
+        ? await getFlowPageData(entityId)
+        : { personalAccounts: [], employees: [] };
+    return {
+      draft,
+      personalAccounts: flowData.personalAccounts,
+      employees: flowData.employees,
+    };
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };

@@ -27,6 +27,7 @@
     "test:salary-payslip": "tsx scripts/run-salary-payslip-test.ts",
     "test:profile-visibility": "tsx scripts/run-profile-visibility-test.ts",
     "test:management": "tsx scripts/run-management-test.ts",
+    "test:pre-runner-db": "tsx scripts/run-pre-runner-db-tests.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

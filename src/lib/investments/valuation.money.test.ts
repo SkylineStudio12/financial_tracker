@@ -13,6 +13,7 @@ import { db, pool } from "@/db";
 import { priceSnapshots, securities } from "@/db/schema";
 import { convertMinorToRon, getEarliestPairedRateDate, resolveRonRate } from "@/lib/fx";
 import { LedgerValidationError } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { executeTrade } from "./service";
 import { valueAtPrice } from "./trade-rules";
 import { valueHoldings } from "./valuation";
@@ -157,6 +158,7 @@ async function run(env: TradeTestEnv) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "investment valuation money"))) return;
   const env = await setupTradeTestEntity();
   try {
     await run(env);

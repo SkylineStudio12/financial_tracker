@@ -18,6 +18,7 @@ import { and, eq, gte } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { accounts, auditLog, categories, entities, fxRates, postings, transactions } from "@/db/schema";
 import { createTransaction, LedgerValidationError, type TransactionInput } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 
 // Far-future dates: no fx_rates rows exist there, so any BNR resolution
 // would go to the network (backfillYear) and fail loudly — a regression of
@@ -32,6 +33,7 @@ function ok(name: string) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "transaction seam characterization"))) return;
   const [entity] = await db
     .insert(entities)
     .values({ name: "TX-SEAM CHARACTERIZATION (throwaway)", type: "household" })

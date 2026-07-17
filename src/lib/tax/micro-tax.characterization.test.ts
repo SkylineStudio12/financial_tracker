@@ -20,6 +20,7 @@ import { accounts, categories, entities } from "@/db/schema";
 import { LedgerValidationError, type AccrualInput, type PostingInput } from "@/lib/ledger/types";
 import { parseIngStatement } from "@/lib/import/ing/parse";
 import { ENTITY_IDS } from "@/lib/profiles";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { planMicroTaxAccrual } from "./micro-tax";
 import { getActiveRule, quarterOf, yearOf } from "./rules";
 
@@ -90,6 +91,7 @@ async function frozenReference(params: {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "micro-tax characterization"))) return;
   const [skylineEquity] = await db
     .select({ id: accounts.id })
     .from(accounts)

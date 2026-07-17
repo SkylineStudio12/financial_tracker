@@ -15,10 +15,11 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
-import { importRows, postings, taxAccruals, transactions } from "@/db/schema";
+import { auditLog, importRows, postings, taxAccruals, transactions } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { bookHighConfidenceRows, bookImportRow, createImportBatch } from "./service";
 import {
   EXPECTED_KIND,
@@ -258,12 +259,22 @@ async function run(env: ImportTestEntity) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "text import"))) return;
+  const priorAuditIds = new Set(
+    (await db.select({ id: auditLog.id }).from(auditLog)).map((row) => row.id),
+  );
   const env = await setupImportTestEntity();
   try {
     await run(env);
     console.log(`\nAll ${checks} money-grade checks passed.`);
   } finally {
     await teardownImportTestEntity(env.entityId);
+    const createdAuditIds = (await db.select({ id: auditLog.id }).from(auditLog))
+      .map((row) => row.id)
+      .filter((id) => !priorAuditIds.has(id));
+    if (createdAuditIds.length > 0) {
+      await db.delete(auditLog).where(inArray(auditLog.id, createdAuditIds));
+    }
   }
 }
 

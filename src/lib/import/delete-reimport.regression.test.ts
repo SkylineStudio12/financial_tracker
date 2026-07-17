@@ -10,10 +10,11 @@ import "dotenv/config";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
-import { importRows, postings } from "@/db/schema";
+import { auditLog, importRows, postings } from "@/db/schema";
 import { purgeTransaction, softDeleteNonInvestmentTransaction } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { bookImportRow, createImportBatch } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
 
@@ -26,6 +27,10 @@ function ok(name: string) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "import delete-reimport regression"))) return;
+  const priorAuditIds = new Set(
+    (await db.select({ id: auditLog.id }).from(auditLog)).map((row) => row.id),
+  );
   const env = await setupImportTestEntity();
   try {
     // A refless fee row — the hardest identity case (synthetic key).
@@ -112,6 +117,12 @@ async function main() {
     console.log(`\nAll ${checks} regression checks passed.`);
   } finally {
     await teardownImportTestEntity(env.entityId);
+    const createdAuditIds = (await db.select({ id: auditLog.id }).from(auditLog))
+      .map((row) => row.id)
+      .filter((id) => !priorAuditIds.has(id));
+    if (createdAuditIds.length > 0) {
+      await db.delete(auditLog).where(inArray(auditLog.id, createdAuditIds));
+    }
   }
 }
 

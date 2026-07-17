@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { priceSnapshots, securities, securityPriceMappings } from "@/db/schema";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { upsertPriceSnapshot } from "./prices";
 
 const ROLLBACK = Symbol("price-sync-test-rollback");
@@ -14,6 +15,7 @@ function ok(name: string) {
 }
 
 async function run() {
+  if (!(await requireTestDatabase(pool, "price sync database"))) return false;
   try {
     await db.transaction(async (tx) => {
       const ticker = `P${Date.now().toString().slice(-8)}`;
@@ -113,10 +115,13 @@ async function run() {
   } catch (error) {
     if (error !== ROLLBACK) throw error;
   }
+  return true;
 }
 
 run()
-  .then(() => console.log(`\nAll ${checks} price-sync database checks passed; fixture rolled back.`))
+  .then((ran) => {
+    if (ran) console.log(`\nAll ${checks} price-sync database checks passed; fixture rolled back.`);
+  })
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;

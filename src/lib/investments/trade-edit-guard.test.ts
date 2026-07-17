@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { transactions } from "@/db/schema";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   createTransaction,
   LedgerValidationError,
@@ -25,6 +26,7 @@ function ok(name: string) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "investment trade edit guard"))) return;
   const env = await setupTradeTestEntity();
   try {
     const buy = await executeTrade({

@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { lotConsumptions, securities } from "@/db/schema";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { executeTrade, previewSell } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity, type TradeTestEnv } from "./test-support";
 
@@ -155,6 +156,7 @@ async function run(env: TradeTestEnv) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "investment preview parity"))) return;
   const env = await setupTradeTestEntity();
   let oddSecId: string | null = null;
   try {

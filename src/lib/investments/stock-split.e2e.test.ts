@@ -3,10 +3,15 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { db, pool } from "@/db";
 import { lotConsumptions, stockSplits, trades } from "@/db/schema";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { executeStockSplit, executeTrade, loadLots } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity } from "./test-support";
 
 async function run() {
+  if (!(await requireTestDatabase(pool, "investment stock split"))) {
+    await pool.end();
+    return;
+  }
   const env = await setupTradeTestEntity();
   try {
     const buy = await executeTrade({

@@ -6,6 +6,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
 import {
   accounts,
+  importSourceClaims,
   postings,
   revolutBookedRows,
   revolutImportBatches,
@@ -16,6 +17,7 @@ import {
 } from "@/db/schema";
 import { ENTITY_IDS } from "@/lib/profiles";
 import { LedgerValidationError } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   approveRevolutBatch,
   createRevolutImportBatch,
@@ -59,6 +61,10 @@ async function accountBalances() {
 }
 
 async function run() {
+  if (!(await requireTestDatabase(pool, "Revolut booking"))) {
+    await pool.end();
+    return;
+  }
   const beforeBalances = await accountBalances();
   const beforeTransactionCount = await db.$count(transactions);
   const beforeSecurities = await db.select({ id: securities.id, ticker: securities.ticker }).from(securities);
@@ -164,7 +170,10 @@ async function run() {
     assert.equal(batch.bookedAt, null, "outer rollback leaves the staged batch unbooked");
     console.log("All Revolut rows booked and asserted atomically; forced outer rollback removed every write.");
   } finally {
-    if (batchId) await db.delete(revolutImportBatches).where(eq(revolutImportBatches.id, batchId));
+    if (batchId) {
+      await db.delete(importSourceClaims).where(eq(importSourceClaims.sourceBatchId, batchId));
+      await db.delete(revolutImportBatches).where(eq(revolutImportBatches.id, batchId));
+    }
     const afterSecurities = await db.select({ id: securities.id, ticker: securities.ticker }).from(securities);
     const createdSecurityIds = afterSecurities
       .filter((security) => !beforeTickerSet.has(security.ticker))

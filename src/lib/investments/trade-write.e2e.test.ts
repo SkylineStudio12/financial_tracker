@@ -26,6 +26,7 @@ import {
   transactions,
 } from "@/db/schema";
 import { LedgerValidationError, softDeleteTransaction } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { estimateDividendTaxes, executeTrade } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity, type TradeTestEnv } from "./test-support";
 
@@ -309,6 +310,7 @@ async function run(env: TradeTestEnv) {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "investment trade write"))) return;
   const env = await setupTradeTestEntity();
   try {
     await run(env);

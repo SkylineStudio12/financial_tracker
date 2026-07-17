@@ -7,6 +7,7 @@ import {
   stockSplitLotAdjustments,
 } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/ledger";
+import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   executeStockSplit,
   executeTrade,
@@ -261,6 +262,7 @@ async function verifyDatedSellsAndBounds() {
 }
 
 async function main() {
+  if (!(await requireTestDatabase(pool, "as-of valuation"))) return;
   for (const fixture of SPLIT_FIXTURES) await verifySplitFixture(fixture);
   await verifyConsumptionRollback();
   await verifyDatedSellsAndBounds();

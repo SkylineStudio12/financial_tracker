@@ -26,8 +26,8 @@ lesson; nothing reviews, learns, or commits autonomously.
 
 Every orchestrator prompt carries a key in its title:
 `[chat]-[seq][tier]`, e.g. `09-06L` = chat 09, sixth prompt, Luna.
-Tier letters: S = Sol high/max, M = Sol medium, T = Terra,
-L = Luna, C = Claude Code, F = Fable.
+Tier letters: M = Sol medium, H = Sol high/max, T = Terra,
+L = Luna, C = CC, F = Fable.
 The prompt instructs the agent to open its report with
 `PROMPT-KEY: <key>`. Rules:
 

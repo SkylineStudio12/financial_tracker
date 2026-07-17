@@ -54,29 +54,28 @@ described below, not by unfinished extraction.
 
 ## Follow-up queue
 
-1. Serialize row exclusions against batch approval; today two sessions can race.
-2. Make a failed optimistic exclusion preserve other successful local exclusions.
-3. Show row timestamps in the review inbox so booking chronology is visible.
-4. Collapse row groups by default; 285 expanded rows is an audit dump on mobile.
-5. Fix migration 0006's stale comment claiming accounts are provisioned in `0007`;
+1. Resolve the salary detail-route cross-entity 404: the separate detail-page
+   entity guard still rejects a Skyline salary viewed from Greg or Household.
+2. Serialize row exclusions against batch approval; today two sessions can race.
+3. Make a failed optimistic exclusion preserve other successful local exclusions.
+4. Show row timestamps in the review inbox so booking chronology is visible.
+5. Collapse row groups by default; 285 expanded rows is an audit dump on mobile.
+6. Fix migration 0006's stale comment claiming accounts are provisioned in `0007`;
    provisioning now lives in `npm run db:provision-revolut`.
-6. Decide cleanup for ticker-only securities left by an abandoned staged batch.
-7. Serialize manual sells against batch reversal / buy-delete with a shared
+7. Decide cleanup for ticker-only securities left by an abandoned staged batch.
+8. Serialize manual sells against batch reversal / buy-delete with a shared
    advisory lock; documented concurrency race, low practical risk.
-8. Complete test isolation: an isolated `_test` runner exists since `e256a9d`
+9. Complete test isolation: an isolated `_test` runner exists since `e256a9d`
    with an identity guard, `_test` suffix assertion, and drop/recreate + migrate
    + seed lifecycle; five suites use it. Residual: pre-runner suites still run
    against the live dev DB and remain to be migrated.
-9. Resolve the cross-entity edit dead-end: cross-entity salaries are visible
-   from Greg and Household with the correct profile-side amount, but the Edit
-   action still passes the viewing profile's entity ID into the entity-gated
-   edit-draft loader; editing such a salary outside Skyline returns
-   `transactionNotFound`. Detail and delete are unaffected. The follow-up unit
-   will resolve the transaction's booking entity.
-10. Category name-lookup coupling: ten load-bearing names resolved at runtime
+10. RESOLVED 2026-07-17: list-row cross-entity editing now authorizes through
+    profile-visible postings and resolves the booking entity from the transaction
+    row. The separate salary detail-route guard remains item 1.
+11. Category name-lookup coupling: ten load-bearing names resolved at runtime
     by name; interim refusal list in management service; structural refs
     pending.
-11. Serialize category booking against management soft-delete. The race fails
+12. Serialize category booking against management soft-delete. The race fails
     toward a booking that can succeed while retaining a reference to the newly
     soft-deleted category: booking validation and the delete usage check are
     separate, and there is no shared serialization lock covering validation

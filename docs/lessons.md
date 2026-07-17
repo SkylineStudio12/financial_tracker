@@ -319,3 +319,14 @@ because the dev server had been started with DATABASE_URL overridden.
 Prompt tier must be derived from the path-defined tier of files the unit will
 plausibly touch, checked against review-standards.md at prompt-writing time,
 not estimated from perceived difficulty.
+
+## L-0027
+
+Every data-driven card ships its empty and sparse states as the primary design;
+dense is earned. No zero-filled or sample-data charts, ever.
+
+## L-0028
+
+A font-feature claim in a design handoff is verified against the delivered
+binaries before any adoption step — GSUB tags + digit advances, with a
+known-good control font validating the method.

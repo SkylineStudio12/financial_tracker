@@ -2,7 +2,20 @@
  * Read side of the ledger: list and detail queries for the UI.
  * All queries exclude soft-deleted rows.
  */
-import { and, count, desc, eq, exists, gte, ilike, inArray, isNull, lte, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -16,7 +29,7 @@ import {
   transactionImportLinks,
   transactionTags,
 } from "@/db/schema";
-import type { AccountOwner } from "@/lib/profiles";
+import type { AccountOwner, Profile } from "@/lib/profiles";
 import type { TransactionKind } from "./types";
 
 export interface TransactionFilters {
@@ -53,28 +66,38 @@ export interface TransactionListRow {
 
 const PAGE_SIZE = 25;
 
-function filterConditions(entityId: string, filters: TransactionFilters, owner?: AccountOwner) {
-  const conditions = [eq(transactions.entityId, entityId), isNull(transactions.deletedAt)];
-  // Personal-profile view filter: only transactions touching that person's
-  // accounts. The equity counter-leg (owner NULL) never hides a transaction —
-  // any owned leg qualifies it. There are no joint accounts.
-  if (owner) {
-    conditions.push(
-      exists(
-        db
-          .select({ one: sql`1` })
-          .from(postings)
-          .innerJoin(accounts, eq(accounts.id, postings.accountId))
-          .where(
-            and(
-              eq(postings.transactionId, transactions.id),
-              eq(accounts.owner, owner),
-              isNull(postings.deletedAt),
-            ),
-          ),
-      ),
-    );
+type VisibilityMode = "live" | "trashed";
+
+export function profileAccountScopeCondition(profile: Profile) {
+  const entityMatch = eq(accounts.entityId, profile.entityId);
+  return profile.owner ? and(entityMatch, eq(accounts.owner, profile.owner))! : entityMatch;
+}
+
+function profileVisibilityCondition(profile: Profile, mode: VisibilityMode) {
+  const postingConditions = [
+    eq(postings.transactionId, transactions.id),
+    profileAccountScopeCondition(profile),
+  ];
+  if (mode === "live") {
+    postingConditions.push(isNull(postings.deletedAt));
+  } else {
+    postingConditions.push(eq(postings.revision, transactions.currentRevision));
   }
+
+  return and(
+    mode === "live" ? isNull(transactions.deletedAt) : isNotNull(transactions.deletedAt),
+    exists(
+      db
+        .select({ one: sql`1` })
+        .from(postings)
+        .innerJoin(accounts, eq(accounts.id, postings.accountId))
+        .where(and(...postingConditions)),
+    ),
+  )!;
+}
+
+function filterConditions(profile: Profile, filters: TransactionFilters) {
+  const conditions = [profileVisibilityCondition(profile, "live")];
   if (filters.from) conditions.push(gte(transactions.date, filters.from));
   if (filters.to) conditions.push(lte(transactions.date, filters.to));
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
@@ -129,13 +152,31 @@ function filterConditions(entityId: string, filters: TransactionFilters, owner?:
   return and(...conditions);
 }
 
+type DisplayLeg = {
+  accountType: string;
+  amountRon: number;
+};
+
+/** @internal Exported for the impossible-state assertion fixture. */
+export function selectProfileDisplayLeg<T extends DisplayLeg>(
+  legs: T[],
+  transactionId: string,
+): T {
+  if (legs.length === 0) {
+    throw new Error(`Transaction ${transactionId} has no posting in the viewing profile`);
+  }
+  const realLegs = legs.filter((posting) => posting.accountType !== "equity");
+  return [...(realLegs.length ? realLegs : legs)].sort(
+    (left, right) => Math.abs(right.amountRon) - Math.abs(left.amountRon),
+  )[0];
+}
+
 export async function listTransactions(
-  entityId: string,
+  profile: Profile,
   filters: TransactionFilters,
   page: number,
-  owner?: AccountOwner,
 ): Promise<{ rows: TransactionListRow[]; total: number; pageSize: number }> {
-  const where = filterConditions(entityId, filters, owner);
+  const where = filterConditions(profile, filters);
 
   const [{ total }] = await db.select({ total: count() }).from(transactions).where(where);
 
@@ -158,6 +199,7 @@ export async function listTransactions(
           accountName: accounts.name,
           accountType: accounts.type,
           categoryName: categories.name,
+          profileMatch: profileAccountScopeCondition(profile),
         })
         .from(postings)
         .innerJoin(accounts, eq(accounts.id, postings.accountId))
@@ -189,10 +231,10 @@ export async function listTransactions(
 
   const rows = transactionRows.map((transaction): TransactionListRow => {
     const legs = postingRows.filter((p) => p.transactionId === transaction.id);
-    const realLegs = legs.filter((p) => p.accountType !== "equity");
-    const display = [...(realLegs.length ? realLegs : legs)].sort(
-      (a, b) => Math.abs(b.amountRon) - Math.abs(a.amountRon),
-    )[0];
+    const display = selectProfileDisplayLeg(
+      legs.filter((posting) => posting.profileMatch),
+      transaction.id,
+    );
     const categoryNames = [...new Set(legs.flatMap((p) => (p.categoryName ? [p.categoryName] : [])))];
     const importLink = importByTransaction.get(transaction.id);
     return {
@@ -203,10 +245,10 @@ export async function listTransactions(
       category: categoryNames.length === 1 ? categoryNames[0] : null,
       splitCount: categoryNames.length > 1 ? categoryNames.length : null,
       tagNames: tagRows.filter((t) => t.transactionId === transaction.id).map((t) => t.name),
-      amount: display?.amount ?? 0,
-      currency: display?.currency ?? "RON",
-      amountRon: display?.amountRon ?? 0,
-      accountName: display?.accountName ?? "—",
+      amount: display.amount,
+      currency: display.currency,
+      amountRon: display.amountRon,
+      accountName: display.accountName,
       currentRevision: transaction.currentRevision,
       crudAvailable: !tradeTransactionIds.has(transaction.id),
       importBatchId: importLink?.sourceBatchId ?? null,
@@ -283,29 +325,11 @@ export async function getTransactionDetail(transactionId: string) {
   };
 }
 
-export async function listDeletedTransactions(entityId: string, owner?: AccountOwner) {
-  const conditions = [eq(transactions.entityId, entityId), sql`${transactions.deletedAt} is not null`];
-  if (owner) {
-    conditions.push(
-      exists(
-        db
-          .select({ one: sql`1` })
-          .from(postings)
-          .innerJoin(accounts, eq(accounts.id, postings.accountId))
-          .where(
-            and(
-              eq(postings.transactionId, transactions.id),
-              eq(postings.revision, transactions.currentRevision),
-              eq(accounts.owner, owner),
-            ),
-          ),
-      ),
-    );
-  }
+export async function listDeletedTransactions(profile: Profile) {
   const transactionRows = await db
     .select()
     .from(transactions)
-    .where(and(...conditions))
+    .where(profileVisibilityCondition(profile, "trashed"))
     .orderBy(desc(transactions.deletedAt));
   const ids = transactionRows.map((row) => row.id);
   if (ids.length === 0) return [];
@@ -319,6 +343,7 @@ export async function listDeletedTransactions(entityId: string, owner?: AccountO
         currency: postings.currency,
         accountName: accounts.name,
         accountType: accounts.type,
+        profileMatch: profileAccountScopeCondition(profile),
       })
       .from(postings)
       .innerJoin(accounts, eq(accounts.id, postings.accountId))
@@ -340,22 +365,20 @@ export async function listDeletedTransactions(entityId: string, owner?: AccountO
     const legs = postingRows.filter(
       (posting) =>
         posting.transactionId === transaction.id &&
-        posting.revision === transaction.currentRevision,
+        posting.revision === transaction.currentRevision &&
+        posting.profileMatch,
     );
-    const realLegs = legs.filter((posting) => posting.accountType !== "equity");
-    const display = [...(realLegs.length ? realLegs : legs)].sort(
-      (a, b) => Math.abs(b.amountRon) - Math.abs(a.amountRon),
-    )[0];
+    const display = selectProfileDisplayLeg(legs, transaction.id);
     const importLink = importByTransaction.get(transaction.id);
     return {
       id: transaction.id,
       date: transaction.date,
       description: transaction.description,
       deletedAt: transaction.deletedAt!,
-      amount: display?.amount ?? 0,
-      amountRon: display?.amountRon ?? 0,
-      currency: display?.currency ?? "RON",
-      accountName: display?.accountName ?? "—",
+      amount: display.amount,
+      amountRon: display.amountRon,
+      currency: display.currency,
+      accountName: display.accountName,
       currentRevision: transaction.currentRevision,
       crudAvailable: !tradeIds.has(transaction.id),
       importBatchId: importLink?.sourceBatchId ?? null,

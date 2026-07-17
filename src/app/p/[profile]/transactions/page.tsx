@@ -79,10 +79,10 @@ export default async function TransactionsPage({
   const page = Math.max(1, Number(single(query.page)) || 1);
 
   const [{ rows, total, pageSize }, options, formOptions, deletedRows, flowData] = await Promise.all([
-    listTransactions(entityId, filters, page, owner),
+    listTransactions(profile, filters, page),
     getFilterOptions(entityId, owner),
     getFormOptions(entityId, owner),
-    listDeletedTransactions(entityId, owner),
+    listDeletedTransactions(profile),
     profile.companyFlows
       ? getFlowPageData(entityId)
       : Promise.resolve({ isCompany: false, personalAccounts: [] }),

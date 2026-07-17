@@ -17,7 +17,7 @@ export default async function TransactionTrashPage({
   const profile = getProfile(slug);
   if (!profile) notFound();
   const [rows, locale, t] = await Promise.all([
-    listDeletedTransactions(profile.entityId, profile.owner),
+    listDeletedTransactions(profile),
     getLocale(),
     getTranslations("transactions"),
   ]);

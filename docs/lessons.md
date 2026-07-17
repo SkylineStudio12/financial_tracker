@@ -293,3 +293,23 @@ Incident 2026-07-17: management-UI rulings prompt executed by both CC and
 Codex; CC misattributed an uncommitted file to commit 0845689, Codex's later
 rewrite corrected it. Contradiction caught only because both reports landed
 in the single orchestrator context.
+
+## L-0024
+
+Handover expected-state deltas are hypotheses. Reconcile against a verified
+snapshot before treating a baseline mismatch as an anomaly; the recorded
+delta, not the recorded count, is the likelier error.
+
+Context: the 0012 apply STOPped on live counts 319/298/21 vs an expected
+318/297/21; the discrepancy was chat-07's expected delta omitting the June
+salary booking, not a live anomaly.
+
+## L-0025
+
+Dev-server database targeting is session state. Any DATABASE_URL override is
+recorded when made; owner UI tests are attributed to a database, not assumed
+to hit live.
+
+Context: fired twice in two days — the management-UI test on 2026-07-16 and
+the employee + July salary entry on 2026-07-17 both landed on the test DB
+because the dev server had been started with DATABASE_URL overridden.

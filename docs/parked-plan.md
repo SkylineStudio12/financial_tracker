@@ -75,6 +75,10 @@ Card backlog, tagged by when its data is real:
 - Spending-vs-limit bars — OPTIONAL, only if budget limits are adopted (not
   currently wanted). Don't build budgeting machinery that won't be used.
 - Savings goals — OPTIONAL, only if goal tracking is wanted.
+- Per-entity P&L: current salary posting shape recognizes the tax total (1,906)
+  as company expense; net salary leaves as an inter-entity bank movement. Decide
+  at report build whether company P&L should present full salary cost (gross +
+  CAM = 4,601) or keep consolidated-household semantics.
 
 Rule: don't let the EaseBudget layout define the dashboard, or it reproduces a
 single-user tool and buries the entity structure + tax that make this app worth building.

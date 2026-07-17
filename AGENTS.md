@@ -21,3 +21,20 @@ lesson; nothing reviews, learns, or commits autonomously.
    ratifies before anything is appended to `docs/lessons.md`.
 4. **Commits:** the owner confirms every commit (message proposed first);
    one concern per commit.
+
+# Orchestration conventions
+
+Every orchestrator prompt carries a key in its title:
+`[chat]-[seq][tier]`, e.g. `09-06L` = chat 09, sixth prompt, Luna.
+Tier letters: S = Sol high/max, M = Sol medium, T = Terra,
+L = Luna, C = Claude Code, F = Fable.
+The prompt instructs the agent to open its report with
+`PROMPT-KEY: <key>`. Rules:
+
+- A report without a key is unattributed; the orchestrator asks
+  before acting on it.
+- A key whose tier letter does not match the agent that ran it is
+  a tier-drift flag, raised immediately.
+- A report answering multiple prompts echoes one key per prompt.
+- The echo confirms correlation only, not compliance; STOP gates
+  and review remain the compliance layer.

@@ -649,5 +649,16 @@
       "calculationInputInvalid": "Valoarea de intrare {field} pentru calculul fiscal este invalidă ({value}).",
       "personalDeductionContextUnsupported": "Deducerea personală confirmată nu acoperă acest context salarial."
     }
+  },
+  "roadmap": {
+    "title": "Plan de lucru",
+    "sourceMissing": "Fișierul docs/roadmap.md nu a fost găsit.",
+    "status": {
+      "done": "Finalizat",
+      "inProgress": "În lucru",
+      "next": "Urmează",
+      "queued": "În așteptare",
+      "parked": "Suspendat"
+    }
   }
 }

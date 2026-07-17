@@ -649,5 +649,16 @@
       "calculationInputInvalid": "The tax calculation input {field} is invalid ({value}).",
       "personalDeductionContextUnsupported": "The confirmed personal deduction does not cover this salary context."
     }
+  },
+  "roadmap": {
+    "title": "Roadmap",
+    "sourceMissing": "docs/roadmap.md was not found.",
+    "status": {
+      "done": "Done",
+      "inProgress": "In progress",
+      "next": "Next",
+      "queued": "Queued",
+      "parked": "Parked"
+    }
   }
 }

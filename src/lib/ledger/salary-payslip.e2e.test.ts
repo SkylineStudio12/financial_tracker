@@ -30,6 +30,7 @@ import {
   saveSalary,
   type SalaryFlowPayload,
 } from "./flow-actions";
+import { loadTransactionEditDraftAction } from "./actions";
 import { getTransactionEditDraft } from "./edit-drafts";
 import {
   defaultSalaryPaymentDate,
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
         .where(
           and(
             eq(accounts.entityId, ENTITY_IDS.household),
+            eq(accounts.owner, "greg"),
             inArray(accounts.type, ["bank", "cash"]),
             eq(accounts.currency, "RON"),
             isNull(accounts.deletedAt),
@@ -520,21 +522,126 @@ async function main(): Promise<void> {
       console.log("  currentRevision=2 paymentDate=2026-04-30 details=[[2,2026-04-01,45000]] revision1LivePostings=0");
     });
 
-    await fixture("entered salary edit appends detail and preserves prior revision", async () => {
+    await fixture("cross-profile salary edit resolves booking entity and preserves revision", async () => {
       const payload = entered("__test__ Edit Employee", "2026-06", {
         personalAccountId: personalAccount.id,
       });
       assert.deepEqual(await saveSalary(payload), { ok: true });
       const transaction = await salaryByDescription("Salary __test__ Edit Employee 2026-06");
       track(transaction.id);
+
+      const householdResult = await loadTransactionEditDraftAction(
+        transaction.id,
+        ENTITY_IDS.household,
+        "household",
+      );
+      assert.ok(!("error" in householdResult));
+      assert.equal(householdResult.draft.type, "salary");
+      assert.equal(householdResult.draft.bookingEntityId, ENTITY_IDS.skyline);
+      assert.equal(householdResult.draft.bookingEntityName, "Skyline Studio SRL");
+      assert.equal(householdResult.draft.gross, "4500,00");
+      assert.equal(householdResult.draft.net, "2695,00");
+      assert.equal(householdResult.draft.personalAccountId, personalAccount.id);
+
+      const gregResult = await loadTransactionEditDraftAction(
+        transaction.id,
+        ENTITY_IDS.household,
+        "greg",
+      );
+      assert.ok(!("error" in gregResult));
+      assert.deepEqual(gregResult.draft, householdResult.draft);
+
+      const andraResult = await loadTransactionEditDraftAction(
+        transaction.id,
+        ENTITY_IDS.household,
+        "andra",
+      );
+      assert.ok("error" in andraResult);
+      assert.ok(andraResult.error);
+      assert.equal(andraResult.error.code, "ledger.transactionNotFound");
+
+      const beforePostings = await db
+        .select()
+        .from(postings)
+        .where(
+          and(
+            eq(postings.transactionId, transaction.id),
+            eq(postings.revision, 1),
+            isNull(postings.deletedAt),
+          ),
+        );
+      const beforeAccruals = await db
+        .select()
+        .from(taxAccruals)
+        .where(
+          and(
+            eq(taxAccruals.transactionId, transaction.id),
+            eq(taxAccruals.revision, 1),
+            isNull(taxAccruals.deletedAt),
+          ),
+        );
+      assert.equal(beforePostings.length, 7);
+      assert.equal(beforeAccruals.length, 4);
+
       assert.deepEqual(
         await saveSalary({
           ...payload,
           transactionId: transaction.id,
           expectedRevision: 1,
+          companyId: gregResult.draft.bookingEntityId,
           personalDeductionMinor: 46_000,
         }),
         { ok: true },
+      );
+      const [updatedTransaction] = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, transaction.id));
+      assert.equal(updatedTransaction.entityId, ENTITY_IDS.skyline);
+      assert.equal(updatedTransaction.currentRevision, 2);
+      assert.equal(
+        await db.$count(
+          postings,
+          and(
+            eq(postings.transactionId, transaction.id),
+            eq(postings.revision, 1),
+            isNull(postings.deletedAt),
+          ),
+        ),
+        0,
+      );
+      assert.equal(
+        await db.$count(
+          postings,
+          and(
+            eq(postings.transactionId, transaction.id),
+            eq(postings.revision, 2),
+            isNull(postings.deletedAt),
+          ),
+        ),
+        7,
+      );
+      assert.equal(
+        await db.$count(
+          taxAccruals,
+          and(
+            eq(taxAccruals.transactionId, transaction.id),
+            eq(taxAccruals.revision, 1),
+            isNull(taxAccruals.deletedAt),
+          ),
+        ),
+        0,
+      );
+      assert.equal(
+        await db.$count(
+          taxAccruals,
+          and(
+            eq(taxAccruals.transactionId, transaction.id),
+            eq(taxAccruals.revision, 2),
+            isNull(taxAccruals.deletedAt),
+          ),
+        ),
+        4,
       );
       const details = await db
         .select()
@@ -553,7 +660,9 @@ async function main(): Promise<void> {
       assert.equal(draft.payMonth, "2026-06");
       assert.equal(draft.paymentDate, "2026-07-10");
       assert.equal(draft.personalDeduction, "460,00");
-      console.log("  details revision1=2026-06-01/45000 revision2=2026-06-01/46000 currentDraftPaymentDate=2026-07-10");
+      console.log(
+        "  household+greg=draft loaded andra=transactionNotFound bookingEntity=Skyline revision=1→2 postings=7→7 accruals=4→4 entityId=unchanged details=45000→46000",
+      );
     });
 
     await fixture("detail survives delete/restore exactly and purge removes it", async () => {

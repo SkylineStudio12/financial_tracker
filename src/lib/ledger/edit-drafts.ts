@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
+  entities,
   postings,
   salaryTransactionDetails,
   taxAccruals,
@@ -12,9 +13,16 @@ import {
   tags,
 } from "@/db/schema";
 import { minorToInput } from "@/lib/format";
+import type { AccountOwner } from "@/lib/profiles";
+import { profileVisibilityCondition } from "./queries";
 import { LedgerValidationError } from "./types";
 
-type StandardDraft = {
+type BookingContext = {
+  bookingEntityId: string;
+  bookingEntityName: string;
+};
+
+type StandardDraft = BookingContext & {
   type: "standard";
   transactionId: string;
   expectedRevision: number;
@@ -29,7 +37,7 @@ type StandardDraft = {
   counterparty: string;
 };
 
-type TransferDraft = {
+type TransferDraft = BookingContext & {
   type: "transfer";
   transactionId: string;
   expectedRevision: number;
@@ -41,7 +49,7 @@ type TransferDraft = {
   note: string;
 };
 
-export type SalaryDraft = {
+export type SalaryDraft = BookingContext & {
   type: "salary";
   transactionId: string;
   expectedRevision: number;
@@ -58,7 +66,7 @@ export type SalaryDraft = {
   personalAccountId: string;
 };
 
-type DividendDraft = {
+type DividendDraft = BookingContext & {
   type: "dividend";
   transactionId: string;
   expectedRevision: number;
@@ -67,7 +75,7 @@ type DividendDraft = {
   personalAccountId: string;
 };
 
-type OpeningBalanceDraft = {
+type OpeningBalanceDraft = BookingContext & {
   type: "opening_balance";
   transactionId: string;
   expectedRevision: number;
@@ -155,6 +163,7 @@ export async function getLastCompleteSalaryDraft(
 export async function getTransactionEditDraft(
   transactionId: string,
   entityId: string,
+  owner?: AccountOwner,
 ): Promise<TransactionEditDraft> {
   const [transaction] = await db
     .select()
@@ -162,13 +171,37 @@ export async function getTransactionEditDraft(
     .where(
       and(
         eq(transactions.id, transactionId),
-        eq(transactions.entityId, entityId),
         isNull(transactions.deletedAt),
       ),
     );
   if (!transaction) {
     throw new LedgerValidationError("ledger.transactionNotFound", { transactionId });
   }
+  const [visible] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.id, transactionId),
+        profileVisibilityCondition({ entityId, owner }, "live"),
+      ),
+    )
+    .limit(1);
+  if (!visible) {
+    throw new LedgerValidationError("ledger.transactionNotFound", { transactionId });
+  }
+  const [bookingEntity] = await db
+    .select({ name: entities.name })
+    .from(entities)
+    .where(eq(entities.id, transaction.entityId))
+    .limit(1);
+  if (!bookingEntity) {
+    throw new LedgerValidationError("ledger.transactionNotFound", { transactionId });
+  }
+  const bookingContext = {
+    bookingEntityId: transaction.entityId,
+    bookingEntityName: bookingEntity.name,
+  };
   const [trade] = await db
     .select({ id: trades.id })
     .from(trades)
@@ -207,6 +240,7 @@ export async function getTransactionEditDraft(
     const to = legs.find((leg) => leg.amount > 0);
     if (!from || !to) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
     return {
+      ...bookingContext,
       type: "transfer",
       transactionId,
       expectedRevision: transaction.currentRevision,
@@ -225,6 +259,7 @@ export async function getTransactionEditDraft(
       throw new LedgerValidationError("ledger.transactionShapeUnsupported");
     }
     return {
+      ...bookingContext,
       type: "opening_balance",
       transactionId,
       expectedRevision: transaction.currentRevision,
@@ -249,7 +284,7 @@ export async function getTransactionEditDraft(
         ),
       );
     const personal = legs.find(
-      (leg) => leg.accountEntityId !== entityId && leg.amount > 0,
+      (leg) => leg.accountEntityId !== transaction.entityId && leg.amount > 0,
     );
     if (!personal) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
     if (transaction.kind === "salary") {
@@ -270,17 +305,20 @@ export async function getTransactionEditDraft(
       const incomeTax = salaryRuleAmount(accrualRows, "salary_income_tax");
       const cam = salaryRuleAmount(accrualRows, "cam");
       const companyBank = legs.find(
-        (leg) => leg.accountEntityId === entityId && leg.accountType === "bank" && leg.amount < 0,
+        (leg) =>
+          leg.accountEntityId === transaction.entityId &&
+          leg.accountType === "bank" &&
+          leg.amount < 0,
       );
       const equity = legs.find(
         (leg) =>
-          leg.accountEntityId === entityId &&
+          leg.accountEntityId === transaction.entityId &&
           leg.accountType === "equity" &&
           leg.amount > 0,
       );
       const taxLegs = legs.filter(
         (leg) =>
-          leg.accountEntityId === entityId &&
+          leg.accountEntityId === transaction.entityId &&
           leg.accountType === "tax_liability" &&
           leg.amount < 0,
       );
@@ -307,6 +345,7 @@ export async function getTransactionEditDraft(
           ),
         );
       return {
+        ...bookingContext,
         type: "salary",
         transactionId,
         expectedRevision: transaction.currentRevision,
@@ -327,6 +366,7 @@ export async function getTransactionEditDraft(
       .filter((row) => row.ruleType === "dividend_tax")
       .reduce((sum, row) => sum + Math.abs(row.amount), 0);
     return {
+      ...bookingContext,
       type: "dividend",
       transactionId,
       expectedRevision: transaction.currentRevision,
@@ -354,6 +394,7 @@ export async function getTransactionEditDraft(
   const allocated = splitAmounts.slice(0, -1).reduce((sum, value) => sum + value, 0);
   splitAmounts[splitAmounts.length - 1] = total - allocated;
   return {
+    ...bookingContext,
     type: "standard",
     transactionId,
     expectedRevision: transaction.currentRevision,

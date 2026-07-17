@@ -133,6 +133,7 @@
     "colPeriod": "Period",
     "backToDetail": "← Back to detail",
     "editTransaction": "Edit transaction",
+    "bookingEntity": "Booking entity: {entity}",
     "editTransfer": "Edit transfer",
     "cannotEdit": "This transaction's posting shape (guided flow or auto tax accrual) cannot be edited with the standard form. Delete and re-create it instead."
   },

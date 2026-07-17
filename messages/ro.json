@@ -133,6 +133,7 @@
     "colPeriod": "Perioadă",
     "backToDetail": "← Înapoi la detalii",
     "editTransaction": "Editează tranzacția",
+    "bookingEntity": "Entitate contabilă: {entity}",
     "editTransfer": "Editează transferul",
     "cannotEdit": "Forma înregistrărilor acestei tranzacții (flux ghidat sau acumulare fiscală automată) nu poate fi editată cu formularul standard. Șterge-o și creeaz-o din nou."
   },

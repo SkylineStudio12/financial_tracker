@@ -102,6 +102,7 @@ type ActionResult = { error: AppError } | { ok: true };
 export async function loadTransactionEditDraftAction(
   transactionId: string,
   entityId: string,
+  profileSlug: string,
 ): Promise<
   | {
       draft: TransactionEditDraft;
@@ -112,10 +113,14 @@ export async function loadTransactionEditDraftAction(
   | { error: AppError; draft?: never; personalAccounts?: never; employees?: never }
 > {
   try {
-    const draft = await getTransactionEditDraft(transactionId, entityId);
+    const profile = getProfile(profileSlug);
+    if (!profile || profile.entityId !== entityId) {
+      throw new LedgerValidationError("ledger.transactionNotFound", { transactionId });
+    }
+    const draft = await getTransactionEditDraft(transactionId, entityId, profile.owner);
     const flowData =
       draft.type === "salary" || draft.type === "dividend"
-        ? await getFlowPageData(entityId)
+        ? await getFlowPageData(draft.bookingEntityId)
         : { personalAccounts: [], employees: [] };
     return {
       draft,

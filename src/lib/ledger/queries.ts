@@ -67,13 +67,17 @@ export interface TransactionListRow {
 const PAGE_SIZE = 25;
 
 type VisibilityMode = "live" | "trashed";
+type ProfileAccountScope = Pick<Profile, "entityId" | "owner">;
 
-export function profileAccountScopeCondition(profile: Profile) {
+export function profileAccountScopeCondition(profile: ProfileAccountScope) {
   const entityMatch = eq(accounts.entityId, profile.entityId);
   return profile.owner ? and(entityMatch, eq(accounts.owner, profile.owner))! : entityMatch;
 }
 
-function profileVisibilityCondition(profile: Profile, mode: VisibilityMode) {
+export function profileVisibilityCondition(
+  profile: ProfileAccountScope,
+  mode: VisibilityMode,
+) {
   const postingConditions = [
     eq(postings.transactionId, transactions.id),
     profileAccountScopeCondition(profile),

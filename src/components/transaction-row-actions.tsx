@@ -19,6 +19,7 @@ import { DividendFlow } from "@/components/flows/dividend-flow";
 import type { AccountOption, FormOptions } from "@/components/forms/option-types";
 import type { EmployeeOption } from "@/lib/management/service";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,7 +75,11 @@ export function TransactionRowActions({
     setEditOpen(true);
     setError(null);
     startTransition(async () => {
-      const result = await loadTransactionEditDraftAction(transactionId, entityId);
+      const result = await loadTransactionEditDraftAction(
+        transactionId,
+        entityId,
+        profileSlug,
+      );
       if (result?.error) setError(result.error);
       else {
         if (!result?.draft || !result.personalAccounts || !result.employees) return;
@@ -146,13 +151,20 @@ export function TransactionRowActions({
       >
         <DialogContent className="density-compact max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t("editTransaction")}</DialogTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle>{t("editTransaction")}</DialogTitle>
+              {draft && draft.bookingEntityId !== entityId && (
+                <Badge variant="secondary">
+                  {t("bookingEntity", { entity: draft.bookingEntityName })}
+                </Badge>
+              )}
+            </div>
           </DialogHeader>
           {pending && !draft && <p className="text-secondary text-text-muted">{t("loading")}</p>}
           {error && <p className="text-secondary text-status-negative-text">{translateError(error)}</p>}
           {draft?.type === "standard" && (
             <StandardForm
-              entityId={entityId}
+              entityId={draft.bookingEntityId}
               profileSlug={profileSlug}
               options={options}
               initial={draft}
@@ -163,7 +175,7 @@ export function TransactionRowActions({
           )}
           {draft?.type === "transfer" && (
             <TransferForm
-              entityId={entityId}
+              entityId={draft.bookingEntityId}
               profileSlug={profileSlug}
               options={options}
               initial={draft}
@@ -174,7 +186,7 @@ export function TransactionRowActions({
           )}
           {draft?.type === "opening_balance" && (
             <OpeningBalanceForm
-              entityId={entityId}
+              entityId={draft.bookingEntityId}
               options={options}
               initial={draft}
               onSaved={saved}
@@ -183,7 +195,7 @@ export function TransactionRowActions({
           )}
           {draft?.type === "salary" && (
             <SalaryFlow
-              companyId={entityId}
+              companyId={draft.bookingEntityId}
               personalAccounts={personalAccounts}
               employees={employees}
               initial={draft}
@@ -193,7 +205,7 @@ export function TransactionRowActions({
           )}
           {draft?.type === "dividend" && (
             <DividendFlow
-              companyId={entityId}
+              companyId={draft.bookingEntityId}
               personalAccounts={personalAccounts}
               initial={draft}
               onSaved={saved}

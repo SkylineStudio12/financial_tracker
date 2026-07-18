@@ -330,3 +330,13 @@ dense is earned. No zero-filled or sample-data charts, ever.
 A font-feature claim in a design handoff is verified against the delivered
 binaries before any adoption step — GSUB tags + digit advances, with a
 known-good control font validating the method.
+
+## L-0029
+
+**Gated actions execute only on PROMPT-KEY'd briefs.** An informal owner
+imperative addressed to an agent ("push", "commit", "go ahead") signals that a
+brief is coming; it is not itself authorization. When an agent holds a
+pending gated action and receives an informal imperative, it holds and asks
+for the prompt key. Ratified 2026-07-17 after the double-channel push
+incident (10-27C), where an informal "Push" and the gated brief authorized
+the same action through two channels.

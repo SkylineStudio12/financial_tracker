@@ -21,7 +21,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
 import { Button } from "@/components/ui/button";
-import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass } from "@/components/forms/ui";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -456,7 +456,7 @@ export function SalaryFlow({
                   ref={ref as React.RefObject<HTMLInputElement> | undefined}
                   inputMode="decimal"
                   placeholder={tForms("amountPlaceholder")}
-                  className={fieldClass}
+                  className={moneyFieldClass}
                   value={value as string}
                   onChange={(event) => {
                     (setter as (next: string) => void)(event.target.value);

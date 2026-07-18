@@ -55,8 +55,10 @@ grep -rn 'dark:' src --include="*.tsx" --include="*.ts"
 grep -rnE 'font-(semibold|bold|extrabold|black)' src --include="*.tsx" --include="*.ts"
 
 # G4 — no raw Tailwind palette and no Tier-1 primitives in components
-#      (components consume SEMANTIC tokens only; neutral-### etc. live in globals.css)
-grep -rnE '(bg|text|border|ring|fill|stroke)-(red|blue|green|slate|gray|zinc|neutral|stone|amber|yellow|lime|emerald|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose|orange)-[0-9]{2,3}' src --include="*.tsx"
+#      (components consume SEMANTIC tokens only; gray-### etc. live in globals.css)
+#      olive added 2026-07-17 (10-25C, owner-ratified): the token adoption
+#      introduced an olive ramp outside Tailwind's stock palette names.
+grep -rnE '(bg|text|border|ring|fill|stroke)-(red|blue|green|slate|gray|zinc|neutral|stone|amber|yellow|lime|olive|emerald|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose|orange)-[0-9]{2,3}' src --include="*.tsx"
 ```
 
 Baseline 2026-07-06: all four CLEAN on the full tree. A new match is a

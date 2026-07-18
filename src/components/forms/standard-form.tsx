@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { FormOptions } from "./option-types";
-import { errorClass, fieldClass, ghostButtonClass, labelClass } from "./ui";
+import { errorClass, fieldClass, ghostButtonClass, labelClass, moneyFieldClass } from "./ui";
 
 interface SplitDraft {
   categoryId: string;
@@ -227,7 +227,7 @@ export function StandardForm({
           ref={amountRef}
           inputMode="decimal"
           placeholder={t("amountPlaceholder")}
-          className={fieldClass}
+          className={moneyFieldClass}
           value={total}
           onChange={(e) => setTotal(e.target.value)}
         />
@@ -276,7 +276,7 @@ export function StandardForm({
                 <input
                   inputMode="decimal"
                   placeholder={t("amountPlaceholder")}
-                  className={fieldClass}
+                  className={moneyFieldClass}
                   value={split.amount}
                   onChange={(e) =>
                     setSplits(splits.map((s, i) => (i === index ? { ...s, amount: e.target.value } : s)))
@@ -305,9 +305,10 @@ export function StandardForm({
           </button>
           {splitMismatch && totalMinor !== null && splitSum !== null && (
             <span className={errorClass}>
-              {t("splitMismatch", {
+              {t.rich("splitMismatch", {
                 sum: formatMinor(splitSum, currency, locale),
                 total: formatMinor(totalMinor, currency, locale),
+                amt: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
               })}
             </span>
           )}

@@ -42,6 +42,7 @@ import {
   fieldClass,
   ghostButtonClass,
   labelClass,
+  moneyFieldClass,
   toggleOffClass,
   toggleOnClass,
 } from "@/components/forms/ui";
@@ -487,7 +488,7 @@ export function TradeForm({
             <label className={labelClass}>
               {t("shares")}
               <input
-                className={`${fieldClass} font-numeric`}
+                className={moneyFieldClass}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder={t("sharesPlaceholder")}
@@ -496,7 +497,7 @@ export function TradeForm({
             <label className={labelClass}>
               {t("pricePerShare", { currency })}
               <input
-                className={`${fieldClass} font-numeric`}
+                className={moneyFieldClass}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder={t("pricePlaceholder")}
@@ -507,7 +508,7 @@ export function TradeForm({
         <label className={labelClass}>
           {mode === "dividend" ? t("netDividend", { currency }) : t("totalForeign", { currency })}
           <input
-            className={`${fieldClass} font-numeric`}
+            className={moneyFieldClass}
             value={totalForeign}
             onChange={(e) => setTotalForeign(e.target.value)}
             placeholder={mode === "dividend" ? t("dividendPlaceholder") : t("totalPlaceholder")}
@@ -519,7 +520,7 @@ export function TradeForm({
         <label className={labelClass}>
           {mode === "dividend" ? t("ronDividend") : mode === "buy" ? t("ronBuy") : t("ronSell")}
           <input
-            className={`${fieldClass} font-numeric`}
+            className={moneyFieldClass}
             value={totalRon}
             onChange={(e) => setTotalRon(e.target.value)}
             placeholder={t("ronPlaceholder")}

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { FormOptions } from "./option-types";
-import { errorClass, fieldClass, labelClass } from "./ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass } from "./ui";
 
 export interface TransferFormInitial {
   transactionId: string;
@@ -191,7 +191,7 @@ export function TransferForm({
             ref={amountRef}
             inputMode="decimal"
             placeholder={t("amountPlaceholder")}
-            className={fieldClass}
+            className={moneyFieldClass}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
@@ -204,7 +204,7 @@ export function TransferForm({
           <input
             inputMode="decimal"
             placeholder={t("amountPlaceholder")}
-            className={fieldClass}
+            className={moneyFieldClass}
             value={received}
             onChange={(e) => setReceived(e.target.value)}
           />

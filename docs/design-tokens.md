@@ -1,118 +1,124 @@
 # Design token foundation
 
-Light-first, airy, number-forward. Off-white canvas, white cards floating on it,
-black as the primary accent, green/red reserved for money status. This document
-is the single source the app's central tokens file implements. Components use
-**semantic tokens only** — never primitives.
+Light-first, airy, number-forward. Off-white canvas, white cards floating on
+it, black as the primary accent, olive/red reserved for money status, and an
+electric-lime highlight family held in reserve (fills only, unadopted). This
+document is the single source the app's central tokens file implements.
+Components use **semantic tokens only** — never primitives.
 
 Scope: color, typography, spacing, radius, density, iconography. No components.
+
+**Provenance (2026-07-17, unit 10-22C):** color values and typography adopted
+from the Claude Design token export under REPO NAMES (10-14C Phase 1 mapping,
+option (a)); all deviations from the export are owner-ruled and listed in §5.
+**Font model is a HYBRID (owner ruling):** Urbanist is the UI typeface
+(`--font-sans`); **Geist stays the numeric face** (`--font-numeric`). The
+export's "one face, numbers too" premise failed the 10-20C gate: GSUB parsing
+of both the Google-served and upstream Urbanist files proved `tnum` (and
+`lnum`/`cv05`) absent, with strongly proportional digit advances ('1' = 530
+vs '0' = 1191 units) — the Lufga failure mode repeated. Geist's `tnum` was
+re-verified as the control in the same gate. Consequence: **every
+money/aligned-number surface MUST resolve through `font-numeric` +
+`tabular-nums`; an amount rendering in `--font-sans` is a defect** (the
+10-22C Checkpoint B report lists the six sites found by that audit).
 
 ---
 
 ## Tier 1 — Primitives
 
-### 1.1 Neutral ramp (white → black, cool-tinted)
+### 1.1 Neutral ramp (achromatic — the export removed the old blue cast)
 
 | Primitive | Value | Ramp role |
 |---|---|---|
-| `neutral-0` | `#FFFFFF` | Pure white (raw palette) |
-| `neutral-50` | `#F5F6F8` | Soft off-white |
-| `neutral-100` | `#EBEDEF` | Inactive grey (raw palette) |
-| `neutral-150` | `#E3E6E9` | Hairline tone |
-| `neutral-200` | `#D6DADE` | Stronger line / input border tone |
-| `neutral-300` | `#B9BFC7` | Visible indicator grey |
-| `neutral-400` | `#99A1AB` | Disabled text / placeholder tone |
-| `neutral-500` | `#67707F` | Muted text tone |
-| `neutral-600` | `#5C636E` | Secondary text tone |
-| `neutral-700` | `#40454E` | Deep grey |
-| `neutral-800` | `#26292E` | Near-black (hover on black) |
-| `neutral-900` | `#141719` | Primary text tone |
-| `neutral-1000` | `#000000` | Pure black (raw palette) |
+| `gray-0` | `#FFFFFF` | Pure white |
+| `gray-25` | `#FBFBFC` | Whisper step (new; unassigned) |
+| `gray-50` | `#F5F5F8` | Soft off-white — page background |
+| `gray-100` | `#ECECF0` | Inactive fill |
+| `gray-200` | `#E0E0E5` | Hairline tone |
+| `gray-300` | `#CDCDD4` | Input border tone |
+| `gray-400` | `#9A9AA3` | Disabled/placeholder tone |
+| `gray-500` | `#6F6F78` | Muted text tone |
+| `gray-600` | `#55555D` | Secondary text tone |
+| `gray-700` | `#3B3B42` | Deep grey (info text) |
+| `gray-800` | `#232328` | Near-black (hover on black) |
+| `gray-900` | `#121215` | Primary text / inverse surface |
+| `gray-950` | `#000000` | Pure black |
 
-### 1.2 Status primitives
+### 1.2 Chromatic ramps
 
-| Primitive | Value | Origin |
+**Lime (highlight — fills ONLY, never text on light; 1.16:1 as text on white):**
+`lime-50 #FAFFDE · 100 #F3FFB0 · 300 #E7FE6A · 500 #D7FE03 · 600 #C2E603 · 700 #A6C405`
+
+**Olive (money positive — deliberately distinct from lime):**
+`olive-50 #F4F9EC · 100 #E6F1D2 · 200 #CBE3A2 · 500 #83AF3B · 600 #4D7C0F · 700 #3F6212 · 800 #365314`
+
+**Red (money negative):**
+`red-50 #FEF3F2 · 100 #FEE4E2 · 200 #FECDCA · 400 #F97066 (dark surfaces only) · 500 #D64B3F · 600 #B42318 · 700 #912018`
+
+**Amber (attention/estimates):**
+`amber-50 #FFFAEB · 100 #FEF0C7 · 200 #FEDF89 · 600 #B54708 · 700 #93370D`
+
+**Legacy fill primitives (kept by owner ruling — no export successor):**
+
+| Primitive | Value | Role |
 |---|---|---|
-| `green-neon` | `#86FF7B` | Raw palette ("ready green") — fills only |
-| `green-700` | `#157A3C` | **Derived** text-safe green (same hue family, deepened) |
-| `red-neon` | `#FF6262` | Raw palette ("alert red") — fills only |
-| `red-700` | `#C93636` | **Derived** text-safe red (same hue, deepened) |
+| `green-neon` | `#86FF7B` | Positive dots/badges — fills only |
+| `red-neon` | `#FF6262` | Negative dots/badges — fills only |
+| `grey-fill` | `#B9BFC7` | Neutral indicator (ex `neutral-300`) |
 
-### 1.3 Spacing scale
+### 1.3 Spacing scale — unchanged
 
-Base unit **4 px**. Steps are multiples of the base; no off-scale values.
+Base unit **4 px**; steps `space-05` 2 · `1` 4 · `2` 8 · `3` 12 · `4` 16 ·
+`5` 20 · `6` 24 · `8` 32 · `10` 40 · `12` 48 · `16` 64 · `20` 80. No
+off-scale values. (Spacing was out of the export's scope.)
 
-| Primitive | Value |
-|---|---|
-| `space-05` | 2 px |
-| `space-1` | 4 px |
-| `space-2` | 8 px |
-| `space-3` | 12 px |
-| `space-4` | 16 px |
-| `space-5` | 20 px |
-| `space-6` | 24 px |
-| `space-8` | 32 px |
-| `space-10` | 40 px |
-| `space-12` | 48 px |
-| `space-16` | 64 px |
-| `space-20` | 80 px |
+### 1.4 Radius scale — unchanged
 
-### 1.4 Radius scale
-
-| Primitive | Value | Intended for |
-|---|---|---|
-| `radius-xs` | 4 px | Tiny chips, checkbox |
-| `radius-sm` | 8 px | Badges, small controls |
-| `radius-md` | 12 px | Inputs, buttons |
-| `radius-lg` | 16 px | Popovers, small cards |
-| `radius-xl` | 20 px | Cards (within the 16–24 target) |
-| `radius-full` | 9999 px | Pills, avatars, status dots |
+`radius-xs` 4 (chips) · `sm` 8 (badges/small controls) · `md` 12
+(inputs/buttons) · `lg` 16 (popovers) · `xl` 20 (cards) · `full` 9999 (pills).
 
 ### 1.5 Type scale (fixed — do not extend)
 
-Font: **Geist** (2026-07-06 — replaced Lufga). One variable typeface for all
-text; also the numeric font (Geist ships `tnum`, so amounts align in the same
-family via `tabular-nums`). The scale uses **Light (300)** and **Regular
-(400)**; **Medium (500)** is the permitted ceiling for exceptional needs (owner
-decision 2026-07-04) — semibold and bolder remain banned. Emphasis comes from
-size and text-color tokens, never from weight. Fallback stack:
-`Geist, system-ui, sans-serif`.
+Fonts: **HYBRID (2026-07-17)** — **Urbanist** for UI text (`--font-sans`,
+via `next/font`, subsets latin + latin-ext for Romanian diacritics);
+**Geist** for numerals (`--font-numeric`, unchanged — `tnum` verified; the
+2026-07-06 Lufga→Geist history stands). Amounts align via `font-numeric` +
+`tabular-nums`; Urbanist must never render money (no tabular figures — see
+Provenance). Weights: **Light (300)** and **Regular (400)**; **Medium (500)**
+is the permitted ceiling (owner decision 2026-07-04, re-affirmed 10-22C: the
+export's 600 weight was NOT adopted — gate G3 enforces). Emphasis comes from
+size and text-color tokens, never from weight. Fallbacks:
+`Urbanist, system-ui, sans-serif` / `Geist, system-ui, sans-serif`.
 
-**Sizes (2026-07-06):** adopted from shadcn typography
-(ui.shadcn.com/docs/components/base/typography). Named `type-*` primitives are
-kept as size aliases; the value is what changed. Weights stay light/regular
-(NOT shadcn's extrabold/semibold), letter-spacing preserved from our scale.
+| Primitive | Size | Weight | Line height | Letter spacing | Notes |
+|---|---|---|---|---|---|
+| `type-46` | 46 px | 300 light | 50 px | −0.01 em | Hero number (export display; **was 36**) |
+| `type-30` | 30 px | 300 light | 36 px | −0.005 em | Page/section title (export h1) |
+| `type-24` | 24 px | 400 | 32 px | −0.005 em | Large number in cards |
+| `type-20` | 20 px | **500 medium** | 28 px | 0 | Card title (export h2; **was 400**) |
+| `type-18` | 18 px | 500 medium | 24 px | 0 | **New** — subsection heading (export h3) |
+| `type-16` | 16 px | 400 | 24 px | 0 | Body / default UI (= export `md`) |
+| `type-14` | 14 px | 400 | 20 px | 0 | Secondary text (= export `base`) |
+| `type-13` | 13 px | 400 | 18 px | 0 | **New** — dense table body (export `sm`) |
+| `type-12` | 12 px | 400 | 16 px | +0.005 em | Small label / caption |
+| `type-11` | 11 px | 400 | 14 px | **+0.04 em** | Micro label, UPPERCASE (tracking was 0.06; export label value, JSON wins) |
 
-| Primitive | Value |
-|---|---|
-| `font-family-sans` | Geist (Light 300 / Regular 400 / Medium 500) |
-| `font-family-numeric` | Geist — ships `tnum` — with `font-numeric` enabled |
+Export-name mapping note: our `body` (16) = export `md`; our `secondary` (14)
+= export `base` — the export's own "body" role is 14 px, which this repo
+renders as `secondary`. Values unchanged; only the name correspondence is
+recorded here so future exports reconcile cleanly.
 
-| Primitive | Size | shadcn | Weight | Line height | Letter spacing | Notes |
-|---|---|---|---|---|---|---|
-| `type-36` | 36 px | text-4xl (h1) | 300 light | 40 px (1.11) | −0.01 em | Hero number |
-| `type-30` | 30 px | text-3xl (h2) | 300 light | 36 px (1.20) | −0.005 em | Page/section title |
-| `type-24` | 24 px | text-2xl (h3) | 400 regular | 32 px (1.33) | −0.005 em | Large number in cards |
-| `type-20` | 20 px | text-xl (h4) | 400 regular | 28 px (1.40) | 0 | Card title / subsection |
-| `type-16` | 16 px | text-base (p) | 400 regular | 24 px (1.50) | 0 | Body / default UI |
-| `type-14` | 14 px | text-sm (small) | 400 regular | 20 px (1.43) | 0 | Secondary text |
-| `type-12` | 12 px | text-xs | 400 regular | 16 px (1.33) | +0.005 em | Small label / caption |
-| `type-11` | 11 px | — (below range) | 400 regular | 14 px (1.27) | +0.06 em | Micro label, UPPERCASE |
+Numeric feature primitive: `font-numeric` = Geist + `tabular-nums`
+(`font-variant-numeric`). The export's `--numeric-features` string
+(`"tnum" 1, "lnum" 1, "cv05" 1`) was **not adopted**: Geist's mechanism
+already works, and the string references features Urbanist doesn't implement.
+Under the hybrid model `font-numeric` is **load-bearing**: it is what moves
+digits off Urbanist onto Geist — `tabular-nums` alone is a silent no-op in
+the sans face.
 
-Numeric feature primitive: `font-numeric` = `font-feature-settings: "tnum" 1, "lnum" 1`.
+### 1.6 Icon primitives — unchanged
 
-### 1.6 Icon primitives
-
-Lucide. Stroke width is absolute (Lucide `absoluteStrokeWidth`), so it stays a
-true 1.5 px hairline at every size.
-
-| Primitive | Value |
-|---|---|
-| `icon-stroke` | 1.5 px |
-| `icon-14` | 14 px |
-| `icon-16` | 16 px |
-| `icon-20` | 20 px |
-| `icon-24` | 24 px |
+Lucide, `absoluteStrokeWidth`, stroke 1.5; sizes 14/16/20/24.
 
 ---
 
@@ -122,171 +128,154 @@ true 1.5 px hairline at every size.
 
 | Semantic token | References | Role |
 |---|---|---|
-| `canvas` | `neutral-50` | Page background — soft off-white so cards float |
-| `surface` | `neutral-0` | Card surface (pure white) |
-| `surface-raised` | `neutral-0` | Popovers/menus above cards — separation comes from elevation shadow, defined in the component pass |
-| `surface-inactive` | `neutral-100` | Inactive fills, disabled controls, skeletons |
-| `border-hairline` | `neutral-150` | 1 px dividers and card outlines |
-| `border-input` | `neutral-200` | Input and control borders (slightly stronger than hairline) |
-
-Divider token: `divider` = 1 px solid `border-hairline`.
+| `canvas` | `gray-50` | Page background |
+| `surface` | `gray-0` | Card surface |
+| `surface-raised` | `gray-0` | Popovers/menus — separation via `shadow-raised` (kept; elevation out of export scope) |
+| `surface-inactive` | `gray-100` | Inactive fills, disabled controls, skeletons |
+| `border-hairline` | `gray-200` | 1 px dividers and card outlines |
+| `border-input` | `gray-300` | Input and control borders |
 
 ### 2.2 Text
 
 | Semantic token | References | Role |
 |---|---|---|
-| `text-primary` | `neutral-900` | Headings, amounts, primary content |
-| `text-secondary` | `neutral-600` | Supporting copy, table headers |
-| `text-muted` | `neutral-500` | De-emphasized metadata, captions |
-| `text-disabled` | `neutral-400` | Disabled labels, placeholders (decorative-level contrast, never for information) |
+| `text-primary` | `gray-900` | Headings, amounts, primary content |
+| `text-secondary` | `gray-600` | Supporting copy, table headers |
+| `text-muted` | `gray-500` | De-emphasized metadata, captions |
+| `text-disabled` | `gray-400` | Disabled labels, placeholders (decorative-level contrast, never for information) |
 
 ### 2.3 Status (finance)
 
-Text variants are for money values rendered as text; fill variants are the
-vivid tones for dots, small badges, and chart accents only.
+Text variants for money values as text; fill variants (vivid legacy tones)
+for dots, small badges, and chart accents only.
 
 | Semantic token | References | Role |
 |---|---|---|
-| `status-positive-text` | `green-700` | Income, gains, credits as text |
-| `status-positive-fill` | `green-neon` | Positive dots/badges/chart accents |
-| `status-negative-text` | `red-700` | Expenses, losses, debits as text |
-| `status-negative-fill` | `red-neon` | Negative dots/badges/chart accents |
-| `status-neutral-text` | `neutral-600` | Transfers, zero, unchanged as text |
-| `status-neutral-fill` | `neutral-300` | Neutral dots/indicators (visible on white, unlike `neutral-100`) |
+| `status-positive-text` | `olive-600` | Income, gains, credits as text (**was green-700**) |
+| `status-positive-fill` | `green-neon` | Positive dots/badges — kept |
+| `status-negative-text` | `red-600` | Expenses, losses, debits as text |
+| `status-negative-fill` | `red-neon` | Negative dots/badges — kept |
+| `status-neutral-text` | `gray-600` | Transfers, zero, unchanged as text |
+| `status-neutral-fill` | `grey-fill` | Neutral dots/indicators — kept |
+| `status-warning-text` | `amber-700` | Estimates/caution (ESTIMATE badges) |
 
-Useful pairing note: black passes AA **on** both neon fills (16.60:1 on green,
-7.18:1 on red), so badge text/icons on neon fills should use `accent`.
+Pairing note: black passes AA on both neons and on lime-500 (18.07:1), so
+badge text/icons on vivid fills use `accent`.
 
-### 2.4 Accent (interactive / selected)
+### 2.4 Accent (interactive / selected) — black; export's "brand" family
 
 | Semantic token | References | Role |
 |---|---|---|
-| `accent` | `neutral-1000` | Primary interactive/selected: buttons, active nav, selection |
-| `accent-foreground` | `neutral-0` | Text/icons on accent (21:1) |
-| `accent-hover` | `neutral-800` | Hover/pressed state (black can't darken, so it lifts) |
+| `accent` | `gray-950` | Primary interactive/selected |
+| `accent-foreground` | `gray-0` | Text/icons on accent (21:1) |
+| `accent-hover` | `gray-800` | Hover/pressed lift |
 
-### 2.4b Interaction & elevation (added phase 2.6, owner-approved 2026-07-04)
+### 2.4b Interaction & elevation
 
 | Semantic token | Value | Role |
 |---|---|---|
-| `scrim` | `neutral-1000` at 20% | Modal overlay (+ subtle backdrop blur at component level) |
-| `focus-ring` | `accent` at 30% | 3 px focus-visible ring on interactive controls |
-| `shadow-raised` | `0 8px 24px rgb(0 0 0 / 0.08)` | Elevation for `surface-raised` (dialogs, popovers) — resolves the deferred flag below |
+| `scrim` | `gray-900` at **40%** | Modal overlay (**was 20%** — export value adopted; owner eye pass at Checkpoint B) |
+| `focus-ring` | `accent` at 30% | **KEPT** — export's 16% shadow variant rejected (owner deviation; 33 call sites unchanged) |
+| `shadow-raised` | `0 8px 24px rgb(0 0 0 / 0.08)` | Kept; elevation out of export scope |
 
 ### 2.5 Typography roles
 
-| Semantic token | References | Role |
-|---|---|---|
-| `font-display` | `type-36` | Hero dashboard figure |
-| `font-title` | `type-30` | Page/section titles |
-| `font-number-lg` | `type-24` + `font-numeric` | Large card numbers |
-| `font-card-title` | `type-20` | Card titles, subsections |
-| `font-body` | `type-16` | Default UI text |
-| `font-secondary` | `type-14` | Secondary text |
-| `font-caption` | `type-12` | Small labels, captions |
-| `font-micro` | `type-11` | Uppercase metadata rows |
-| `font-amount-hero` | `type-36` metrics + `font-family-numeric` | Hero money figure |
-| `font-amount` | `type-16` metrics + `font-family-numeric` | Amounts in rows/tables |
-| `font-amount-sm` | `type-14` metrics + `font-family-numeric` | Amounts in dense tables |
+Unchanged role names over the §1.5 scale: `font-display` (46), `font-title`
+(30), `font-number-lg` (24 + numeric), `font-card-title` (20/500),
+`font-subtitle` (18/500, new), `font-body` (16), `font-secondary` (14),
+`font-body-sm` (13, new), `font-caption` (12), `font-micro` (11 uppercase),
+`font-amount-*` (numeric variants, `tabular-nums` everywhere).
 
-All `font-amount-*` styles render in `font-family-numeric` (Geist, `tnum` on)
-at the type-scale sizes/line-heights, applied via `tabular-nums`. Since the UI
-font is now also Geist, numeric and body share one family; `tabular-nums`
-remains the switch that keeps digits aligned in columns.
+### 2.6 Density presets — unchanged
 
-### 2.6 Density presets
+Comfortable/compact as before (card padding 24/16, control height 44/36…).
 
-Both presets reference the spacing scale — compact is a re-mapping, not new
-numbers. Control heights are base-unit multiples (4 px × 11 / × 9).
+### 2.7 Radius roles — unchanged
 
-| Semantic token | Comfortable | Compact |
-|---|---|---|
-| `density-card-padding` | `space-6` (24) | `space-4` (16) |
-| `density-section-gap` | `space-8` (32) | `space-4` (16) |
-| `density-row-padding-y` | `space-4` (16) | `space-2` (8) |
-| `density-row-padding-x` | `space-4` (16) | `space-3` (12) |
-| `density-stack-gap` | `space-4` (16) | `space-2` (8) |
-| `density-control-height` | 44 px | 36 px |
+`radius-card` 20 · `radius-input` 12 · `radius-badge` 8 · `radius-pill` full.
 
-Comfortable: dashboard and overview cards. Compact: transaction lists, tables,
-entry forms.
+### 2.8 Icon roles — unchanged
 
-### 2.7 Radius roles
-
-| Semantic token | References |
-|---|---|
-| `radius-card` | `radius-xl` (20 px) |
-| `radius-input` | `radius-md` (12 px) |
-| `radius-badge` | `radius-sm` (8 px) |
-| `radius-pill` | `radius-full` |
-
-### 2.8 Icon roles
-
-| Semantic token | References | Role |
-|---|---|---|
-| `icon-inline` | `icon-14` | Inside 12/14 px text lines |
-| `icon-default` | `icon-16` | Row icons, buttons |
-| `icon-ui` | `icon-20` | Nav, section headers |
-| `icon-feature` | `icon-24` | Empty states, feature callouts |
-| `icon-stroke-default` | `icon-stroke` (1.5) | All icons; matches hairline aesthetic |
+`icon-inline` 14 · `icon-default` 16 · `icon-ui` 20 · `icon-feature` 24 ·
+stroke 1.5.
 
 ---
 
-## Measured contrast (WCAG 2.x)
+## Tier 2 additions (adopted 10-22C, **no component consumes these yet**)
 
-Text-safe status variants, measured against both backgrounds:
+Each future adoption is its own reviewed unit; the tokens exist so those units
+need no frozen-path edits.
 
-| Token | Value | vs `surface` #FFFFFF | vs `canvas` #F5F6F8 | AA ≥ 4.5 |
+| Family | Tokens | Notes |
+|---|---|---|
+| **Highlight** (export "accent", renamed — lime) | `highlight`, `-hover`, `-active`, `-foreground` (black), `-subtle`, `-border` | FILLS ONLY, never text on light; ration 1–3 per screen |
+| **Money extensions** | `money-positive-strong/-bg/-border`, `money-negative-strong/-bg/-border`, `money-neutral-strong`, `money-symbol`, `money-decimals` | Pill treatments + digit dressing; `money-symbol` **deviates to `gray-500`** (§5) |
+| **Links** | `text-link` (olive-700), `text-link-hover` (olive-800) | Current links use `accent`; olive adoption is a future unit |
+| **Brand-subtle** | `brand-subtle`, `brand-subtle-text`, `brand-border` | Quiet black-family emphasis |
+| **Inverse / hero card** | `surface-inverse`, `-inverse-card`, `-inverse-raised`, `text-on-inverse`, `-secondary`, `border-on-inverse`, `money-positive-on-inverse` (lime), `money-negative-on-inverse` (red-400) | Max one inverse card per screen |
+| **Chart** | `chart-accent`, `-strong`, `-strong-on-inverse`, `-hatch`, `-hatch-on-inverse`, `-muted`, `-muted-on-inverse` | Emphasis palette; categorical identity palette (10-07F Q8) remains open |
+| **Status backgrounds** | `status-success-bg`, `status-error-bg`, `status-warning-bg`, `status-info-text/-bg`, `status-neutral-bg` | Pill/banner backgrounds for the existing status texts |
+
+---
+
+## Measured contrast (WCAG 2.x) — recomputed 2026-07-17 post-swap
+
+| Token | Value | vs `surface` #FFF | vs `canvas` #F5F5F8 | AA ≥ 4.5 |
 |---|---|---|---|---|
-| `status-positive-text` | `#157A3C` | **5.41 : 1** | **5.00 : 1** | pass |
-| `status-negative-text` | `#C93636` | **5.17 : 1** | **4.78 : 1** | pass |
-| `status-neutral-text` | `#5C636E` | **6.06 : 1** | **5.60 : 1** | pass |
+| `status-positive-text` | `#4D7C0F` | **4.99** | **4.59** | pass |
+| `status-negative-text` | `#B42318` | **6.57** | **6.04** | pass |
+| `status-warning-text` | `#93370D` | **7.52** | **6.91** | pass |
+| `status-neutral-text` | `#55555D` | **7.38** | **6.79** | pass |
+| `text-primary` | `#121215` | 18.70 | 17.18 | pass |
+| `text-secondary` | `#55555D` | 7.38 | 6.79 | pass |
+| `text-muted` | `#6F6F78` | 4.98 | 4.57 | pass |
+| `money-positive-strong` | `#3F6212` | 7.08 | 6.50 | pass |
+| `money-negative-strong` | `#912018` | 8.66 | 7.96 | pass |
+| `money-symbol` / `money-decimals` | `#6F6F78` | 4.98 | 4.57 | pass |
+| `text-link` | `#3F6212` | 7.08 | 6.50 | pass |
+| `status-info-text` | `#3B3B42` | 11.11 | 10.21 | pass |
+| `accent-hover` | `#232328` | 15.64 | 14.38 | pass |
 
-Raw palette as text (why derivation was required):
+Own-background pill pairs: olive-600/olive-50 **4.66**; red-600/red-50
+**6.05**; amber-700/amber-50 **7.21**; gray-700/gray-100 **9.43**;
+gray-600/gray-100 **6.27** — all pass. Inverse (on `gray-900`): white
+18.70, lime-500 16.09, red-400 6.71 — all pass. Lime-500 as text on white:
+**1.16 — fails by design; fills only.**
 
-| Raw value | vs white | vs canvas | Verdict |
-|---|---|---|---|
-| `#86FF7B` ready green | 1.26 : 1 | 1.17 : 1 | fails hard — fills only |
-| `#FF6262` alert red | 2.93 : 1 | 2.71 : 1 | fails — fills only |
+## §5 Deviations from the export (owner-ruled, 10-22C)
 
-Regular text tokens (also verified):
-
-| Token | Value | vs white | vs canvas |
-|---|---|---|---|
-| `text-primary` | `#141719` | 18.01 : 1 | 16.65 : 1 |
-| `text-secondary` | `#5C636E` | 6.06 : 1 | 5.60 : 1 |
-| `text-muted` | `#67707F` | 5.00 : 1 | 4.62 : 1 |
-| `accent-foreground` on `accent` | white on black | 21 : 1 | — |
-| `accent-hover` | `#26292E` | 14.59 : 1 | 13.50 : 1 |
-
-## Palette adjustments made for contrast
-
-1. **Green**: `#86FF7B` is a 1.26:1 near-white as text — unusable. Derived
-   `green-700 #157A3C` (same hue family, deepened to AA with margin) for all
-   textual money values; the neon stays as the fill/indicator tone.
-2. **Red**: `#FF6262` reaches only 2.93:1. Derived `red-700 #C93636` for text;
-   neon red stays for fills.
-3. **Muted text**: a mid-grey around `#7A828E` (a natural ramp midpoint) only
-   reaches 3.88:1, so `neutral-500` was pushed darker to `#67707F` (5.00 /
-   4.62) — muted copy in a daily finance tool should still be genuinely
-   readable.
-4. `#EBEDEF` (raw inactive grey) is kept verbatim as `neutral-100` /
-   `surface-inactive`, but it is too faint as a status indicator on white, so
-   `status-neutral-fill` uses `neutral-300 #B9BFC7` instead.
+1. **Names:** export values adopted under REPO semantic names (option (a));
+   the export's lime "accent" enters as `highlight-*` because `accent` here
+   means black-interactive (51 component call sites).
+2. **`money-symbol` at `gray-500`, not the export's `gray-400`** — 2.79:1
+   is sub-AA and a currency symbol is information in a RON/EUR/USD ledger.
+3. **`focus-ring` kept** (accent at 30%, ring utility) — export's 16%
+   shadow variant rejected.
+4. **Status fills kept** (`green-neon`, `red-neon`, `grey-fill`) — no export
+   successor for vivid money dots/badges.
+5. **`surface-raised` + `shadow-raised` kept** — elevation excluded from the
+   export's scope.
+6. **Weight 600 rejected** — Medium 500 stays the ceiling; G3 greps for
+   regressions.
+7. **Uppercase micro idiom OVERRULED vs the export's "no uppercase labels"**
+   — the 27 uppercase call sites stand; only the tracking value (0.04em) was
+   adopted.
+8. **Hybrid font model, not the export's single face** — Urbanist adopted for
+   UI text only; Geist kept for all numerals because Urbanist verifiably
+   lacks `tnum` (10-20C gate evidence in that unit's report); the export's
+   `--numeric-features` string not adopted. Corollary rule: money never
+   renders in `--font-sans`.
 
 ## Flags / open points
 
-- `surface-raised` shares `neutral-0` with `surface`; its separation depends on
-  an elevation shadow to be defined in the component pass (no shadow tokens in
-  this foundation).
-- The type scale has no size between 30 and 36; if a screen ever needs an
-  intermediate display size, that is a scale change to decide explicitly — do
-  not improvise one.
-- ~~Lufga must be loaded with `tnum` support confirmed.~~ **Resolved
-  2026-07-04**: Lufga verified missing `tnum` (proportional digits). **Superseded
-  2026-07-06**: Lufga replaced by Geist as the single UI + numeric font (Geist
-  ships `tnum`); amounts use `tabular-nums`.
-- ~~The Lufga files came from a font-sharing site; confirm licensing before any
-  public (non-local) deployment.~~ **Moot 2026-07-06**: Lufga removed. Geist is
-  loaded from Google Fonts via `next/font` (OFL — no licensing concern); the
-  unused `Lufga-*.otf` files can be deleted from `src/fonts/`.
+- `surface-raised` shares white with `surface`; separation via
+  `shadow-raised` (resolved earlier; unchanged).
+- The type scale gap between 30 and 46 remains deliberate; do not improvise
+  intermediate display sizes.
+- **G4 gate gap (found 10-22C):** the G4 grep's palette list does not include
+  `olive` — components using `text-olive-600` etc. would slip past it.
+  Fix is an owner-ratified edit to `docs/review-standards.md` (its §6 rule),
+  proposed at this unit's Checkpoint B — not silently patched here.
+- Historical: Lufga replaced by Geist 2026-07-06 (`tnum` missing); unused
+  `Lufga-*.otf` files in `src/fonts/` can still be deleted. Urbanist rejected
+  2026-07-17 for the same defect (see Provenance).

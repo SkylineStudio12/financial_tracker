@@ -119,7 +119,7 @@ export default async function ImportBatchPage({
         </Link>
         <h1 className="text-title text-text-primary">{batch.statementNumber}</h1>
         <p className="text-caption text-text-muted">
-          {t("batchSummary", {
+          {t.rich("batchSummary", {
             account: batch.accountName,
             start: formatDate(batch.periodStart, locale),
             end: formatDate(batch.periodEnd, locale),
@@ -127,6 +127,8 @@ export default async function ImportBatchPage({
             closing: formatMinor(batch.closingBalanceMinor, "RON", locale),
             sign: movement >= 0 ? "+" : "−",
             net: formatMinor(Math.abs(movement), "RON", locale),
+            // Amounts must render in the numeric face (hybrid font model).
+            amt: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
           })}
         </p>
       </div>

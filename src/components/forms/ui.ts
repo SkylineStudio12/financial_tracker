@@ -5,6 +5,10 @@
  */
 export const fieldClass =
   "bg-surface border border-border-input rounded-input px-3 h-[var(--density-control-height)] text-secondary text-text-primary w-full transition-colors outline-none placeholder:text-text-muted focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50 disabled:bg-surface-inactive";
+/** Money inputs ONLY (inputMode="decimal"): digits must render in the numeric
+ * face (Geist tabular) — the sans face has no tabular figures (10-22C hybrid
+ * model). Text inputs keep fieldClass. */
+export const moneyFieldClass = `${fieldClass} font-numeric tabular-nums`;
 export const labelClass = "flex flex-col gap-1 text-caption text-text-muted";
 /** Shared focus ring — the same treatment as the Button cva base. */
 const focusRing = "outline-none focus-visible:ring-3 focus-visible:ring-focus-ring";

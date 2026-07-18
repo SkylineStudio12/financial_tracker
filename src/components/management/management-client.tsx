@@ -22,7 +22,7 @@ import type {
   SalaryProfileValues,
 } from "@/lib/management/service";
 import { useTranslatedError } from "@/components/use-translated-error";
-import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass } from "@/components/forms/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -525,7 +525,7 @@ export function ManagementClient({
                       {label}
                       <input
                         inputMode="decimal"
-                        className={fieldClass}
+                        className={moneyFieldClass}
                         value={fields[key]}
                         onChange={(event) => setFields({ ...fields, [key]: event.target.value })}
                       />

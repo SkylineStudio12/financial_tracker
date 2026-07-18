@@ -11,7 +11,7 @@ import {
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
-import { errorClass, fieldClass, labelClass, primaryButtonClass } from "@/components/forms/ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass, primaryButtonClass } from "@/components/forms/ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -114,7 +114,7 @@ export function DividendFlow({
             ref={grossRef}
             inputMode="decimal"
             placeholder={tForms("amountPlaceholder")}
-            className={fieldClass}
+            className={moneyFieldClass}
             value={gross}
             onChange={(e) => {
               setGross(e.target.value);

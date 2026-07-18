@@ -18,7 +18,7 @@ import { formatDate, formatMinor, parseAmountToMinor } from "@/lib/format";
 import { upsertPriceSnapshotAction } from "@/lib/investments/actions";
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
-import { errorClass, fieldClass, labelClass } from "@/components/forms/ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass } from "@/components/forms/ui";
 
 interface SecurityOption {
   id: string;
@@ -118,7 +118,7 @@ export function PriceSnapshotForm({
         <label className={labelClass}>
           {t("closingPrice")} {selected ? `(${selected.currency})` : ""}
           <input
-            className={`${fieldClass} font-numeric`}
+            className={moneyFieldClass}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder={t("pricePlaceholder")}
@@ -127,9 +127,10 @@ export function PriceSnapshotForm({
       </div>
       {selected?.latest && (
         <p className="text-caption text-text-muted">
-          {t("latestStored", {
+          {t.rich("latestStored", {
             price: formatMinor(selected.latest.priceMinor, selected.currency, locale),
             date: formatDate(selected.latest.date, locale),
+            amt: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
           })}
         </p>
       )}

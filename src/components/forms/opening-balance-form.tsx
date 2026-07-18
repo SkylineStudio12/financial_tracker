@@ -8,7 +8,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
 import type { FormOptions } from "./option-types";
-import { errorClass, fieldClass, labelClass } from "./ui";
+import { errorClass, fieldClass, labelClass, moneyFieldClass } from "./ui";
 
 export function OpeningBalanceForm({
   entityId,
@@ -82,7 +82,7 @@ export function OpeningBalanceForm({
       </div>
       <label className={labelClass}>
         {t("amount", { currency })}
-        <input className={fieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
+        <input className={moneyFieldClass} inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
       </label>
       <label className={labelClass}>
         {t("description")}

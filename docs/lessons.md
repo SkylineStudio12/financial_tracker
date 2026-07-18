@@ -340,3 +340,26 @@ pending gated action and receives an informal imperative, it holds and asks
 for the prompt key. Ratified 2026-07-17 after the double-channel push
 incident (10-27C), where an informal "Push" and the gated brief authorized
 the same action through two channels.
+
+## L-0030
+
+The session harness launches agent sessions in isolated git worktrees under
+.claude/worktrees/ by default. This is normal launcher behavior, not agent
+misbehavior. Consequences: (1) COMMITTED work propagates — worktrees share
+the repository, so approved commits reach main regardless of which tree the
+session ran in. UNCOMMITTED deliverables do not — a design document awaiting
+rulings exists only in that session's worktree. (2) A design agent's delivery
+report is therefore not proof the artifact exists in the main tree. Procedure:
+the agent reports the absolute path; the owner copies the file to the main
+tree; the doc-commit unit verifies the file exists at the main-tree path
+before editing anything. (3) When a delivery is accepted out-of-band
+(rulings recorded directly in the repo), the originating session is left
+holding a stale STOP gate. Never answer that gate with rulings — the agent
+would revise its worktree copy, creating a divergent version of an
+already-committed document (L-0023's double-write shape, in docs form). Send
+an explicit closure instead: accepted, committed at <hash>, do not edit, end
+session. Closing the orphaned session is part of the cleanup. (Firings: a
+Fable session delivered import-inbox-checkpoint-a.md into a worktree while
+the acceptance was committed at 0004519 out-of-band; a later Fable session
+correctly STOPped on the worktree guard, confirming the harness pins
+worktrees by default.)

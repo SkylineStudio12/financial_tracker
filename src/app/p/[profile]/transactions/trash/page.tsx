@@ -5,6 +5,7 @@ import { formatDate, formatDateTime, formatMinor } from "@/lib/format";
 import { listDeletedTransactions } from "@/lib/ledger/queries";
 import { getProfile } from "@/lib/profiles";
 import { TrashRowActions } from "@/components/trash-row-actions";
+import { AccountLabel } from "@/components/category-label";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,11 @@ export default async function TransactionTrashPage({
   const { profile: slug } = await params;
   const profile = getProfile(slug);
   if (!profile) notFound();
-  const [rows, locale, t] = await Promise.all([
+  const [rows, locale, t, tManage] = await Promise.all([
     listDeletedTransactions(profile),
     getLocale(),
     getTranslations("transactions"),
+    getTranslations("manage"),
   ]);
   const cell = "px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)]";
 
@@ -63,7 +65,13 @@ export default async function TransactionTrashPage({
                     <div className="text-caption text-text-muted">{row.importSourceLabel}</div>
                   )}
                 </td>
-                <td className={`${cell} text-text-muted`}>{row.accountName}</td>
+                <td className={`${cell} text-text-muted`}>
+                  <AccountLabel
+                    name={row.accountName}
+                    deleted={row.accountDeleted}
+                    deletedTooltip={tManage("deletedAccountTooltip")}
+                  />
+                </td>
                 <td className={`${cell} whitespace-nowrap text-text-muted`}>{formatDateTime(row.deletedAt, locale)}</td>
                 <td className={`${cell} whitespace-nowrap text-right font-numeric tabular-nums text-text-muted`}>
                   {formatMinor(row.amount, row.currency, locale)}

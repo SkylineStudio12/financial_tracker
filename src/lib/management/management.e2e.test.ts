@@ -1,6 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, pool } from "@/db";
 import {
@@ -16,9 +18,16 @@ import {
   transactions,
 } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/app-error";
+import { AccountLabel, CategoryLabel } from "@/components/category-label";
 import { SUGGESTED_CATEGORY_BY_KIND } from "@/lib/import/config";
 import { getFormOptions } from "@/lib/ledger/form-options";
 import { saveSalary } from "@/lib/ledger/flow-actions";
+import {
+  getFilterOptions,
+  getTransactionDetail,
+  listDeletedTransactions,
+  listTransactions,
+} from "@/lib/ledger/queries";
 import {
   createTransaction,
   softDeleteNonInvestmentTransaction,
@@ -27,25 +36,35 @@ import {
   defaultSalaryPayMonth,
   salaryPayMonthAfterPaymentDateChange,
 } from "@/lib/ledger/salary-dates";
-import { ENTITY_IDS } from "@/lib/profiles";
+import { ENTITY_IDS, getProfile } from "@/lib/profiles";
 import { resolveAutomaticSalaryPrefill } from "./salary-prefill";
 import {
   categoryDuplicateGroups,
   createCategory,
   createEmployee,
+  createManagedAccount,
   deleteSalaryProfile,
   getEmployeeSalaryPrefill,
+  listManagedAccounts,
+  listManagedCategories,
+  purgeCategory,
+  purgeManagedAccount,
+  restoreCategory,
+  restoreManagedAccount,
   saveSalaryProfile,
   seedRevenueCategories,
   softDeleteCategory,
   softDeleteEmployee,
+  softDeleteManagedAccount,
   updateCategory,
   updateEmployee,
+  updateManagedAccount,
   type SalaryProfileValues,
 } from "./service";
 
 const COMPANY_ID = ENTITY_IDS.skyline;
 const createdCategoryIds: string[] = [];
+const createdAccountIds: string[] = [];
 const createdEmployeeIds: string[] = [];
 const createdTransactionIds: string[] = [];
 
@@ -179,6 +198,252 @@ async function main(): Promise<void> {
     assert.doesNotMatch(serviceSource, /@\/lib\/tax\//);
     assert.doesNotMatch(serviceSource, /rateBps|percentage|\/\s*100/);
     console.log("PASS fixture 3 no-computation proof: no tax import, rate, percentage, or derivation");
+
+    const householdAccounts = await listManagedAccounts(ENTITY_IDS.household);
+    assert.ok(householdAccounts.some((account) => account.owner === "greg"));
+    assert.ok(householdAccounts.some((account) => account.owner === "andra"));
+    assert.ok(householdAccounts.every((account) => ["bank", "cash", "brokerage"].includes(account.type)));
+    const brokerage = householdAccounts.find((account) => account.type === "brokerage");
+    assert.ok(brokerage?.readOnly);
+    await expectCode(
+      () =>
+        updateManagedAccount(brokerage.id, ENTITY_IDS.household, {
+          name: brokerage.name,
+          type: "bank",
+          currency: brokerage.currency,
+          owner: brokerage.owner,
+          isActive: brokerage.isActive,
+        }),
+      "manage.accountReadOnly",
+    );
+    await expectCode(
+      () =>
+        createManagedAccount(ENTITY_IDS.household, {
+          name: "Fixture Ownerless",
+          type: "bank",
+          currency: "RON",
+          owner: null,
+          isActive: true,
+        }),
+      "manage.accountOwnerRequired",
+    );
+    await expectCode(
+      () =>
+        createManagedAccount(COMPANY_ID, {
+          name: "Fixture Company Owned",
+          type: "bank",
+          currency: "RON",
+          owner: "greg",
+          isActive: true,
+        }),
+      "manage.companyAccountOwnerForbidden",
+    );
+    const mutableAccountId = await createManagedAccount(ENTITY_IDS.household, {
+      name: "Fixture Household Cash",
+      type: "cash",
+      currency: "EUR",
+      owner: "greg",
+      isActive: true,
+    });
+    createdAccountIds.push(mutableAccountId);
+    await expectCode(
+      () =>
+        updateManagedAccount(mutableAccountId, ENTITY_IDS.household, {
+          name: "Fixture Household Cash",
+          type: "cash",
+          currency: "EUR",
+          owner: null,
+          isActive: true,
+        }),
+      "manage.accountOwnerRequired",
+    );
+    console.log(
+      "PASS fixture 4a.1 Q3 negative owner paths: household create/edit owner NULL refused; company owner set refused",
+    );
+    await expectCode(
+      () =>
+        createManagedAccount(ENTITY_IDS.household, {
+          name: " fixture household cash ",
+          type: "bank",
+          currency: "USD",
+          owner: "andra",
+          isActive: true,
+        }),
+      "manage.accountDuplicate",
+    );
+    await updateManagedAccount(mutableAccountId, ENTITY_IDS.household, {
+      name: "Fixture Household Bank",
+      type: "bank",
+      currency: "USD",
+      owner: "andra",
+      isActive: false,
+    });
+    const mutated = (await listManagedAccounts(ENTITY_IDS.household)).find(
+      (account) => account.id === mutableAccountId,
+    );
+    assert.deepEqual(
+      mutated && {
+        name: mutated.name,
+        type: mutated.type,
+        currency: mutated.currency,
+        owner: mutated.owner,
+        isActive: mutated.isActive,
+      },
+      {
+        name: "Fixture Household Bank",
+        type: "bank",
+        currency: "USD",
+        owner: "andra",
+        isActive: false,
+      },
+    );
+
+    const historyAccountId = await createManagedAccount(COMPANY_ID, {
+      name: "Fixture History Bank",
+      type: "bank",
+      currency: "RON",
+      owner: null,
+      isActive: true,
+    });
+    createdAccountIds.push(historyAccountId);
+    const [companyEquity] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.entityId, COMPANY_ID),
+          eq(accounts.type, "equity"),
+          isNull(accounts.deletedAt),
+        ),
+      );
+    assert.ok(companyEquity);
+    const accountTransactionId = await createTransaction({
+      entityId: COMPANY_ID,
+      date: "2026-01-14",
+      description: "Management account fixture",
+      kind: "transfer",
+      postings: [
+        { accountId: historyAccountId, amount: -500 },
+        { accountId: companyEquity.id, amount: 500 },
+      ],
+    });
+    createdTransactionIds.push(accountTransactionId);
+    const withBalance = (await listManagedAccounts(COMPANY_ID)).find(
+      (account) => account.id === historyAccountId,
+    );
+    assert.equal(withBalance?.balanceRon, -500);
+    assert.equal(withBalance?.postingCount, 1);
+    await expectCode(
+      () =>
+        updateManagedAccount(historyAccountId, COMPANY_ID, {
+          name: "Fixture History Cash",
+          type: "cash",
+          currency: "RON",
+          owner: null,
+          isActive: true,
+        }),
+      "manage.accountHistoryLocked",
+    );
+    await expectCode(
+      () => softDeleteManagedAccount(historyAccountId, COMPANY_ID),
+      "manage.accountInUse",
+    );
+    await updateManagedAccount(historyAccountId, COMPANY_ID, {
+      name: "Fixture History Bank Renamed",
+      type: "bank",
+      currency: "RON",
+      owner: null,
+      isActive: false,
+    });
+    await softDeleteNonInvestmentTransaction(accountTransactionId);
+    await softDeleteManagedAccount(historyAccountId, COMPANY_ID);
+    const skyline = getProfile("skyline");
+    assert.ok(skyline);
+    const trashedAccountRow = (await listDeletedTransactions(skyline)).find(
+      (row) => row.id === accountTransactionId,
+    );
+    assert.ok(trashedAccountRow);
+    assert.equal(trashedAccountRow?.accountName, "Fixture History Bank Renamed");
+    assert.equal(trashedAccountRow?.accountDeleted, true);
+    const accountLabelHtml = renderToStaticMarkup(
+      createElement(AccountLabel, {
+        name: trashedAccountRow.accountName,
+        deleted: trashedAccountRow.accountDeleted,
+        deletedTooltip: "Account deleted — historical label",
+      }),
+    );
+    assert.match(accountLabelHtml, /text-text-muted/);
+    assert.match(accountLabelHtml, /lucide-archive/);
+    assert.match(accountLabelHtml, /Account deleted — historical label/);
+    await expectCode(
+      () => purgeManagedAccount(historyAccountId, COMPANY_ID),
+      "manage.accountReferencedCannotPurge",
+    );
+    await restoreManagedAccount(historyAccountId, COMPANY_ID);
+    assert.ok(
+      (await listManagedAccounts(COMPANY_ID)).some((account) => account.id === historyAccountId),
+    );
+    await softDeleteManagedAccount(historyAccountId, COMPANY_ID);
+    await db.delete(auditLog).where(eq(auditLog.rowId, accountTransactionId));
+    await db.delete(transactions).where(eq(transactions.id, accountTransactionId));
+    createdTransactionIds.splice(createdTransactionIds.indexOf(accountTransactionId), 1);
+
+    await softDeleteManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    await restoreManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    const restoredAccount = (await listManagedAccounts(ENTITY_IDS.household)).find(
+      (account) => account.id === mutableAccountId,
+    );
+    assert.deepEqual(
+      restoredAccount && {
+        name: restoredAccount.name,
+        type: restoredAccount.type,
+        currency: restoredAccount.currency,
+        owner: restoredAccount.owner,
+        isActive: restoredAccount.isActive,
+      },
+      {
+        name: "Fixture Household Bank",
+        type: "bank",
+        currency: "USD",
+        owner: "andra",
+        isActive: false,
+      },
+    );
+    await softDeleteManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    const accountCollisionId = await createManagedAccount(ENTITY_IDS.household, {
+      name: "fixture household bank",
+      type: "bank",
+      currency: "RON",
+      owner: "greg",
+      isActive: true,
+    });
+    createdAccountIds.push(accountCollisionId);
+    await expectCode(
+      () => restoreManagedAccount(mutableAccountId, ENTITY_IDS.household),
+      "manage.restoreNameTaken",
+    );
+    await softDeleteManagedAccount(accountCollisionId, ENTITY_IDS.household);
+    await purgeManagedAccount(accountCollisionId, ENTITY_IDS.household);
+    await restoreManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    await softDeleteManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    await purgeManagedAccount(mutableAccountId, ENTITY_IDS.household);
+    console.log(
+      "PASS fixture 4a accounts: owner/system/brokerage rules, app duplicate refusal, -500 RON balance, history lock, delete guard, archived label, referenced-purge refusal, exact restore, collision refusal, unused purge",
+    );
+    const managementClientSource = await readFile(
+      "src/components/management/management-client.tsx",
+      "utf8",
+    );
+    assert.equal(managementClientSource.match(/disabled=\{accountShapeLocked\}/g)?.length, 3);
+    assert.match(managementClientSource, /!company && <TableHead>\{t\("owner"\)\}<\/TableHead>/);
+    assert.match(managementClientSource, /t\("accountsEmpty"\)/);
+    assert.match(managementClientSource, /t\("systemAccountsCaption"\)/);
+    assert.match(managementClientSource, /deletedAccounts\.length > 0/);
+    assert.match(managementClientSource, /deletedCategories\.length > 0/);
+    assert.match(managementClientSource, /t\("deactivateInstead"\)/);
+    console.log(
+      "PASS fixture 4b account UI: three historical-shape controls lock, company owner column absent, honest empty/system copy, zero-count disclosures absent, in-use delete offers Deactivate",
+    );
 
     let repeatCalls = 0;
     const fromProfile = await resolveAutomaticSalaryPrefill(canonicalProfile, async () => {
@@ -325,6 +590,59 @@ async function main(): Promise<void> {
     });
     createdTransactionIds.push(categoryTransactionId);
     await expectCode(() => softDeleteCategory(inUseId, COMPANY_ID), "manage.categoryInUse");
+
+    // Simulate the accepted category-delete race directly: the management
+    // guard normally refuses while this live posting exists.
+    await db
+      .update(categories)
+      .set({ deletedAt: new Date("2026-01-16T00:00:00Z") })
+      .where(eq(categories.id, inUseId));
+    const listed = await listTransactions(skyline, {}, 1);
+    const listedRaceRow = listed.rows.find((row) => row.id === categoryTransactionId);
+    assert.ok(listedRaceRow);
+    assert.equal(listedRaceRow?.category, "Fixture In Use");
+    assert.equal(listedRaceRow?.categoryDeleted, true);
+    const detail = await getTransactionDetail(categoryTransactionId, skyline);
+    const detailRacePosting = detail?.postings.find(
+      (posting) => posting.categoryName === "Fixture In Use",
+    );
+    assert.equal(detailRacePosting?.categoryName, "Fixture In Use");
+    assert.ok(detailRacePosting?.categoryDeletedAt);
+    const categoryLabelHtml = renderToStaticMarkup(
+      createElement(CategoryLabel, {
+        name: listedRaceRow.category,
+        deleted: listedRaceRow.categoryDeleted,
+        deletedTooltip: "Category deleted — historical label",
+      }),
+    );
+    assert.match(categoryLabelHtml, /text-text-muted/);
+    assert.match(categoryLabelHtml, /lucide-archive/);
+    assert.match(categoryLabelHtml, /Category deleted — historical label/);
+    const regularFilters = await getFilterOptions(COMPANY_ID);
+    assert.equal(regularFilters.categories.some((category) => category.id === inUseId), false);
+    const pinnedFilters = await getFilterOptions(COMPANY_ID, undefined, { categoryId: inUseId });
+    assert.deepEqual(
+      pinnedFilters.categories.find((category) => category.id === inUseId),
+      { id: inUseId, name: "Fixture In Use", deleted: true },
+    );
+    const listSource = await readFile("src/app/p/[profile]/transactions/page.tsx", "utf8");
+    const detailSource = await readFile(
+      "src/app/p/[profile]/transactions/[transactionId]/page.tsx",
+      "utf8",
+    );
+    assert.match(listSource, /<CategoryLabel/);
+    assert.match(listSource, /deleted=\{row\.categoryDeleted\}/);
+    assert.match(listSource, /selectedCategory\?\.deleted/);
+    assert.match(detailSource, /<CategoryLabel/);
+    assert.match(detailSource, /posting\.categoryDeletedAt !== null/);
+    await db
+      .update(categories)
+      .set({ deletedAt: null })
+      .where(eq(categories.id, inUseId));
+    console.log(
+      "PASS fixture 6a accepted category-delete race: production list/detail joins retain the name; list/detail/pinned filter render shared muted Archive treatment",
+    );
+
     await softDeleteNonInvestmentTransaction(categoryTransactionId);
     await softDeleteCategory(inUseId, COMPANY_ID);
     const [historical] = await db
@@ -335,6 +653,18 @@ async function main(): Promise<void> {
     assert.equal(historical.name, "Fixture In Use");
     const formOptions = await getFormOptions(COMPANY_ID);
     assert.equal(formOptions.categories.some((category) => category.id === inUseId), false);
+    assert.ok(
+      (await listManagedCategories(COMPANY_ID, "deleted")).some(
+        (category) => category.id === inUseId && category.postingCount === 1,
+      ),
+    );
+    await expectCode(
+      () => purgeCategory(inUseId, COMPANY_ID),
+      "manage.categoryReferencedCannotPurge",
+    );
+    await restoreCategory(inUseId, COMPANY_ID);
+    assert.ok((await listManagedCategories(COMPANY_ID)).some((category) => category.id === inUseId));
+    await softDeleteCategory(inUseId, COMPANY_ID);
     const unusedId = await createCategory({
       entityId: COMPANY_ID,
       name: "Fixture Unused",
@@ -342,13 +672,31 @@ async function main(): Promise<void> {
     });
     createdCategoryIds.push(unusedId);
     await softDeleteCategory(unusedId, COMPANY_ID);
+    await restoreCategory(unusedId, COMPANY_ID);
+    await softDeleteCategory(unusedId, COMPANY_ID);
+    const categoryCollisionId = await createCategory({
+      entityId: COMPANY_ID,
+      name: "fixture unused",
+      kind: "expense",
+    });
+    createdCategoryIds.push(categoryCollisionId);
+    await expectCode(() => restoreCategory(unusedId, COMPANY_ID), "manage.restoreNameTaken");
+    await softDeleteCategory(categoryCollisionId, COMPANY_ID);
+    await purgeCategory(categoryCollisionId, COMPANY_ID);
+    await restoreCategory(unusedId, COMPANY_ID);
+    await softDeleteCategory(unusedId, COMPANY_ID);
+    await purgeCategory(unusedId, COMPANY_ID);
+
+    await softDeleteCategory(parentId, COMPANY_ID);
+    await expectCode(() => purgeCategory(parentId, COMPANY_ID), "manage.categoryHasChildren");
+    await restoreCategory(parentId, COMPANY_ID);
 
     await assert.rejects(
       db.insert(categories).values({ entityId: COMPANY_ID, name: "FIXTURE PARENT", kind: "expense" }),
       (error) => hasPgCode(error, "23505"),
     );
     console.log(
-      "PASS fixture 6 category constraints: duplicate/index, depth, kind, protected, in-use, unused soft-delete, and historical-name behavior",
+      "PASS fixture 6 category recovery: constraints/protected guard, race join + muted Archive tooltip, form exclusion, pinned deleted filter, referenced-purge refusal, exact restore, collision refusal, unused purge, child guard",
     );
 
     assert.equal(defaultSalaryPayMonth("2026-07-10"), "2026-06");
@@ -386,6 +734,10 @@ async function main(): Promise<void> {
     if (createdCategoryIds.length > 0) {
       await db.delete(auditLog).where(inArray(auditLog.rowId, createdCategoryIds));
       await db.delete(categories).where(inArray(categories.id, createdCategoryIds));
+    }
+    if (createdAccountIds.length > 0) {
+      await db.delete(auditLog).where(inArray(auditLog.rowId, createdAccountIds));
+      await db.delete(accounts).where(inArray(accounts.id, createdAccountIds));
     }
     if (createdEmployeeIds.length > 0) {
       await db

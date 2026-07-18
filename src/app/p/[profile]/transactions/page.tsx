@@ -17,6 +17,7 @@ import type { TransactionKind } from "@/lib/ledger";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
 import { RowLink } from "@/components/row-link";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
+import { AccountLabel, CategoryLabel } from "@/components/category-label";
 
 export const dynamic = "force-dynamic";
 
@@ -74,19 +75,23 @@ export default async function TransactionsPage({
   const locale = await getLocale();
   const t = await getTranslations("transactions");
   const tEnums = await getTranslations("enums");
+  const tManage = await getTranslations("manage");
   const query = await searchParams;
   const filters = parseFilters(query);
   const page = Math.max(1, Number(single(query.page)) || 1);
 
   const [{ rows, total, pageSize }, options, formOptions, deletedRows, flowData] = await Promise.all([
     listTransactions(profile, filters, page),
-    getFilterOptions(entityId, owner),
+    getFilterOptions(entityId, owner, { categoryId: filters.categoryId }),
     getFormOptions(entityId, owner),
     listDeletedTransactions(profile),
     profile.companyFlows
       ? getFlowPageData(entityId)
       : Promise.resolve({ isCompany: false, personalAccounts: [], employees: [] }),
   ]);
+  const selectedCategory = options.categories.find(
+    (category) => category.id === filters.categoryId,
+  );
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Compact pill filters: quiet by default so the data stays the focus;
@@ -148,14 +153,25 @@ export default async function TransactionsPage({
         </label>
         <label className={pill(Boolean(filters.categoryId))}>
           {t("filterCategory")}
-          <select name="category" defaultValue={filters.categoryId ?? ""} className={pillControl}>
-            <option value="">{t("all")}</option>
-            {options.categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          {selectedCategory?.deleted ? (
+            <>
+              <input type="hidden" name="category" value={selectedCategory.id} />
+              <CategoryLabel
+                name={selectedCategory.name}
+                deleted
+                deletedTooltip={tManage("deletedCategoryTooltip")}
+              />
+            </>
+          ) : (
+            <select name="category" defaultValue={filters.categoryId ?? ""} className={pillControl}>
+              <option value="">{t("all")}</option>
+              {options.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label className={pill(Boolean(filters.kind))}>
           {t("filterKind")}
@@ -238,12 +254,28 @@ export default async function TransactionsPage({
                 </td>
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
                 <td className={`${cellClass} text-text-muted`}>
-                  {row.splitCount ? t("split", { count: row.splitCount }) : (row.category ?? "—")}
+                  {row.splitCount ? (
+                    t("split", { count: row.splitCount })
+                  ) : row.category ? (
+                    <CategoryLabel
+                      name={row.category}
+                      deleted={row.categoryDeleted}
+                      deletedTooltip={tManage("deletedCategoryTooltip")}
+                    />
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className={`${cellClass} text-text-muted`}>
                   {row.tagNames.join(", ") || "—"}
                 </td>
-                <td className={`${cellClass} text-text-muted`}>{row.accountName}</td>
+                <td className={`${cellClass} text-text-muted`}>
+                  <AccountLabel
+                    name={row.accountName}
+                    deleted={row.accountDeleted}
+                    deletedTooltip={tManage("deletedAccountTooltip")}
+                  />
+                </td>
                 <td
                   className={`${cellClass} text-right whitespace-nowrap font-numeric tabular-nums font-medium ${amountTone(row.kind, row.amount)}`}
                 >

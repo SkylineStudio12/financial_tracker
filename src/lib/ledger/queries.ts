@@ -14,6 +14,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import { db } from "@/db";
@@ -49,6 +50,7 @@ export interface TransactionListRow {
   kind: TransactionKind;
   /** Single category name when all legs share one; null otherwise. */
   category: string | null;
+  categoryDeleted: boolean;
   /** Distinct leg-category count when legs differ (≥2); null otherwise —
    * the page renders the localized "Split (n)" label, not the query. */
   splitCount: number | null;
@@ -58,6 +60,7 @@ export interface TransactionListRow {
   currency: string;
   amountRon: number;
   accountName: string;
+  accountDeleted: boolean;
   currentRevision: number;
   crudAvailable: boolean;
   importBatchId: string | null;
@@ -201,8 +204,10 @@ export async function listTransactions(
           currency: postings.currency,
           amountRon: postings.amountRon,
           accountName: accounts.name,
+          accountDeletedAt: accounts.deletedAt,
           accountType: accounts.type,
           categoryName: categories.name,
+          categoryDeletedAt: categories.deletedAt,
           profileMatch: profileAccountScopeCondition(profile),
         })
         .from(postings)
@@ -247,12 +252,19 @@ export async function listTransactions(
       description: transaction.description,
       kind: transaction.kind,
       category: categoryNames.length === 1 ? categoryNames[0] : null,
+      categoryDeleted:
+        categoryNames.length === 1 &&
+        legs.some(
+          (posting) =>
+            posting.categoryName === categoryNames[0] && posting.categoryDeletedAt !== null,
+        ),
       splitCount: categoryNames.length > 1 ? categoryNames.length : null,
       tagNames: tagRows.filter((t) => t.transactionId === transaction.id).map((t) => t.name),
       amount: display.amount,
       currency: display.currency,
       amountRon: display.amountRon,
       accountName: display.accountName,
+      accountDeleted: display.accountDeletedAt !== null,
       currentRevision: transaction.currentRevision,
       crudAvailable: !tradeTransactionIds.has(transaction.id),
       importBatchId: importLink?.sourceBatchId ?? null,
@@ -288,8 +300,10 @@ export async function getTransactionDetail(
       amountRon: postings.amountRon,
       counterparty: postings.counterparty,
       accountName: accounts.name,
+      accountDeletedAt: accounts.deletedAt,
       accountType: accounts.type,
       categoryName: categories.name,
+      categoryDeletedAt: categories.deletedAt,
     })
     .from(postings)
     .innerJoin(accounts, eq(accounts.id, postings.accountId))
@@ -356,6 +370,7 @@ export async function listDeletedTransactions(profile: Profile) {
         amountRon: postings.amountRon,
         currency: postings.currency,
         accountName: accounts.name,
+        accountDeletedAt: accounts.deletedAt,
         accountType: accounts.type,
         profileMatch: profileAccountScopeCondition(profile),
       })
@@ -393,6 +408,7 @@ export async function listDeletedTransactions(profile: Profile) {
       amountRon: display.amountRon,
       currency: display.currency,
       accountName: display.accountName,
+      accountDeleted: display.accountDeletedAt !== null,
       currentRevision: transaction.currentRevision,
       crudAvailable: !tradeIds.has(transaction.id),
       importBatchId: importLink?.sourceBatchId ?? null,
@@ -453,7 +469,11 @@ export async function hasLikelyRestoreCollision(transactionId: string): Promise<
 }
 
 /** Data for filter dropdowns on the list page. */
-export async function getFilterOptions(entityId: string, owner?: AccountOwner) {
+export async function getFilterOptions(
+  entityId: string,
+  owner?: AccountOwner,
+  selected?: { categoryId?: string },
+) {
   const accountRows = await db
     .select({ id: accounts.id, name: accounts.name })
     .from(accounts)
@@ -466,12 +486,14 @@ export async function getFilterOptions(entityId: string, owner?: AccountOwner) {
     )
     .orderBy(accounts.name);
   const categoryRows = await db
-    .select({ id: categories.id, name: categories.name })
+    .select({ id: categories.id, name: categories.name, deletedAt: categories.deletedAt })
     .from(categories)
     .where(
       and(
         sql`${categories.entityId} is null or ${categories.entityId} = ${entityId}`,
-        isNull(categories.deletedAt),
+        selected?.categoryId
+          ? or(isNull(categories.deletedAt), eq(categories.id, selected.categoryId))
+          : isNull(categories.deletedAt),
       ),
     )
     .orderBy(categories.name);
@@ -480,5 +502,13 @@ export async function getFilterOptions(entityId: string, owner?: AccountOwner) {
     .from(tags)
     .where(isNull(tags.deletedAt))
     .orderBy(tags.name);
-  return { accounts: accountRows, categories: categoryRows, tags: tagRows };
+  return {
+    accounts: accountRows,
+    categories: categoryRows.map((category) => ({
+      id: category.id,
+      name: category.name,
+      deleted: category.deletedAt !== null,
+    })),
+    tags: tagRows,
+  };
 }

@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ManagementClient } from "@/components/management/management-client";
-import { listManagedCategories, listManagedEmployees } from "@/lib/management/service";
+import {
+  listManagedAccounts,
+  listManagedCategories,
+  listManagedEmployees,
+} from "@/lib/management/service";
 import { getProfile } from "@/lib/profiles";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +19,11 @@ export default async function ManagePage({
   const profile = getProfile(slug);
   if (!profile) notFound();
   const t = await getTranslations("manage");
-  const [categories, employees] = await Promise.all([
+  const [accounts, deletedAccounts, categories, deletedCategories, employees] = await Promise.all([
+    listManagedAccounts(profile.entityId),
+    listManagedAccounts(profile.entityId, "deleted"),
     listManagedCategories(profile.entityId),
+    listManagedCategories(profile.entityId, "deleted"),
     profile.companyFlows ? listManagedEmployees(profile.entityId) : Promise.resolve([]),
   ]);
 
@@ -27,7 +34,10 @@ export default async function ManagePage({
         profileSlug={profile.slug}
         entityId={profile.entityId}
         company={profile.companyFlows}
+        accounts={accounts}
+        deletedAccounts={deletedAccounts}
         categories={categories}
+        deletedCategories={deletedCategories}
         employees={employees}
       />
     </div>

@@ -4,14 +4,22 @@ import { revalidatePath } from "next/cache";
 import { toAppError, type AppError } from "@/lib/app-error";
 import {
   createCategory,
+  createManagedAccount,
   createEmployee,
   deleteSalaryProfile,
   getEmployeeSalaryPrefill,
+  purgeCategory,
+  purgeManagedAccount,
+  restoreCategory,
+  restoreManagedAccount,
   saveSalaryProfile,
   softDeleteCategory,
   softDeleteEmployee,
+  softDeleteManagedAccount,
   updateCategory,
   updateEmployee,
+  updateManagedAccount,
+  type ManagedAccountValues,
   type SalaryProfileValues,
 } from "./service";
 
@@ -87,6 +95,57 @@ export async function deleteSalaryProfileAction(
   return result;
 }
 
+export async function createManagedAccountAction(
+  profileSlug: string,
+  entityId: string,
+  values: ManagedAccountValues,
+): Promise<ActionResult<string>> {
+  const result = await runAction(() => createManagedAccount(entityId, values));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function updateManagedAccountAction(
+  profileSlug: string,
+  entityId: string,
+  accountId: string,
+  values: ManagedAccountValues,
+): Promise<ActionResult> {
+  const result = await runAction(() => updateManagedAccount(accountId, entityId, values));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function deleteManagedAccountAction(
+  profileSlug: string,
+  entityId: string,
+  accountId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => softDeleteManagedAccount(accountId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function restoreManagedAccountAction(
+  profileSlug: string,
+  entityId: string,
+  accountId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => restoreManagedAccount(accountId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function purgeManagedAccountAction(
+  profileSlug: string,
+  entityId: string,
+  accountId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => purgeManagedAccount(accountId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
 export async function createCategoryAction(
   profileSlug: string,
   input: {
@@ -118,6 +177,26 @@ export async function deleteCategoryAction(
   categoryId: string,
 ): Promise<ActionResult> {
   const result = await runAction(() => softDeleteCategory(categoryId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function restoreCategoryAction(
+  profileSlug: string,
+  entityId: string,
+  categoryId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => restoreCategory(categoryId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function purgeCategoryAction(
+  profileSlug: string,
+  entityId: string,
+  categoryId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => purgeCategory(categoryId, entityId));
   if ("ok" in result) refreshManage(profileSlug);
   return result;
 }

@@ -34,6 +34,7 @@ export interface AccountBalance {
 export async function getAccountBalances(
   entityId: string,
   owner?: AccountOwner,
+  options?: { includeInactive?: boolean },
 ): Promise<AccountBalance[]> {
   return db
     .select({
@@ -52,7 +53,7 @@ export async function getAccountBalances(
     .where(
       and(
         eq(accounts.entityId, entityId),
-        eq(accounts.isActive, true),
+        ...(options?.includeInactive ? [] : [eq(accounts.isActive, true)]),
         isNull(accounts.deletedAt),
         // Personal profile: only that person's accounts (no joint accounts
         // exist; the structural equity account has owner NULL and drops out).

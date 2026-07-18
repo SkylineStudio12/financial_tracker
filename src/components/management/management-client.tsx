@@ -1,23 +1,31 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
-import { Pencil, Plus, Trash2, WalletCards } from "lucide-react";
+import { Fragment, useMemo, useRef, useState, useTransition } from "react";
+import { Pencil, Plus, RotateCcw, Trash2, Wallet, WalletCards } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { minorToInput, parseAmountToMinor } from "@/lib/format";
+import { useLocale, useTranslations } from "next-intl";
+import { formatDateTime, formatMinor, minorToInput, parseAmountToMinor } from "@/lib/format";
 import type { AppError } from "@/lib/app-error";
 import {
   createCategoryAction,
   createEmployeeAction,
+  createManagedAccountAction,
   deleteCategoryAction,
   deleteEmployeeAction,
+  deleteManagedAccountAction,
   deleteSalaryProfileAction,
+  purgeCategoryAction,
+  purgeManagedAccountAction,
+  restoreCategoryAction,
+  restoreManagedAccountAction,
   saveSalaryProfileAction,
   updateCategoryAction,
   updateEmployeeAction,
+  updateManagedAccountAction,
 } from "@/lib/management/actions";
 import type {
   ManagedCategory,
+  ManagedAccount,
   ManagedEmployee,
   SalaryProfileValues,
 } from "@/lib/management/service";
@@ -55,6 +63,8 @@ import {
 const ICON_PROPS = { absoluteStrokeWidth: true, strokeWidth: 1.5 } as const;
 
 type DialogMode =
+  | { type: "account-create" }
+  | { type: "account-edit"; account: ManagedAccount }
   | { type: "category-create" }
   | { type: "category-edit"; category: ManagedCategory }
   | { type: "employee-create" }
@@ -62,15 +72,21 @@ type DialogMode =
   | { type: "profile-edit"; employee: ManagedEmployee };
 
 type DeleteTarget =
+  | { type: "account"; id: string; name: string }
   | { type: "category"; id: string; name: string }
   | { type: "employee"; id: string; name: string }
   | { type: "profile"; id: string; name: string };
+
+type RecoveryTarget = { type: "account" | "category"; id: string; name: string };
 
 interface FormFields {
   name: string;
   kind: "income" | "expense";
   parentId: string;
   isActive: boolean;
+  accountType: "bank" | "cash";
+  currency: "RON" | "EUR" | "USD";
+  owner: "greg" | "andra" | "";
   gross: string;
   cas: string;
   cass: string;
@@ -85,6 +101,9 @@ const emptyFields: FormFields = {
   kind: "expense",
   parentId: "",
   isActive: true,
+  accountType: "bank",
+  currency: "RON",
+  owner: "",
   gross: "",
   cas: "",
   cass: "",
@@ -113,22 +132,31 @@ export function ManagementClient({
   profileSlug,
   entityId,
   company,
+  accounts,
+  deletedAccounts,
   categories,
+  deletedCategories,
   employees,
 }: {
   profileSlug: string;
   entityId: string;
   company: boolean;
+  accounts: ManagedAccount[];
+  deletedAccounts: ManagedAccount[];
   categories: ManagedCategory[];
+  deletedCategories: ManagedCategory[];
   employees: ManagedEmployee[];
 }) {
   const t = useTranslations("manage");
+  const labels = useTranslations("enums");
+  const locale = useLocale();
   const translateError = useTranslatedError();
   const router = useRouter();
   const [dialog, setDialog] = useState<DialogMode | null>(null);
   const [fields, setFields] = useState<FormFields>(emptyFields);
   const [initialFields, setInitialFields] = useState(JSON.stringify(emptyFields));
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<RecoveryTarget | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [pending, startTransition] = useTransition();
@@ -158,10 +186,23 @@ export function ManagementClient({
     return ordered;
   }, [categories]);
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+  const orderedAccounts = useMemo(
+    () => [...accounts].sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.name.localeCompare(b.name)),
+    [accounts],
+  );
 
   const openDialog = (next: DialogMode) => {
     let nextFields = emptyFields;
-    if (next.type === "category-edit") {
+    if (next.type === "account-edit") {
+      nextFields = {
+        ...emptyFields,
+        name: next.account.name,
+        accountType: next.account.type === "cash" ? "cash" : "bank",
+        currency: next.account.currency,
+        owner: next.account.owner ?? "",
+        isActive: next.account.isActive,
+      };
+    } else if (next.type === "category-edit") {
       nextFields = {
         ...emptyFields,
         name: next.category.name,
@@ -193,7 +234,19 @@ export function ManagementClient({
     if (!dialog) return;
     startTransition(async () => {
       let result;
-      if (dialog.type === "category-create") {
+      if (dialog.type === "account-create" || dialog.type === "account-edit") {
+        const values = {
+          name: fields.name,
+          type: fields.accountType,
+          currency: fields.currency,
+          owner: company ? null : fields.owner || null,
+          isActive: fields.isActive,
+        } as const;
+        result =
+          dialog.type === "account-create"
+            ? await createManagedAccountAction(profileSlug, entityId, values)
+            : await updateManagedAccountAction(profileSlug, entityId, dialog.account.id, values);
+      } else if (dialog.type === "category-create") {
         result = await createCategoryAction(profileSlug, {
           entityId,
           name: fields.name,
@@ -239,7 +292,9 @@ export function ManagementClient({
     if (!deleteTarget) return;
     startTransition(async () => {
       const result =
-        deleteTarget.type === "category"
+        deleteTarget.type === "account"
+          ? await deleteManagedAccountAction(profileSlug, entityId, deleteTarget.id)
+          : deleteTarget.type === "category"
           ? await deleteCategoryAction(profileSlug, entityId, deleteTarget.id)
           : deleteTarget.type === "employee"
             ? await deleteEmployeeAction(profileSlug, entityId, deleteTarget.id)
@@ -253,19 +308,239 @@ export function ManagementClient({
     });
   };
 
+  const restore = (target: RecoveryTarget) => {
+    startTransition(async () => {
+      const result =
+        target.type === "account"
+          ? await restoreManagedAccountAction(profileSlug, entityId, target.id)
+          : await restoreCategoryAction(profileSlug, entityId, target.id);
+      if ("error" in result) setError(result.error);
+      else {
+        setError(null);
+        router.refresh();
+      }
+    });
+  };
+
+  const confirmPurge = () => {
+    if (!purgeTarget) return;
+    startTransition(async () => {
+      const result =
+        purgeTarget.type === "account"
+          ? await purgeManagedAccountAction(profileSlug, entityId, purgeTarget.id)
+          : await purgeCategoryAction(profileSlug, entityId, purgeTarget.id);
+      if ("error" in result) setError(result.error);
+      else {
+        setError(null);
+        setPurgeTarget(null);
+        router.refresh();
+      }
+    });
+  };
+
+  const deactivateDeleteTarget = () => {
+    if (deleteTarget?.type !== "account") return;
+    const account = accounts.find((candidate) => candidate.id === deleteTarget.id);
+    if (!account || (account.type !== "bank" && account.type !== "cash")) return;
+    const accountType = account.type;
+    startTransition(async () => {
+      const result = await updateManagedAccountAction(profileSlug, entityId, account.id, {
+        name: account.name,
+        type: accountType,
+        currency: account.currency,
+        owner: account.owner,
+        isActive: false,
+      });
+      if ("error" in result) setError(result.error);
+      else {
+        setError(null);
+        setDeleteTarget(null);
+        router.refresh();
+      }
+    });
+  };
+
   const title =
-    dialog?.type === "category-create"
-      ? t("categoryCreate")
-      : dialog?.type === "category-edit"
-        ? t("categoryEdit")
-        : dialog?.type === "employee-create"
-          ? t("employeeCreate")
-          : dialog?.type === "employee-edit"
-            ? t("employeeEdit")
-            : t("profileEdit");
+    dialog?.type === "account-create"
+      ? t("accountCreate")
+      : dialog?.type === "account-edit"
+        ? t("accountEdit")
+        : dialog?.type === "category-create"
+          ? t("categoryCreate")
+          : dialog?.type === "category-edit"
+            ? t("categoryEdit")
+            : dialog?.type === "employee-create"
+              ? t("employeeCreate")
+              : dialog?.type === "employee-edit"
+                ? t("employeeEdit")
+                : t("profileEdit");
+  const editingAccount = dialog?.type === "account-edit" ? dialog.account : null;
+  const accountShapeLocked = Boolean(editingAccount && editingAccount.postingCount > 0);
+  const accountOwnerMissing =
+    !company &&
+    (dialog?.type === "account-create" || dialog?.type === "account-edit") &&
+    fields.owner === "";
 
   return (
     <>
+      {error && !dialog && !deleteTarget && !purgeTarget && (
+        <p className={errorClass}>{translateError(error)}</p>
+      )}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-card-title text-text-primary">{t("accountsTitle")}</h2>
+            <p className="text-caption text-text-muted">{t("accountsIntro")}</p>
+          </div>
+          <Button size="sm" onClick={() => openDialog({ type: "account-create" })}>
+            <Plus {...ICON_PROPS} />
+            {t("accountAdd")}
+          </Button>
+        </div>
+        {orderedAccounts.length === 0 ? (
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 border border-border-hairline bg-surface px-4 py-6 text-center">
+            <Wallet {...ICON_PROPS} className="size-5 text-text-muted" />
+            <p className="text-secondary text-text-primary">{t("accountsEmpty")}</p>
+            <Button size="sm" onClick={() => openDialog({ type: "account-create" })}>
+              <Plus {...ICON_PROPS} />
+              {t("accountAdd")}
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-hidden border border-border-hairline bg-surface">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("type")}</TableHead>
+                  <TableHead>{t("currency")}</TableHead>
+                  {!company && <TableHead>{t("owner")}</TableHead>}
+                  <TableHead className="text-right">{t("balanceRon")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orderedAccounts.map((account, index) => (
+                  <Fragment key={account.id}>
+                    {!account.isActive &&
+                      (index === 0 || orderedAccounts[index - 1]?.isActive) && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={company ? 5 : 6}
+                            className="text-caption font-medium uppercase text-text-muted"
+                          >
+                            {t("inactive")}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    <TableRow className={account.isActive ? undefined : "text-text-muted"}>
+                      <TableCell>{account.name}</TableCell>
+                      <TableCell>{labels(`accountType.${account.type}`)}</TableCell>
+                      <TableCell>{account.currency}</TableCell>
+                      {!company && (
+                        <TableCell>{account.owner ? t(`owners.${account.owner}`) : "-"}</TableCell>
+                      )}
+                      <TableCell
+                        className={`text-right font-numeric tabular-nums ${
+                          account.balanceRon < 0 ? "text-status-negative-text" : "text-text-primary"
+                        }`}
+                      >
+                        {formatMinor(account.balanceRon, "RON", locale)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={account.readOnly}
+                            aria-label={t("edit")}
+                            title={account.readOnly ? t("brokerageManaged") : undefined}
+                            onClick={() => openDialog({ type: "account-edit", account })}
+                          >
+                            <Pencil {...ICON_PROPS} />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            disabled={account.readOnly}
+                            aria-label={t("delete")}
+                            title={account.readOnly ? t("brokerageManaged") : undefined}
+                            onClick={() =>
+                              setDeleteTarget({ type: "account", id: account.id, name: account.name })
+                            }
+                          >
+                            <Trash2 {...ICON_PROPS} />
+                          </Button>
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  </Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {deletedAccounts.length > 0 && (
+          <details className="border-t border-border-hairline pt-2">
+            <summary className="cursor-pointer text-secondary text-text-primary outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
+              {t("deletedAccounts", { count: deletedAccounts.length })}
+            </summary>
+            <div className="mt-2 overflow-hidden border border-border-hairline bg-surface">
+              <Table>
+                <TableBody>
+                  {deletedAccounts.map((account) => (
+                    <TableRow key={account.id}>
+                      <TableCell>{account.name}</TableCell>
+                      <TableCell>{labels(`accountType.${account.type}`)}</TableCell>
+                      <TableCell className="text-text-muted">
+                        {formatDateTime(account.deletedAt!, locale)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={pending}
+                            onClick={() =>
+                              restore({ type: "account", id: account.id, name: account.name })
+                            }
+                          >
+                            <RotateCcw {...ICON_PROPS} />
+                            {t("restore")}
+                          </Button>
+                          {account.postingCount === 0 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-status-negative-text"
+                              onClick={() =>
+                                setPurgeTarget({
+                                  type: "account",
+                                  id: account.id,
+                                  name: account.name,
+                                })
+                              }
+                            >
+                              <Trash2 {...ICON_PROPS} />
+                              {t("purge")}
+                            </Button>
+                          )}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
+        )}
+        <p className="text-caption text-text-muted">{t("systemAccountsCaption")}</p>
+      </section>
+
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div>
@@ -333,6 +608,64 @@ export function ManagementClient({
             </TableBody>
           </Table>
         </div>
+        {deletedCategories.length > 0 && (
+          <details className="border-t border-border-hairline pt-2">
+            <summary className="cursor-pointer text-secondary text-text-primary outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
+              {t("deletedCategories", { count: deletedCategories.length })}
+            </summary>
+            <div className="mt-2 overflow-hidden border border-border-hairline bg-surface">
+              <Table>
+                <TableBody>
+                  {deletedCategories.map((category) => (
+                    <TableRow key={category.id}>
+                      <TableCell>{category.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{t(category.kind)}</Badge>
+                      </TableCell>
+                      <TableCell className="text-text-muted">
+                        {formatDateTime(category.deletedAt!, locale)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={pending}
+                            onClick={() =>
+                              restore({ type: "category", id: category.id, name: category.name })
+                            }
+                          >
+                            <RotateCcw {...ICON_PROPS} />
+                            {t("restore")}
+                          </Button>
+                          {category.postingCount === 0 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-status-negative-text"
+                              onClick={() =>
+                                setPurgeTarget({
+                                  type: "category",
+                                  id: category.id,
+                                  name: category.name,
+                                })
+                              }
+                            >
+                              <Trash2 {...ICON_PROPS} />
+                              {t("purge")}
+                            </Button>
+                          )}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </details>
+        )}
       </section>
 
       {company && (
@@ -442,6 +775,89 @@ export function ManagementClient({
               submit();
             }}
           >
+            {(dialog?.type === "account-create" || dialog?.type === "account-edit") && (
+              <>
+                <label className={labelClass}>
+                  {t("name")}
+                  <input
+                    className={fieldClass}
+                    value={fields.name}
+                    onChange={(event) => setFields({ ...fields, name: event.target.value })}
+                  />
+                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    {t("type")}
+                    <select
+                      className={fieldClass}
+                      value={fields.accountType}
+                      disabled={accountShapeLocked}
+                      onChange={(event) =>
+                        setFields({
+                          ...fields,
+                          accountType: event.target.value as "bank" | "cash",
+                        })
+                      }
+                    >
+                      <option value="bank">{labels("accountType.bank")}</option>
+                      <option value="cash">{labels("accountType.cash")}</option>
+                    </select>
+                  </label>
+                  <label className={labelClass}>
+                    {t("currency")}
+                    <select
+                      className={fieldClass}
+                      value={fields.currency}
+                      disabled={accountShapeLocked}
+                      onChange={(event) =>
+                        setFields({
+                          ...fields,
+                          currency: event.target.value as "RON" | "EUR" | "USD",
+                        })
+                      }
+                    >
+                      {(["RON", "EUR", "USD"] as const).map((currency) => (
+                        <option key={currency} value={currency}>
+                          {currency}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {!company && (
+                  <fieldset className={labelClass} disabled={accountShapeLocked}>
+                    <legend>{t("owner")}</legend>
+                    <div className="flex gap-4">
+                      {(["greg", "andra"] as const).map((owner) => (
+                        <label key={owner} className="flex items-center gap-2 text-secondary text-text-primary">
+                          <input
+                            type="radio"
+                            name="account-owner"
+                            value={owner}
+                            checked={fields.owner === owner}
+                            onChange={() => setFields({ ...fields, owner })}
+                          />
+                          {t(`owners.${owner}`)}
+                        </label>
+                      ))}
+                    </div>
+                    <span className="text-caption text-text-muted">{t("ownerRequiredNote")}</span>
+                  </fieldset>
+                )}
+                {accountShapeLocked && (
+                  <p className="text-caption text-text-muted">{t("accountShapeLocked")}</p>
+                )}
+                <label className="flex items-center gap-2 text-secondary text-text-primary">
+                  <Checkbox
+                    checked={fields.isActive}
+                    onCheckedChange={(checked) =>
+                      setFields({ ...fields, isActive: checked === true })
+                    }
+                  />
+                  {t("active")}
+                </label>
+              </>
+            )}
             {(dialog?.type === "category-create" || dialog?.type === "category-edit") && (
               <>
                 <label className={labelClass}>
@@ -558,7 +974,10 @@ export function ManagementClient({
               <Button type="button" variant="secondary" onClick={closeDialog}>
                 {t("cancel")}
               </Button>
-              <Button type="submit" disabled={pending || !fields.name.trim()}>
+              <Button
+                type="submit"
+                disabled={pending || !fields.name.trim() || accountOwnerMissing}
+              >
                 {pending ? t("working") : t("save")}
               </Button>
             </DialogFooter>
@@ -571,14 +990,44 @@ export function ManagementClient({
           <AlertDialogHeader>
             <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("deleteBody", { name: deleteTarget?.name ?? "" })}
+              {deleteTarget
+                ? deleteTarget.type === "account"
+                  ? t("deleteAccountBody", { name: deleteTarget.name })
+                  : deleteTarget.type === "category"
+                    ? t("deleteCategoryBody", { name: deleteTarget.name })
+                    : t("deleteBody", { name: deleteTarget.name })
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error && <p className={errorClass}>{translateError(error)}</p>}
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" disabled={pending} onClick={confirmDelete}>
-              {pending ? t("working") : t("delete")}
+            {error?.code === "manage.accountInUse" && deleteTarget?.type === "account" ? (
+              <AlertDialogAction disabled={pending} onClick={deactivateDeleteTarget}>
+                {pending ? t("working") : t("deactivateInstead")}
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction variant="destructive" disabled={pending} onClick={confirmDelete}>
+                {pending ? t("working") : t("delete")}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={purgeTarget !== null} onOpenChange={(open) => !open && setPurgeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("purgeTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {purgeTarget ? t("purgeBody", { name: purgeTarget.name }) : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && <p className={errorClass}>{translateError(error)}</p>}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={pending} onClick={confirmPurge}>
+              {pending ? t("working") : t("purge")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

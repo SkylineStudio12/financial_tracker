@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
+import { AccountLabel, CategoryLabel } from "@/components/category-label";
 import { formatBpsPercent, formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
 import { getFormOptions } from "@/lib/ledger/form-options";
@@ -27,6 +28,7 @@ export default async function TransactionDetailPage({
   const t = await getTranslations("transactions");
   const tEnums = await getTranslations("enums");
   const tCommon = await getTranslations("common");
+  const tManage = await getTranslations("manage");
   const detail = await getTransactionDetail(transactionId, profile);
   if (!detail) notFound();
   const { transaction, postings, tagNames, accruals, crudAvailable, importLink } = detail;
@@ -101,8 +103,24 @@ export default async function TransactionDetailPage({
             <tbody>
               {postings.map((posting) => (
                 <tr key={posting.id} className="border-t border-border-hairline">
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">{posting.accountName}</td>
-                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{posting.categoryName ?? "—"}</td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
+                    <AccountLabel
+                      name={posting.accountName}
+                      deleted={posting.accountDeletedAt !== null}
+                      deletedTooltip={tManage("deletedAccountTooltip")}
+                    />
+                  </td>
+                  <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
+                    {posting.categoryName ? (
+                      <CategoryLabel
+                        name={posting.categoryName}
+                        deleted={posting.categoryDeletedAt !== null}
+                        deletedTooltip={tManage("deletedCategoryTooltip")}
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">{posting.counterparty ?? "—"}</td>
                   <td
                     className={`px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-right whitespace-nowrap font-numeric tabular-nums ${

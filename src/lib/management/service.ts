@@ -1,6 +1,7 @@
-import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  accounts,
   auditLog,
   categories,
   employeeSalaryProfiles,
@@ -9,6 +10,8 @@ import {
   postings,
 } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/app-error";
+import { getAccountBalances } from "@/lib/ledger/dashboard";
+import type { AccountOwner } from "@/lib/profiles";
 
 export interface SalaryProfileValues {
   grossMinor: number;
@@ -37,6 +40,30 @@ export interface ManagedCategory {
   parentId: string | null;
   shared: boolean;
   inUseCount: number;
+  postingCount: number;
+  deletedAt: string | null;
+}
+
+export interface ManagedAccount {
+  id: string;
+  name: string;
+  type: "bank" | "cash" | "brokerage";
+  currency: "RON" | "EUR" | "USD";
+  owner: AccountOwner | null;
+  isActive: boolean;
+  balanceRon: number;
+  postingCount: number;
+  livePostingCount: number;
+  readOnly: boolean;
+  deletedAt: string | null;
+}
+
+export interface ManagedAccountValues {
+  name: string;
+  type: "bank" | "cash";
+  currency: "RON" | "EUR" | "USD";
+  owner: AccountOwner | null;
+  isActive: boolean;
 }
 
 const COMPANY_PROTECTED_NAMES = new Set([
@@ -147,6 +174,92 @@ function assertCategoryNameMutable(entityType: "company" | "household", name: st
   if (protectedNames.has(name.trim().toLowerCase())) {
     throw new LedgerValidationError("manage.categoryProtected", { name });
   }
+}
+
+async function loadManagedAccount(accountId: string, entityId: string) {
+  const [account] = await db
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.id, accountId),
+        eq(accounts.entityId, entityId),
+        isNull(accounts.deletedAt),
+      ),
+    );
+  if (!account) throw new LedgerValidationError("manage.accountNotFound", { accountId });
+  if (account.type !== "bank" && account.type !== "cash" && account.type !== "brokerage") {
+    throw new LedgerValidationError("manage.accountNotFound", { accountId });
+  }
+  if (account.type === "brokerage") {
+    throw new LedgerValidationError("manage.accountReadOnly", { accountName: account.name });
+  }
+  return account;
+}
+
+async function loadDeletedManagedAccount(accountId: string, entityId: string) {
+  const [account] = await db
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.id, accountId),
+        eq(accounts.entityId, entityId),
+        isNotNull(accounts.deletedAt),
+      ),
+    );
+  if (!account || (account.type !== "bank" && account.type !== "cash")) {
+    throw new LedgerValidationError("manage.accountNotFound", { accountId });
+  }
+  return account;
+}
+
+async function loadDeletedOwnedCategory(categoryId: string, entityId: string) {
+  const [category] = await db
+    .select()
+    .from(categories)
+    .where(
+      and(
+        eq(categories.id, categoryId),
+        eq(categories.entityId, entityId),
+        isNotNull(categories.deletedAt),
+      ),
+    );
+  if (!category) throw new LedgerValidationError("manage.categoryNotFound", { categoryId });
+  return category;
+}
+
+function validateAccountOwner(
+  entityType: "company" | "household",
+  owner: AccountOwner | null,
+): AccountOwner | null {
+  if (entityType === "household") {
+    if (!owner) throw new LedgerValidationError("manage.accountOwnerRequired");
+    return owner;
+  }
+  if (owner !== null) throw new LedgerValidationError("manage.companyAccountOwnerForbidden");
+  return null;
+}
+
+async function assertAccountNameAvailable(
+  entityId: string,
+  name: string,
+  excludeId?: string,
+  errorCode: "manage.accountDuplicate" | "manage.restoreNameTaken" = "manage.accountDuplicate",
+): Promise<void> {
+  const [duplicate] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.entityId, entityId),
+        sql`lower(btrim(${accounts.name})) = lower(btrim(${name}))`,
+        isNull(accounts.deletedAt),
+        ...(excludeId ? [ne(accounts.id, excludeId)] : []),
+      ),
+    )
+    .limit(1);
+  if (duplicate) throw new LedgerValidationError(errorCode, { name });
 }
 
 export async function listEmployeeOptions(entityId: string): Promise<EmployeeOption[]> {
@@ -397,7 +510,260 @@ export async function deleteSalaryProfile(employeeId: string, entityId: string):
   });
 }
 
-export async function listManagedCategories(entityId: string): Promise<ManagedCategory[]> {
+export async function listManagedAccounts(
+  entityId: string,
+  mode: "live" | "deleted" = "live",
+): Promise<ManagedAccount[]> {
+  await loadEntity(entityId);
+  const [rows, balances] = await Promise.all([
+    db
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        type: accounts.type,
+        currency: accounts.currency,
+        owner: accounts.owner,
+        isActive: accounts.isActive,
+        deletedAt: accounts.deletedAt,
+        postingCount: count(postings.id),
+        livePostingCount: sql<number>`count(${postings.id}) filter (where ${postings.deletedAt} is null)`,
+      })
+      .from(accounts)
+      .leftJoin(postings, eq(postings.accountId, accounts.id))
+      .where(
+        and(
+          eq(accounts.entityId, entityId),
+          inArray(accounts.type, ["bank", "cash", "brokerage"]),
+          mode === "live" ? isNull(accounts.deletedAt) : isNotNull(accounts.deletedAt),
+        ),
+      )
+      .groupBy(accounts.id)
+      .orderBy(desc(accounts.isActive), asc(accounts.name)),
+    getAccountBalances(entityId, undefined, { includeInactive: true }),
+  ]);
+  const balanceById = new Map(balances.map((balance) => [balance.accountId, balance.balanceRon]));
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type as ManagedAccount["type"],
+    currency: row.currency,
+    owner: row.owner,
+    isActive: row.isActive,
+    balanceRon: balanceById.get(row.id) ?? 0,
+    postingCount: Number(row.postingCount),
+    livePostingCount: Number(row.livePostingCount),
+    readOnly: row.type === "brokerage",
+    deletedAt: row.deletedAt?.toISOString() ?? null,
+  }));
+}
+
+export async function createManagedAccount(
+  entityId: string,
+  values: ManagedAccountValues,
+): Promise<string> {
+  const entity = await loadEntity(entityId);
+  const name = normalizedName(values.name);
+  const owner = validateAccountOwner(entity.type, values.owner);
+  await assertAccountNameAvailable(entityId, name);
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(accounts)
+      .values({
+        entityId,
+        name,
+        type: values.type,
+        currency: values.currency,
+        owner,
+        isActive: values.isActive,
+      })
+      .returning({ id: accounts.id });
+    await tx.insert(auditLog).values({
+      tableName: "accounts",
+      rowId: created.id,
+      action: "insert",
+      previousValues: null,
+    });
+    return created.id;
+  });
+}
+
+export async function updateManagedAccount(
+  accountId: string,
+  entityId: string,
+  values: ManagedAccountValues,
+): Promise<void> {
+  await loadManagedAccount(accountId, entityId);
+  const entity = await loadEntity(entityId);
+  const name = normalizedName(values.name);
+  const owner = validateAccountOwner(entity.type, values.owner);
+  await assertAccountNameAvailable(entityId, name, accountId);
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          eq(accounts.entityId, entityId),
+          isNull(accounts.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    if (prior.type === "brokerage") {
+      throw new LedgerValidationError("manage.accountReadOnly", { accountName: prior.name });
+    }
+    if (prior.type !== "bank" && prior.type !== "cash") {
+      throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    }
+    const [usage] = await tx
+      .select({ count: count() })
+      .from(postings)
+      .where(eq(postings.accountId, accountId));
+    const postingCount = Number(usage?.count ?? 0);
+    const changesHistoricalShape =
+      prior.type !== values.type || prior.currency !== values.currency || prior.owner !== owner;
+    if (postingCount > 0 && changesHistoricalShape) {
+      throw new LedgerValidationError("manage.accountHistoryLocked", { count: postingCount });
+    }
+    await tx
+      .update(accounts)
+      .set({
+        name,
+        type: values.type,
+        currency: values.currency,
+        owner,
+        isActive: values.isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, accountId));
+    await tx.insert(auditLog).values({
+      tableName: "accounts",
+      rowId: accountId,
+      action: "update",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function softDeleteManagedAccount(
+  accountId: string,
+  entityId: string,
+): Promise<void> {
+  await loadManagedAccount(accountId, entityId);
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          eq(accounts.entityId, entityId),
+          isNull(accounts.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    if (prior.type === "brokerage") {
+      throw new LedgerValidationError("manage.accountReadOnly", { accountName: prior.name });
+    }
+    if (prior.type !== "bank" && prior.type !== "cash") {
+      throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    }
+    const [usage] = await tx
+      .select({ count: count() })
+      .from(postings)
+      .where(and(eq(postings.accountId, accountId), isNull(postings.deletedAt)));
+    const livePostingCount = Number(usage?.count ?? 0);
+    if (livePostingCount > 0) {
+      throw new LedgerValidationError("manage.accountInUse", { count: livePostingCount });
+    }
+    await tx
+      .update(accounts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(accounts.id, accountId));
+    await tx.insert(auditLog).values({
+      tableName: "accounts",
+      rowId: accountId,
+      action: "delete",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function restoreManagedAccount(accountId: string, entityId: string): Promise<void> {
+  const account = await loadDeletedManagedAccount(accountId, entityId);
+  await assertAccountNameAvailable(
+    entityId,
+    account.name,
+    undefined,
+    "manage.restoreNameTaken",
+  );
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          eq(accounts.entityId, entityId),
+          isNotNull(accounts.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    await tx
+      .update(accounts)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where(eq(accounts.id, accountId));
+    await tx.insert(auditLog).values({
+      tableName: "accounts",
+      rowId: accountId,
+      action: "restore",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function purgeManagedAccount(accountId: string, entityId: string): Promise<void> {
+  await loadDeletedManagedAccount(accountId, entityId);
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, accountId),
+          eq(accounts.entityId, entityId),
+          isNotNull(accounts.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.accountNotFound", { accountId });
+    const [usage] = await tx
+      .select({ count: count() })
+      .from(postings)
+      .where(eq(postings.accountId, accountId));
+    const postingCount = Number(usage?.count ?? 0);
+    if (postingCount > 0) {
+      throw new LedgerValidationError("manage.accountReferencedCannotPurge", {
+        count: postingCount,
+      });
+    }
+    await tx.delete(accounts).where(eq(accounts.id, accountId));
+    await tx.insert(auditLog).values({
+      tableName: "accounts",
+      rowId: accountId,
+      action: "purge",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function listManagedCategories(
+  entityId: string,
+  mode: "live" | "deleted" = "live",
+): Promise<ManagedCategory[]> {
   await loadEntity(entityId);
   const rows = await db
     .select({
@@ -406,17 +772,18 @@ export async function listManagedCategories(entityId: string): Promise<ManagedCa
       kind: categories.kind,
       parentId: categories.parentId,
       categoryEntityId: categories.entityId,
-      inUseCount: count(postings.id),
+      deletedAt: categories.deletedAt,
+      postingCount: count(postings.id),
+      inUseCount: sql<number>`count(${postings.id}) filter (where ${postings.deletedAt} is null)`,
     })
     .from(categories)
-    .leftJoin(
-      postings,
-      and(eq(postings.categoryId, categories.id), isNull(postings.deletedAt)),
-    )
+    .leftJoin(postings, eq(postings.categoryId, categories.id))
     .where(
       and(
-        or(eq(categories.entityId, entityId), isNull(categories.entityId)),
-        isNull(categories.deletedAt),
+        mode === "live"
+          ? or(eq(categories.entityId, entityId), isNull(categories.entityId))
+          : eq(categories.entityId, entityId),
+        mode === "live" ? isNull(categories.deletedAt) : isNotNull(categories.deletedAt),
       ),
     )
     .groupBy(categories.id)
@@ -428,6 +795,8 @@ export async function listManagedCategories(entityId: string): Promise<ManagedCa
     parentId: row.parentId,
     shared: row.categoryEntityId === null,
     inUseCount: Number(row.inUseCount),
+    postingCount: Number(row.postingCount),
+    deletedAt: row.deletedAt?.toISOString() ?? null,
   }));
 }
 
@@ -543,6 +912,90 @@ export async function softDeleteCategory(categoryId: string, entityId: string): 
       tableName: "categories",
       rowId: categoryId,
       action: "delete",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function restoreCategory(categoryId: string, entityId: string): Promise<void> {
+  const category = await loadDeletedOwnedCategory(categoryId, entityId);
+  const [collision] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.entityId, entityId),
+        eq(categories.kind, category.kind),
+        sql`lower(btrim(${categories.name})) = lower(btrim(${category.name}))`,
+        isNull(categories.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (collision) {
+    throw new LedgerValidationError("manage.restoreNameTaken", { name: category.name });
+  }
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(categories)
+      .where(
+        and(
+          eq(categories.id, categoryId),
+          eq(categories.entityId, entityId),
+          isNotNull(categories.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.categoryNotFound", { categoryId });
+    await tx
+      .update(categories)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where(eq(categories.id, categoryId));
+    await tx.insert(auditLog).values({
+      tableName: "categories",
+      rowId: categoryId,
+      action: "restore",
+      previousValues: prior,
+    });
+  });
+}
+
+export async function purgeCategory(categoryId: string, entityId: string): Promise<void> {
+  await loadDeletedOwnedCategory(categoryId, entityId);
+  await db.transaction(async (tx) => {
+    const [prior] = await tx
+      .select()
+      .from(categories)
+      .where(
+        and(
+          eq(categories.id, categoryId),
+          eq(categories.entityId, entityId),
+          isNotNull(categories.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!prior) throw new LedgerValidationError("manage.categoryNotFound", { categoryId });
+    const [usage] = await tx
+      .select({ count: count() })
+      .from(postings)
+      .where(eq(postings.categoryId, categoryId));
+    const [child] = await tx
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.parentId, categoryId))
+      .limit(1);
+    const postingCount = Number(usage?.count ?? 0);
+    if (postingCount > 0) {
+      throw new LedgerValidationError("manage.categoryReferencedCannotPurge", {
+        count: postingCount,
+      });
+    }
+    if (child) throw new LedgerValidationError("manage.categoryHasChildren");
+    await tx.delete(categories).where(eq(categories.id, categoryId));
+    await tx.insert(auditLog).values({
+      tableName: "categories",
+      rowId: categoryId,
+      action: "purge",
       previousValues: prior,
     });
   });

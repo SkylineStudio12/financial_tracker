@@ -164,6 +164,8 @@
     "typeStandard": "Expense / Income",
     "typeTransfer": "Transfer",
     "typeSalary": "Salary",
+    "typeGroupLabel": "Transaction type",
+    "close": "Close",
     "cancel": "Cancel",
     "discardTitle": "Discard this transaction?",
     "discardBody": "The details you entered will be lost.",

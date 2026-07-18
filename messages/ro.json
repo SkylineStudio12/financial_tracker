@@ -164,6 +164,8 @@
     "typeStandard": "Cheltuială / Venit",
     "typeTransfer": "Transfer",
     "typeSalary": "Salariu",
+    "typeGroupLabel": "Tip tranzacție",
+    "close": "Închide",
     "cancel": "Anulează",
     "discardTitle": "Renunți la această tranzacție?",
     "discardBody": "Detaliile introduse se vor pierde.",

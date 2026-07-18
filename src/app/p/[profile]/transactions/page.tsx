@@ -15,6 +15,7 @@ import { getFormOptions } from "@/lib/ledger/form-options";
 import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import type { TransactionKind } from "@/lib/ledger";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
+import { DevDatabaseBadge } from "@/components/dev-database-badge";
 import { RowLink } from "@/components/row-link";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { AccountLabel, CategoryLabel } from "@/components/category-label";
@@ -127,6 +128,7 @@ export default async function TransactionsPage({
             initialType={
               flowData.isCompany && single(query.entry) === "salary" ? "salary" : undefined
             }
+            databaseBadge={<DevDatabaseBadge />}
           />
         </div>
       </div>

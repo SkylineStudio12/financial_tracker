@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,13 +23,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StandardForm } from "@/components/forms/standard-form";
 import { TransferForm } from "@/components/forms/transfer-form";
 import { SalaryFlow } from "@/components/flows/salary-flow";
 import type { AccountOption, FormOptions } from "@/components/forms/option-types";
 import type { EmployeeOption } from "@/lib/management/service";
-
-type EntryType = "standard" | "transfer" | "salary";
+import {
+  decideEntryTypeChange,
+  SEGMENT_GRID_STYLE,
+  type EntryType,
+} from "@/components/new-transaction-dialog-state";
 
 /**
  * Everyday transaction entry as a modal over the transaction list.
@@ -45,6 +50,7 @@ export function NewTransactionDialog({
   employees = [],
   salaryAvailable = false,
   initialType,
+  databaseBadge,
 }: {
   entityId: string;
   /** Active profile view; forwarded to the forms (modal saves stay put). */
@@ -54,11 +60,12 @@ export function NewTransactionDialog({
   employees?: EmployeeOption[];
   salaryAvailable?: boolean;
   initialType?: Extract<EntryType, "salary">;
+  databaseBadge?: React.ReactNode;
 }) {
   const t = useTranslations("forms");
-  const tFlows = useTranslations("flows");
   const [open, setOpen] = useState(Boolean(initialType));
   const [type, setType] = useState<EntryType>(initialType ?? "standard");
+  const [pendingType, setPendingType] = useState<EntryType | null>(null);
   // Token-styled discard prompt (replaces window.confirm): an intercepted
   // close parks here until the user picks Discard or Keep editing.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -97,11 +104,33 @@ export function NewTransactionDialog({
     setOpen(nextOpen);
   };
 
+  const handleTypeChange = (requested: unknown) => {
+    const decision = decideEntryTypeChange(type, requested, dirty.current);
+    if (decision.kind === "select") {
+      dirty.current = false;
+      setType(decision.type);
+    } else if (decision.kind === "confirm") {
+      setPendingType(decision.type);
+      setConfirmDiscard(true);
+    }
+  };
+
   const handleDiscard = () => {
-    // Deliberate discard bypasses the guard: close directly, like a save.
+    // A dirty type switch reuses the same confirmation without closing the modal.
     setConfirmDiscard(false);
     dirty.current = false;
+    if (pendingType) {
+      setType(pendingType);
+      setPendingType(null);
+      return;
+    }
+    // Deliberate close discard bypasses the guard, like a save.
     setOpen(false);
+  };
+
+  const handleConfirmDiscardOpenChange = (nextOpen: boolean) => {
+    setConfirmDiscard(nextOpen);
+    if (!nextOpen) setPendingType(null);
   };
 
   const handleOpenChangeComplete = (nowOpen: boolean) => {
@@ -125,70 +154,87 @@ export function NewTransactionDialog({
     <>
     <Dialog open={open} onOpenChange={handleOpenChange} onOpenChangeComplete={handleOpenChangeComplete}>
       <DialogTrigger render={<Button />}>{t("newTransaction")}</DialogTrigger>
-      <DialogContent className="density-compact max-h-[90vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{type === "salary" ? tFlows("salaryTitle") : t("newTransaction")}</DialogTitle>
+      <DialogContent
+        className="density-compact max-h-[90vh] overflow-y-auto sm:max-w-xl"
+        showCloseButton={false}
+      >
+        <DialogHeader className="flex-row items-center justify-between">
+          <DialogTitle>{t("newTransaction")}</DialogTitle>
+          <div className="flex items-center gap-2">
+            {databaseBadge}
+            <DialogClose render={<Button variant="ghost" size="icon" />}>
+              <XIcon absoluteStrokeWidth strokeWidth={1.5} />
+              <span className="sr-only">{t("close")}</span>
+            </DialogClose>
+          </div>
         </DialogHeader>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={type === "standard" ? "default" : "secondary"}
-            onClick={() => setType("standard")}
+        <Tabs value={type} onValueChange={handleTypeChange} className="gap-[var(--density-stack-gap)]">
+          <TabsList
+            activateOnFocus={false}
+            loopFocus
+            aria-label={t("typeGroupLabel")}
+            className="grid h-auto w-full gap-0.5 rounded-input bg-surface-inactive p-1"
+            style={SEGMENT_GRID_STYLE}
           >
-            {t("typeStandard")}
-          </Button>
-          <Button
-            type="button"
-            variant={type === "transfer" ? "default" : "secondary"}
-            onClick={() => setType("transfer")}
-          >
-            {t("typeTransfer")}
-          </Button>
-          {salaryAvailable && (
-            <Button
-              type="button"
-              variant={type === "salary" ? "default" : "secondary"}
-              onClick={() => setType("salary")}
+            <TabsTrigger
+              value="standard"
+              className="h-7 min-w-0 rounded-badge px-3 py-0 text-secondary font-normal whitespace-normal text-text-secondary shadow-none hover:text-text-primary data-active:bg-accent data-active:text-accent-foreground data-active:hover:bg-accent-hover"
             >
-              {t("typeSalary")}
-            </Button>
+              {t("typeStandard")}
+            </TabsTrigger>
+            <TabsTrigger
+              value="transfer"
+              className="h-7 min-w-0 rounded-badge px-3 py-0 text-secondary font-normal whitespace-normal text-text-secondary shadow-none hover:text-text-primary data-active:bg-accent data-active:text-accent-foreground data-active:hover:bg-accent-hover"
+            >
+              {t("typeTransfer")}
+            </TabsTrigger>
+            {salaryAvailable && (
+              <TabsTrigger
+                value="salary"
+                className="h-7 min-w-0 rounded-badge px-3 py-0 text-secondary font-normal whitespace-normal text-text-secondary shadow-none hover:text-text-primary data-active:bg-accent data-active:text-accent-foreground data-active:hover:bg-accent-hover"
+              >
+                {t("typeSalary")}
+              </TabsTrigger>
+            )}
+          </TabsList>
+          <TabsContent value="standard">
+            <StandardForm
+              entityId={entityId}
+              profileSlug={profileSlug}
+              options={options}
+              stay
+              onSaved={handleSaved}
+              cancelSlot={cancelSlot}
+              onDirtyChange={handleDirtyChange}
+            />
+          </TabsContent>
+          <TabsContent value="transfer">
+            <TransferForm
+              entityId={entityId}
+              profileSlug={profileSlug}
+              options={options}
+              stay
+              onSaved={handleSaved}
+              cancelSlot={cancelSlot}
+              onDirtyChange={handleDirtyChange}
+            />
+          </TabsContent>
+          {salaryAvailable && (
+            <TabsContent value="salary">
+              <SalaryFlow
+                companyId={entityId}
+                personalAccounts={personalAccounts}
+                employees={employees}
+                onSaved={handleSaved}
+                cancelSlot={cancelSlot}
+                onDirtyChange={handleDirtyChange}
+              />
+            </TabsContent>
           )}
-        </div>
-        {type === "standard" && (
-          <StandardForm
-            entityId={entityId}
-            profileSlug={profileSlug}
-            options={options}
-            stay
-            onSaved={handleSaved}
-            cancelSlot={cancelSlot}
-            onDirtyChange={handleDirtyChange}
-          />
-        )}
-        {type === "transfer" && (
-          <TransferForm
-            entityId={entityId}
-            profileSlug={profileSlug}
-            options={options}
-            stay
-            onSaved={handleSaved}
-            cancelSlot={cancelSlot}
-            onDirtyChange={handleDirtyChange}
-          />
-        )}
-        {type === "salary" && (
-          <SalaryFlow
-            companyId={entityId}
-            personalAccounts={personalAccounts}
-            employees={employees}
-            onSaved={handleSaved}
-            cancelSlot={cancelSlot}
-            onDirtyChange={handleDirtyChange}
-          />
-        )}
+        </Tabs>
       </DialogContent>
     </Dialog>
-    <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+    <AlertDialog open={confirmDiscard} onOpenChange={handleConfirmDiscardOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("discardTitle")}</AlertDialogTitle>

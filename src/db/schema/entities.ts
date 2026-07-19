@@ -1,4 +1,5 @@
-import { boolean, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { accountOwner, accountType, currency, entityType } from "./enums";
 import { id, softDelete, timestamps } from "./helpers";
 
@@ -31,5 +32,10 @@ export const accounts = pgTable(
     ...timestamps,
     ...softDelete,
   },
-  (table) => [index("accounts_entity_id_idx").on(table.entityId)],
+  (table) => [
+    index("accounts_entity_id_idx").on(table.entityId),
+    uniqueIndex("accounts_entity_lower_name_live_uidx")
+      .on(table.entityId, sql`lower(${table.name})`)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
 );

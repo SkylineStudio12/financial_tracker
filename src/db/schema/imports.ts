@@ -103,6 +103,8 @@ export const importRows = pgTable(
      */
     overlapSuspect: boolean("overlap_suspect").notNull().default(false),
     status: importRowStatus("status").notNull().default("pending"),
+    skipReasonCode: text("skip_reason_code"),
+    skipReasonNote: text("skip_reason_note"),
     /** Set when booked (the ledger transaction) or duplicate (the existing one). */
     transactionId: uuid("transaction_id").references(() => transactions.id),
     bookedAt: timestamp("booked_at", { withTimezone: true }),

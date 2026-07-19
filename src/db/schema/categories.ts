@@ -28,6 +28,7 @@ export const categories = pgTable(
     entityId: uuid("entity_id").references(() => entities.id),
     parentId: uuid("parent_id").references((): AnyPgColumn => categories.id),
     name: text("name").notNull(),
+    icon: text("icon"),
     kind: categoryKind("kind").notNull(),
     ...timestamps,
     ...softDelete,

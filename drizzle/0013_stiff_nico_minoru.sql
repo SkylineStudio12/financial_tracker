@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "accounts_entity_lower_name_live_uidx" ON "accounts" USING btree ("entity_id",lower("name")) WHERE "accounts"."deleted_at" IS NULL;

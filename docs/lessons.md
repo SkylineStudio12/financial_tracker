@@ -363,3 +363,19 @@ Fable session delivered import-inbox-checkpoint-a.md into a worktree while
 the acceptance was committed at 0004519 out-of-band; a later Fable session
 correctly STOPped on the worktree guard, confirming the harness pins
 worktrees by default.)
+
+## L-0031
+
+Two session-environment rules. (1) Tier-drift detection by agents is post-hoc;
+prevention is at relay time. Implementation-tier briefs (C/M/H keys) are never
+relayed into a Fable window; the Fable window stays closed unless a design unit
+is active. Drift onto Fable past a read-only phase is stopped and re-relayed,
+not accepted — the 11-05C precedent covers read-only phases only. (2) Never
+remove or prune a worktree while any agent session may be live: the harness
+silently re-roots orphaned sessions into the MAIN working tree, dissolving the
+sandbox mid-conversation. Worktree cleanup happens only when all agent sessions
+are closed, and each worktree's `git status --porcelain` is diffed against
+origin/main before removal. (Firing: the 11-11C gate check ran in a stale
+worktree at 6e9ce82; worktrees were removed mid-session; the session's
+close-out then reported pwd at the main tree, clean at 8cb90b4 — zero writes by
+luck of timing, not by design.)

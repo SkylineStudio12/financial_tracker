@@ -12,6 +12,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
 import { errorClass, fieldClass, labelClass, moneyFieldClass, primaryButtonClass } from "@/components/forms/ui";
+import { DateField } from "@/components/ui/date-field";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -98,12 +99,10 @@ export function DividendFlow({
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
           {tForms("date")}
-          <input
-            type="date"
-            className={fieldClass}
+          <DateField
             value={date}
-            onChange={(e) => {
-              setDate(e.target.value);
+            onChange={(iso) => {
+              setDate(iso);
               invalidate();
             }}
           />

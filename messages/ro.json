@@ -4,6 +4,7 @@
     "appDescription": "Finanțe personale și de firmă",
     "investments": "Investiții",
     "estimate": "ESTIMARE",
+    "clear": "Golește",
     "periodAnnual": "{year} anual",
     "periodQuarter": "{year} T{quarter}"
   },
@@ -76,8 +77,7 @@
   },
   "transactions": {
     "title": "Tranzacții",
-    "filterFrom": "De la",
-    "filterTo": "Până la",
+    "filterPeriod": "Perioadă",
     "filterAccount": "Cont",
     "filterCategory": "Categorie",
     "filterKind": "Tip",
@@ -142,6 +142,9 @@
     "income": "Venit",
     "account": "Cont",
     "date": "Dată",
+    "datePlaceholder": "zz.ll.aaaa",
+    "dateInvalid": "Dată invalidă",
+    "openCalendar": "Deschide calendarul",
     "amount": "Sumă ({currency})",
     "amountPlaceholder": "0,00",
     "description": "Descriere",

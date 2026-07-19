@@ -21,6 +21,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { AccountOption } from "@/components/forms/option-types";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { errorClass, fieldClass, labelClass, moneyFieldClass } from "@/components/forms/ui";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
@@ -416,15 +417,19 @@ export function SalaryFlow({
             </label>
             <label className={labelClass}>
               {t("paymentDate")}
-              <input
-                type="date"
-                className={fieldClass}
+              {/* Touched = any engagement (D6): input focus OR opening the
+                  picker — open-intent is the new focus-intent. Derived writes
+                  from payMonth arrive via the value prop, never these
+                  callbacks, so no feedback loop. */}
+              <DateField
                 value={paymentDate}
                 onFocus={() => {
                   paymentDateTouched.current = true;
                 }}
-                onChange={(event) => {
-                  const nextPaymentDate = event.target.value;
+                onOpenChange={(open) => {
+                  if (open) paymentDateTouched.current = true;
+                }}
+                onChange={(nextPaymentDate) => {
                   paymentDateTouched.current = true;
                   setPaymentDate(nextPaymentDate);
                   setPayMonth((current) =>

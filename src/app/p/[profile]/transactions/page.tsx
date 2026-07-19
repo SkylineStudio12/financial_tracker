@@ -15,6 +15,7 @@ import { getFormOptions } from "@/lib/ledger/form-options";
 import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import type { TransactionKind } from "@/lib/ledger";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
+import { DateFilter } from "@/components/ui/date-filter";
 import { DevDatabaseBadge } from "@/components/dev-database-badge";
 import { RowLink } from "@/components/row-link";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
@@ -134,14 +135,13 @@ export default async function TransactionsPage({
       </div>
 
       <form method="get" className="flex flex-wrap items-center gap-2">
-        <label className={pill(Boolean(filters.from))}>
-          {t("filterFrom")}
-          <input type="date" name="from" defaultValue={filters.from} className={pillControl} />
-        </label>
-        <label className={pill(Boolean(filters.to))}>
-          {t("filterTo")}
-          <input type="date" name="to" defaultValue={filters.to} className={pillControl} />
-        </label>
+        {/* Client island (D7): one range pill; hidden from/to inputs keep the
+            GET contract identical; Apply still does the submitting. */}
+        <DateFilter
+          from={filters.from}
+          to={filters.to}
+          className={pill(Boolean(filters.from || filters.to))}
+        />
         <label className={pill(Boolean(filters.accountId))}>
           {t("filterAccount")}
           <select name="account" defaultValue={filters.accountId ?? ""} className={pillControl}>

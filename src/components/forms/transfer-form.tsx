@@ -7,6 +7,7 @@ import { saveTransferTransaction, type TransferPayload } from "@/lib/ledger/acti
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -178,12 +179,7 @@ export function TransferForm({
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
           {t("date")}
-          <input
-            type="date"
-            className={fieldClass}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <DateField value={date} onChange={setDate} />
         </label>
         <label className={labelClass}>
           {t("amount", { currency: fromCurrency })}

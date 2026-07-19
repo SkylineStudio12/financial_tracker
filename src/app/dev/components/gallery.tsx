@@ -54,6 +54,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { DateField } from "@/components/ui/date-field";
+import { DateFilter } from "@/components/ui/date-filter";
 import {
   Card,
   CardContent,
@@ -168,9 +170,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 /* ---------------------------------------------------------------- helpers */
 
-/** Local-date formatter — toISOString would shift the day across timezones. */
-const formatLocalDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** The transactions page's pill classes, frozen here for the DateFilter demo. */
+const GALLERY_PILL_CLASS =
+  "flex items-center gap-1.5 rounded-pill border bg-surface pl-3 pr-2 h-[var(--density-control-height)] text-caption transition-colors focus-within:border-border-input focus-within:ring-2 focus-within:ring-focus-ring border-border-input text-text-secondary";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -340,7 +342,7 @@ function SidebarDemo() {
 
 export function Gallery() {
   const locale = useLocale();
-  const [date, setDate] = React.useState<Date | undefined>(new Date(2026, 6, 4));
+  const [fieldDate, setFieldDate] = React.useState("2026-07-04");
 
   return (
     <TooltipProvider>
@@ -418,19 +420,34 @@ export function Gallery() {
                 </Combobox>
               </Demo>
 
-              <Demo label="Date picker — Popover + Calendar">
-                <Popover>
-                  <PopoverTrigger
-                    render={<Button variant="secondary" className="w-56 justify-start gap-2" />}
-                  >
-                    <CalendarIcon className="size-4 text-text-muted" absoluteStrokeWidth strokeWidth={1.5} />
-                    {date ? formatLocalDate(date) : "Pick a date"}
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} />
-                  </PopoverContent>
-                </Popover>
+              <Demo label="Date field — typed input + calendar (the app pattern)">
+                <div className="flex max-w-64 flex-col gap-3">
+                  <DateField value={fieldDate} onChange={setFieldDate} />
+                  <p className="text-caption text-text-muted">
+                    Committed ISO: {fieldDate || "—"}
+                  </p>
+                </div>
               </Demo>
+
+              <Demo label="Date filter — range pill (transactions period)">
+                <DateFilter
+                  from="2026-07-01"
+                  to="2026-07-19"
+                  className={GALLERY_PILL_CLASS}
+                />
+              </Demo>
+
+              {/* Q6 evidence (ruled at Checkpoint B, 11-11C: Urbanist).
+                  Same grid, both digit faces; the shipped default is sans —
+                  DEFAULT_NUMERIC_DAY_GRID in calendar.tsx records the ruling. */}
+              <div className="lg:col-span-2">
+                <Demo label="Q6 — day-grid digits: font-numeric (left) vs --font-sans (right)">
+                  <div className="flex flex-wrap gap-8">
+                    <Calendar mode="single" defaultMonth={new Date(2026, 6)} numericDayGrid />
+                    <Calendar mode="single" defaultMonth={new Date(2026, 6)} numericDayGrid={false} />
+                  </div>
+                </Demo>
+              </div>
 
               <Demo label="Input — default / filled / disabled / error">
                 <div className="flex flex-col gap-3">

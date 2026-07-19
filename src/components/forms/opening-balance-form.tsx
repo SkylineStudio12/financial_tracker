@@ -7,6 +7,7 @@ import { saveOpeningBalanceTransaction } from "@/lib/ledger/actions";
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import type { FormOptions } from "./option-types";
 import { errorClass, fieldClass, labelClass, moneyFieldClass } from "./ui";
 
@@ -77,7 +78,7 @@ export function OpeningBalanceForm({
         </label>
         <label className={labelClass}>
           {t("date")}
-          <input className={fieldClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <DateField value={date} onChange={setDate} />
         </label>
       </div>
       <label className={labelClass}>

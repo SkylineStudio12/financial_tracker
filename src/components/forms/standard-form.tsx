@@ -7,6 +7,7 @@ import { saveStandardTransaction, type StandardPayload } from "@/lib/ledger/acti
 import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -212,12 +213,7 @@ export function StandardForm({
         </label>
         <label className={labelClass}>
           {t("date")}
-          <input
-            type="date"
-            className={fieldClass}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <DateField value={date} onChange={setDate} />
         </label>
       </div>
 

@@ -28,6 +28,7 @@
     "test:profile-visibility": "tsx scripts/run-profile-visibility-test.ts",
     "test:management": "tsx scripts/run-management-test.ts",
     "test:new-transaction-dialog": "tsx scripts/run-new-transaction-dialog-test.tsx",
+    "test:date-field": "tsx scripts/run-date-field-test.tsx",
     "test:pre-runner-db": "tsx scripts/run-pre-runner-db-tests.ts",
     "db:studio": "drizzle-kit studio"
   },

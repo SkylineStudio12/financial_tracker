@@ -7,6 +7,7 @@
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -108,12 +109,7 @@ export function PriceSnapshotForm({
         </label>
         <label className={labelClass}>
           {tForms("date")}
-          <input
-            type="date"
-            className={fieldClass}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <DateField value={date} onChange={setDate} />
         </label>
         <label className={labelClass}>
           {t("closingPrice")} {selected ? `(${selected.currency})` : ""}

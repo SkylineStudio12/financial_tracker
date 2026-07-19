@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import {
   Select,
   SelectContent,
@@ -476,12 +477,7 @@ export function TradeForm({
       <div className="grid grid-cols-2 gap-[var(--density-field-gap)] sm:grid-cols-4">
         <label className={labelClass}>
           {tForms("date")}
-          <input
-            type="date"
-            className={fieldClass}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          <DateField value={date} onChange={setDate} />
         </label>
         {mode !== "dividend" && (
           <>

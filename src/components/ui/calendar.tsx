@@ -6,6 +6,7 @@ import { ro as roDateFns } from "date-fns/locale"
 import {
   DayPicker,
   getDefaultClassNames,
+  YearsDropdown as YearsDropdownPrimitive,
   type DayButton,
   type Locale,
 } from "react-day-picker"
@@ -14,18 +15,32 @@ import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
 
+/**
+ * Q6 (owner-ruled at Checkpoint B, 11-11C): the day grid's digits — day
+ * numbers, week numbers, and the caption year — render in --font-sans
+ * (Urbanist), uniform with the UI chrome. Flip this default to true for the
+ * numeric face (Geist + tabular-nums, D4's columnar-alignment alternative);
+ * the side-by-side evidence lives in the /dev/components gallery.
+ */
+const DEFAULT_NUMERIC_DAY_GRID = false
+
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
   captionLayout = "label",
   buttonVariant = "ghost",
+  // Standing rule (D9): weeks start Monday in BOTH locales — the date-fns ro
+  // locale already does this, but en would fall to enUS's Sunday start.
+  weekStartsOn = 1,
+  numericDayGrid = DEFAULT_NUMERIC_DAY_GRID,
   locale,
   formatters,
   components,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
+  numericDayGrid?: boolean
 }) {
   const defaultClassNames = getDefaultClassNames()
   // App-locale default (i18n Stage 2): an explicit `locale` prop still wins;
@@ -43,6 +58,7 @@ function Calendar({
         className
       )}
       captionLayout={captionLayout}
+      weekStartsOn={weekStartsOn}
       locale={resolvedLocale}
       formatters={{
         formatMonthDropdown: (date) =>
@@ -99,7 +115,12 @@ function Calendar({
  "flex-1 rounded-(--cell-radius) text-caption font-normal text-text-muted select-none",
           defaultClassNames.weekday
         ),
-        week: cn("mt-2 flex w-full", defaultClassNames.week),
+        // Q6: digits-only rows; weekday NAMES live in their own row above.
+        week: cn(
+ "mt-2 flex w-full",
+          numericDayGrid && "font-numeric tabular-nums",
+          defaultClassNames.week
+        ),
         week_number_header: cn(
  "w-(--cell-size) select-none",
           defaultClassNames.week_number_header
@@ -170,6 +191,16 @@ function Calendar({
         DayButton: ({ ...props }) => (
           <CalendarDayButton locale={locale} {...props} />
         ),
+        // Q6: the caption YEAR is a digit surface; `contents` keeps the
+        // wrapper out of layout while the font inherits into the dropdown.
+        YearsDropdown: (props) =>
+          numericDayGrid ? (
+            <span className="contents font-numeric tabular-nums">
+              <YearsDropdownPrimitive {...props} />
+            </span>
+          ) : (
+            <YearsDropdownPrimitive {...props} />
+          ),
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>

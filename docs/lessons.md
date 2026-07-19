@@ -379,3 +379,25 @@ origin/main before removal. (Firing: the 11-11C gate check ran in a stale
 worktree at 6e9ce82; worktrees were removed mid-session; the session's
 close-out then reported pwd at the main tree, clean at 8cb90b4 — zero writes by
 luck of timing, not by design.)
+
+## L-0032
+
+A Base UI popup's content stays mounted after close, so any per-open initial
+state (visible month, focus target, `default*` props) must be controlled and
+reset in `onOpenChange(true)`; `default*` props silently freeze at first open.
+(Firing: the date-picker unit's calendar froze `defaultMonth` at first open —
+type December, reopen, see July — and react-day-picker's `autoFocus` fired
+before the popup subtree could take focus. Both fixed in-unit,
+regression-pinned; ratified at the 11-11C Checkpoint B.)
+
+## L-0033
+
+The orchestrator can only serialize sessions it knows exist. Every relay of a
+brief to any agent is reported to the orchestrator in the same breath — key,
+agent, window — and the orchestrator maintains the live-session register in
+the handover. Cleanup operations, "all sessions closed" attestations (L-0031),
+and collision sequencing all check that register; an unregistered session
+invalidates them. (Firing: 11-11C was relayed without a report and its
+existence was lost; the worktree audit rediscovered the unit as 18 unexplained
+dirty files, mid-cleanup, while an "all sessions closed" attestation was
+already in force.)

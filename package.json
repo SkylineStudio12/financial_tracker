@@ -29,6 +29,7 @@
     "test:management": "tsx scripts/run-management-test.ts",
     "test:new-transaction-dialog": "tsx scripts/run-new-transaction-dialog-test.tsx",
     "test:date-field": "tsx scripts/run-date-field-test.tsx",
+    "test:import-inbox": "tsx scripts/run-import-inbox-test.tsx",
     "test:pre-runner-db": "tsx scripts/run-pre-runner-db-tests.ts",
     "db:studio": "drizzle-kit studio"
   },

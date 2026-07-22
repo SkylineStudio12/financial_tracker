@@ -20,7 +20,13 @@ import { db, pool } from "@/db";
 import { auditLog, importRows, postings, taxAccruals, transactions } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/ledger";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
-import { bookHighConfidenceRows, bookImportRow, createImportBatch } from "./service";
+import {
+  bookHighConfidenceRows,
+  bookImportRow,
+  createImportBatch,
+  reopenSkippedImportRow,
+  skipImportRow,
+} from "./service";
 import {
   EXPECTED_KIND,
   setupImportTestEntity,
@@ -84,6 +90,26 @@ async function run(env: ImportTestEntity) {
     assert.ok(!byLine.get("1462")!.resolvedExternalRef.startsWith("ING:")); // has bank ref
     assert.ok(byLine.get("1482")!.resolvedExternalRef.startsWith("ING:")); // revenue, refless
     assert.ok(byLine.get("1461")!.resolvedExternalRef.startsWith("ING:")); // POS, refless
+  });
+
+  await skipImportRow({ rowId: byLine.get("1465")!.id, note: "  booked through salary flow  " });
+  await ok("manual skip stores only the trimmed optional note and writes no ledger row", async () => {
+    const [skipped] = await db.select().from(importRows).where(eq(importRows.id, byLine.get("1465")!.id));
+    assert.equal(skipped.status, "skipped");
+    assert.equal(skipped.skipReasonCode, null);
+    assert.equal(skipped.skipReasonNote, "booked through salary flow");
+    const ledgerRows = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(eq(transactions.entityId, env.entityId));
+    assert.equal(ledgerRows.length, 0);
+  });
+  await reopenSkippedImportRow(byLine.get("1465")!.id);
+  await ok("reopen returns only the skipped row to pending and clears both reason fields", async () => {
+    const [reopened] = await db.select().from(importRows).where(eq(importRows.id, byLine.get("1465")!.id));
+    assert.equal(reopened.status, "pending");
+    assert.equal(reopened.skipReasonCode, null);
+    assert.equal(reopened.skipReasonNote, null);
   });
 
   // ---------------------------------------------------- 2. Book every row

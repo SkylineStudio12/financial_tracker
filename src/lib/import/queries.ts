@@ -1,9 +1,9 @@
 /**
  * Read queries for the import inbox pages. Display only — no writes.
  */
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, importBatches, importRows } from "@/db/schema";
+import { accounts, categories, importBatches, importRows, postings } from "@/db/schema";
 
 export async function getImportFormOptions(entityId: string) {
   const bankAccounts = await db
@@ -74,5 +74,17 @@ export async function getImportBatch(batchId: string, entityId: string) {
     .where(and(eq(categories.entityId, entityId), isNull(categories.deletedAt)))
     .orderBy(asc(categories.kind), asc(categories.name));
 
-  return { batch, rows, categories: entityCategories };
+  const transactionIds = rows.flatMap((row) => row.transactionId ? [row.transactionId] : []);
+  const bookedCategories = transactionIds.length
+    ? await db
+        .select({ transactionId: postings.transactionId, categoryName: categories.name })
+        .from(postings)
+        .innerJoin(categories, eq(categories.id, postings.categoryId))
+        .where(inArray(postings.transactionId, transactionIds))
+    : [];
+  const bookedCategoryByTransactionId = new Map(
+    bookedCategories.map((row) => [row.transactionId, row.categoryName]),
+  );
+
+  return { batch, rows, categories: entityCategories, bookedCategoryByTransactionId };
 }

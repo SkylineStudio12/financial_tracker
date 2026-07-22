@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { getProfile } from "@/lib/profiles";
-import { formatDate } from "@/lib/format";
 import { getImportFormOptions, listImportBatches } from "@/lib/import/queries";
 import { ImportPasteForm } from "@/components/import/import-paste-form";
+import { ImportBatchSections } from "@/components/import/import-batch-sections";
 import { RevolutUploadForm } from "@/components/import/revolut-upload-form";
 import { listRevolutImportBatches } from "@/lib/import/revolut/brokerage-queries";
 
@@ -19,7 +19,6 @@ export default async function ImportsPage({
   const profile = getProfile(slug);
   if (!profile || (!profile.companyFlows && profile.owner !== "greg")) notFound();
 
-  const locale = await getLocale();
   const t = await getTranslations("imports");
   const isRevolut = profile.owner === "greg";
   const { bankAccounts } = isRevolut
@@ -46,15 +45,14 @@ export default async function ImportsPage({
         />
       )}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-card-title text-text-primary">
-          {isRevolut ? t("revolut.recent") : t("recentImports")}
-        </h2>
-        {(isRevolut ? revolutBatches : batches).length === 0 ? (
+      {isRevolut ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-card-title text-text-primary">{t("revolut.recent")}</h2>
+          {revolutBatches.length === 0 ? (
           <p className="text-secondary text-text-muted">
-            {isRevolut ? t("revolut.none") : t("noStatements")}
+              {t("revolut.none")}
           </p>
-        ) : isRevolut ? (
+          ) : (
           <ul className="flex flex-col">
             {revolutBatches.map((batch) => (
               <li key={batch.id} className="border-b border-border-hairline last:border-b-0">
@@ -76,27 +74,11 @@ export default async function ImportsPage({
               </li>
             ))}
           </ul>
-        ) : (
-          <ul className="flex flex-col">
-            {batches.map((batch) => (
-              <li key={batch.id} className="border-b border-border-hairline last:border-b-0">
-                <Link
-                  href={`/p/${profile.slug}/imports/${batch.id}`}
-                  className="flex items-baseline justify-between gap-3 py-2 outline-none hover:text-accent focus-visible:ring-3 focus-visible:ring-focus-ring"
-                >
-                  <span className="text-secondary text-text-primary">
-                    {batch.statementNumber} · {batch.accountName}
-                  </span>
-                  <span className="text-caption text-text-muted">
-                    {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·{" "}
-                    {t("pendingOfTotal", { pending: batch.pendingCount, total: batch.rowCount })}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          )}
+        </section>
+      ) : (
+        <ImportBatchSections batches={batches} profileSlug={profile.slug} />
+      )}
     </div>
   );
 }

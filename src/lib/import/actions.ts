@@ -12,9 +12,11 @@ import { toAppError, type AppError } from "@/lib/app-error";
 import { getProfile } from "@/lib/profiles";
 import { IngParseError } from "./ing/types";
 import {
+  assertImportRowScope,
   bookHighConfidenceRows,
   bookImportRow,
   createImportBatch,
+  reopenSkippedImportRow,
   skipImportRow,
 } from "./service";
 
@@ -67,8 +69,11 @@ export async function bookImportRowAction(payload: {
   categoryId?: string | null;
 }): Promise<ActionResult> {
   try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
     const result = await bookImportRow({ rowId: payload.rowId, categoryId: payload.categoryId });
-    revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
     return {
       ok: true,
       status: result.status === "duplicate" ? "duplicate" : undefined,
@@ -111,10 +116,34 @@ export async function skipImportRowAction(payload: {
   entityId: string;
   batchId: string;
   rowId: string;
+  note?: string | null;
 }): Promise<ActionResult> {
   try {
-    await skipImportRow(payload.rowId);
-    revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await skipImportRow({ rowId: payload.rowId, note: payload.note });
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function reopenSkippedImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await reopenSkippedImportRow(payload.rowId);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
     return { ok: true };
   } catch (error) {
     const appError = toAppError(error);

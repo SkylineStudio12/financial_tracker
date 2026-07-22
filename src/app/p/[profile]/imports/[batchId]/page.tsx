@@ -81,7 +81,7 @@ export default async function ImportBatchPage({
   }
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
-  const { batch, rows, categories } = data;
+  const { batch, rows, categories, bookedCategoryByTransactionId } = data;
 
   const inboxRows = rows.map((r) => {
     const classified = r.payload as ClassifiedRow;
@@ -99,14 +99,39 @@ export default async function ImportBatchPage({
       resolvedExternalRef: r.resolvedExternalRef,
       suggestedCategoryId: r.suggestedCategoryId,
       transactionId: r.transactionId,
+      confirmedCategoryName: r.transactionId
+        ? (bookedCategoryByTransactionId.get(r.transactionId) ?? null)
+        : null,
+      skipReasonCode: r.skipReasonCode,
+      skipReasonNote: r.skipReasonNote,
       bookDate: classified.row.bookDate,
       direction: classified.row.direction,
       amountMinor: classified.row.amountMinor,
+      balanceAfterMinor: classified.row.balanceAfterMinor,
       counterpartyName: classified.row.counterpartyName,
+      counterpartyIban: classified.row.counterpartyIban,
+      description: classified.row.description,
+      rawLines: classified.row.rawLines,
+      bankReference: classified.row.bankReference,
+      internalReference: classified.row.internalReference,
+      instantReference: classified.row.instantReference,
+      fx: classified.row.fx,
     };
   });
 
   const movement = batch.closingBalanceMinor - batch.openingBalanceMinor;
+  const counts = {
+    pending: rows.filter((row) => row.status === "pending").length,
+    booked: rows.filter((row) => row.status === "booked").length,
+    skipped: rows.filter((row) => row.status === "skipped").length,
+    duplicate: rows.filter((row) => row.status === "duplicate").length,
+  };
+  const countItems = [
+    counts.pending > 0 && t("countPending", { count: counts.pending }),
+    counts.booked > 0 && t("countBooked", { count: counts.booked }),
+    counts.skipped > 0 && t("countSkipped", { count: counts.skipped }),
+    counts.duplicate > 0 && t("countDuplicates", { count: counts.duplicate }),
+  ].filter(Boolean);
 
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)]">
@@ -117,17 +142,20 @@ export default async function ImportBatchPage({
         >
           {t("allImports")}
         </Link>
-        <h1 className="text-title text-text-primary">{batch.statementNumber}</h1>
-        <p className="text-caption text-text-muted">
-          {t.rich("batchSummary", {
+        <h1 className="text-title text-text-primary">
+          {t("batchIdentity", {
+            statement: batch.statementNumber,
             account: batch.accountName,
             start: formatDate(batch.periodStart, locale),
             end: formatDate(batch.periodEnd, locale),
+          })}
+        </h1>
+        <p className="text-caption text-text-muted">{countItems.join(" · ")}</p>
+        <p className="text-caption text-text-muted">
+          {t.rich("reconciliation", {
             opening: formatMinor(batch.openingBalanceMinor, "RON", locale),
             closing: formatMinor(batch.closingBalanceMinor, "RON", locale),
-            sign: movement >= 0 ? "+" : "−",
-            net: formatMinor(Math.abs(movement), "RON", locale),
-            // Amounts must render in the numeric face (hybrid font model).
+            delta: `${movement >= 0 ? "+" : "−"}${formatMinor(Math.abs(movement), "RON", locale)}`,
             amt: (chunks) => <span className="font-numeric tabular-nums">{chunks}</span>,
           })}
         </p>

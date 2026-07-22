@@ -248,6 +248,27 @@ export type BookRowResult =
   | { status: "booked"; transactionId: string }
   | { status: "duplicate"; transactionId: string | null };
 
+/** Server-action ownership check: client-supplied row and batch ids must
+ * resolve inside the profile's entity before any single-row mutation runs. */
+export async function assertImportRowScope(params: {
+  rowId: string;
+  batchId: string;
+  entityId: string;
+}): Promise<void> {
+  const [scoped] = await db
+    .select({ id: importRows.id })
+    .from(importRows)
+    .innerJoin(importBatches, eq(importBatches.id, importRows.batchId))
+    .where(
+      and(
+        eq(importRows.id, params.rowId),
+        eq(importRows.batchId, params.batchId),
+        eq(importBatches.entityId, params.entityId),
+      ),
+    );
+  if (!scoped) throw new LedgerValidationError("imports.rowNotFound");
+}
+
 /**
  * Book ONE confirmed inbox row into the ledger — through createTransaction,
  * the single write path. A unique-index hit is not an error: the movement is
@@ -424,14 +445,39 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
   return result;
 }
 
-export async function skipImportRow(rowId: string): Promise<void> {
+export async function skipImportRow(params: {
+  rowId: string;
+  /** Manual skips carry no system code; a human note is optional. */
+  note?: string | null;
+}): Promise<void> {
+  const note = params.note?.trim() || null;
+  const [updated] = await db
+    .update(importRows)
+    .set({ status: "skipped", skipReasonCode: null, skipReasonNote: note })
+    .where(and(eq(importRows.id, params.rowId), eq(importRows.status, "pending")))
+    .returning({ id: importRows.id });
+  if (updated) return;
+  const [row] = await db
+    .select({ status: importRows.status })
+    .from(importRows)
+    .where(eq(importRows.id, params.rowId));
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
+  throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+}
+
+/** Reopen only a manual skip. Booked/trashed/purged rows have separate,
+ * ledger-owned lifecycles and must never pass through this transition. */
+export async function reopenSkippedImportRow(rowId: string): Promise<void> {
+  const [updated] = await db
+    .update(importRows)
+    .set({ status: "pending", skipReasonCode: null, skipReasonNote: null })
+    .where(and(eq(importRows.id, rowId), eq(importRows.status, "skipped")))
+    .returning({ id: importRows.id });
+  if (updated) return;
   const [row] = await db
     .select({ status: importRows.status })
     .from(importRows)
     .where(eq(importRows.id, rowId));
   if (!row) throw new LedgerValidationError("imports.rowNotFound");
-  if (row.status !== "pending") {
-    throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
-  }
-  await db.update(importRows).set({ status: "skipped" }).where(eq(importRows.id, rowId));
+  throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
 }

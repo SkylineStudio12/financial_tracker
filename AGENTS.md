@@ -27,8 +27,9 @@ lesson; nothing reviews, learns, or commits autonomously.
 ## Documentation policies
 
 - New UI strings use next-intl keys with EN values. RO translation is
-  deferred to the end-purge unit; the current `ro.json` EN-mirroring
-  convention prevents runtime breakage when a key is missing.
+  deferred to the end-purge unit; the current `ro.json` EN-mirror is done by
+  hand and pinned by test (no mirror script exists in the repo), preventing
+  runtime breakage when a key is missing.
 - L-0013's cache-cleared-`tsc` i18n rider is **SUSPENDED** for new feature
   units during development. It MUST be reinstated for the end-purge unit.
 - The 14-02M category-icons unit predates the EN-values-only policy:

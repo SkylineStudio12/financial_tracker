@@ -401,3 +401,19 @@ invalidates them. (Firing: 11-11C was relayed without a report and its
 existence was lost; the worktree audit rediscovered the unit as 18 unexplained
 dirty files, mid-cleanup, while an "all sessions closed" attestation was
 already in force.)
+
+## L-0034
+
+Verification checklist steps must contain the exact executable command/query,
+schema-qualified where applicable. A step describing what to check without
+how forces improvisation, reintroducing the chat-memory dependency the doc
+exists to remove. New verification docs get one full dry run before
+ratification.
+
+## L-0035
+
+Prompt-authoring must not describe reversible-looking operations as symmetric
+pairs unless the accepted design defines both directions. "Confirm/un-confirm"
+and "book/un-book" imply a symmetry ledger operations rarely have — a booking
+reverses through posting reversal, not a state toggle. Name each direction
+against its design section.

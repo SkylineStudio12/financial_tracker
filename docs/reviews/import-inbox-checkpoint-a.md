@@ -368,6 +368,11 @@ Bulk result reporting stays as-is (booked / duplicates / left counts) and
 gains "excluded: N owner transfers" so the narrowed scope is visible, not
 silent (no-silent-caps rule).
 
+**§12 Q2 reconciliation:** the later auto-skip ruling supersedes the original
+wording that excluded `owner_transfer` rows remain pending. Shipped behavior
+is to auto-skip an otherwise bulk-eligible owner-transfer row with the system
+skip code and a NULL note; it does not remain pending.
+
 ## 8. Duplicates on re-import (D9)
 
 Re-pasting a statement (or an overlapping successor) surfaces already-seen
@@ -472,8 +477,9 @@ greps, scope guard, checklist), plus:
    pending moves to Closed disclosure; closed batch page stays reachable.
 5. **Bulk scope:** fixture batch containing an `owner_transfer` high row,
    an overlap suspect, a low-confidence row, and a category-less unknown —
-   bulk books none of them, reports the owner-transfer exclusion count;
-   the salary-shaped row remains pending after bulk.
+   bulk books none of the excluded rows, reports the owner-transfer exclusion
+   count, and auto-skips the salary-shaped owner-transfer row with the system
+   code; other ineligible rows remain pending after bulk.
 6. **Duplicates:** re-import fixture shows duplicate rows greyed with
    link to the existing transaction; refless overlap rows show suspect
    badge and remain individually bookable; the two states differ in DOM,

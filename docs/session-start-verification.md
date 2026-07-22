@@ -41,15 +41,30 @@ observed triple with the expected baseline and list any surplus rows by id,
 Confirm the migration head and report both journal artifacts:
 
 - `drizzle/meta/_journal.json` `idx`, which is contiguous;
-- PostgreSQL `__drizzle_migrations.id`, which is a serial identifier and may
-  be non-contiguous or gappy from historical re-runs. Gaps are documented
-  history, not a defect.
+- PostgreSQL `drizzle.__drizzle_migrations.id`, which is a serial identifier
+  and may be non-contiguous or gappy from historical re-runs. The table lives
+  in the `drizzle` schema, not `public`; gaps are documented history, not a
+  defect.
 
-## Categories and icons
+Run this exact query for the PostgreSQL journal artifact:
 
-Report category total, live, and soft-deleted counts. Also report the count
-of live category rows whose `icon` is non-NULL. The expected live set has
-non-NULL icons, while soft-deleted rows remain untouched by the backfill.
+```sql
+SELECT id, hash, created_at FROM drizzle.__drizzle_migrations
+ORDER BY id;
+```
+
+## Categories and icons (drifting session state)
+
+Report category total, live, and soft-deleted counts. Category counts are
+drifting session state, not fixed constants: reconcile the observed counts
+against the current handover hypothesis and surface any surplus or other
+delta, using the same treatment as the transaction triple. The current
+baseline hypothesis is **27 live categories**, after the owner added
+`Utilities`.
+
+Also report the count of live category rows whose `icon` is non-NULL. All
+observed live rows should have non-NULL icons, while soft-deleted rows remain
+untouched by the backfill.
 
 ## July salary spot check
 

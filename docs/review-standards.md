@@ -134,6 +134,19 @@ Proposed lessons: none | <draft entries for docs/lessons.md — await ratificati
 Tier 3 adds: `Invariants touched: <list>` and the explicit line
 `Escalation: owner must review the diff — gate pass does not imply acceptance.`
 
+### Checkpoint B — owner diff review
+
+Owner review is a lightweight second layer, not a code-quality judgment. The
+owner checks only:
+
+1. changed files are in the expected lane (their paths match the brief's
+   scope);
+2. plain-English fragments in added lines match the ruled decisions; and
+3. claimed safety checks are visibly present in the diff or its tests.
+
+The automated gates are the real safety net. Approving after a walkthrough
+and passing gates is a legitimate Checkpoint B approval.
+
 ## 5. The pre-commit hook (optional layer, objective-only)
 
 Speed rule: **if the hook takes more than ~2 seconds it will get skipped and

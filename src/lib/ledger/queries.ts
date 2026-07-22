@@ -50,6 +50,7 @@ export interface TransactionListRow {
   kind: TransactionKind;
   /** Single category name when all legs share one; null otherwise. */
   category: string | null;
+  categoryIcon: string | null;
   categoryDeleted: boolean;
   /** Distinct leg-category count when legs differ (≥2); null otherwise —
    * the page renders the localized "Split (n)" label, not the query. */
@@ -207,6 +208,7 @@ export async function listTransactions(
           accountDeletedAt: accounts.deletedAt,
           accountType: accounts.type,
           categoryName: categories.name,
+          categoryIcon: categories.icon,
           categoryDeletedAt: categories.deletedAt,
           profileMatch: profileAccountScopeCondition(profile),
         })
@@ -245,6 +247,10 @@ export async function listTransactions(
       transaction.id,
     );
     const categoryNames = [...new Set(legs.flatMap((p) => (p.categoryName ? [p.categoryName] : [])))];
+    const categoryIcon =
+      categoryNames.length === 1
+        ? legs.find((posting) => posting.categoryName === categoryNames[0])?.categoryIcon ?? null
+        : null;
     const importLink = importByTransaction.get(transaction.id);
     return {
       id: transaction.id,
@@ -252,6 +258,7 @@ export async function listTransactions(
       description: transaction.description,
       kind: transaction.kind,
       category: categoryNames.length === 1 ? categoryNames[0] : null,
+      categoryIcon,
       categoryDeleted:
         categoryNames.length === 1 &&
         legs.some(
@@ -303,6 +310,7 @@ export async function getTransactionDetail(
       accountDeletedAt: accounts.deletedAt,
       accountType: accounts.type,
       categoryName: categories.name,
+      categoryIcon: categories.icon,
       categoryDeletedAt: categories.deletedAt,
     })
     .from(postings)
@@ -486,7 +494,12 @@ export async function getFilterOptions(
     )
     .orderBy(accounts.name);
   const categoryRows = await db
-    .select({ id: categories.id, name: categories.name, deletedAt: categories.deletedAt })
+    .select({
+      id: categories.id,
+      name: categories.name,
+      icon: categories.icon,
+      deletedAt: categories.deletedAt,
+    })
     .from(categories)
     .where(
       and(
@@ -507,6 +520,7 @@ export async function getFilterOptions(
     categories: categoryRows.map((category) => ({
       id: category.id,
       name: category.name,
+      icon: category.icon,
       deleted: category.deletedAt !== null,
     })),
     tags: tagRows,

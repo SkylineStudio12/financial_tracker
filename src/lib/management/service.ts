@@ -10,6 +10,7 @@ import {
   postings,
 } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/app-error";
+import { isCategoryIconName } from "@/components/category-icons";
 import { getAccountBalances } from "@/lib/ledger/dashboard";
 import type { AccountOwner } from "@/lib/profiles";
 
@@ -38,6 +39,7 @@ export interface ManagedCategory {
   name: string;
   kind: "income" | "expense";
   parentId: string | null;
+  icon: string | null;
   shared: boolean;
   inUseCount: number;
   postingCount: number;
@@ -85,6 +87,14 @@ function normalizedName(name: string): string {
   const normalized = name.trim();
   if (!normalized) throw new LedgerValidationError("manage.nameRequired");
   return normalized;
+}
+
+function normalizeCategoryIcon(icon: string | null | undefined): string | null {
+  if (!icon) return null;
+  if (!isCategoryIconName(icon)) {
+    throw new LedgerValidationError("manage.categoryIconInvalid", { icon });
+  }
+  return icon;
 }
 
 function isUniqueViolation(error: unknown, constraint: string): boolean {
@@ -771,6 +781,7 @@ export async function listManagedCategories(
       name: categories.name,
       kind: categories.kind,
       parentId: categories.parentId,
+      icon: categories.icon,
       categoryEntityId: categories.entityId,
       deletedAt: categories.deletedAt,
       postingCount: count(postings.id),
@@ -793,6 +804,7 @@ export async function listManagedCategories(
     name: row.name,
     kind: row.kind,
     parentId: row.parentId,
+    icon: row.icon,
     shared: row.categoryEntityId === null,
     inUseCount: Number(row.inUseCount),
     postingCount: Number(row.postingCount),
@@ -805,9 +817,11 @@ export async function createCategory(input: {
   name: string;
   kind: "income" | "expense";
   parentId?: string | null;
+  icon?: string | null;
 }): Promise<string> {
   await loadEntity(input.entityId);
   const cleanName = normalizedName(input.name);
+  const icon = normalizeCategoryIcon(input.icon);
   if (input.parentId) {
     const parent = await loadOwnedCategory(input.parentId, input.entityId);
     if (parent.parentId !== null) throw new LedgerValidationError("manage.categoryDepthExceeded");
@@ -821,6 +835,7 @@ export async function createCategory(input: {
           name: cleanName,
           kind: input.kind,
           parentId: input.parentId ?? null,
+          icon,
         })
         .returning({ id: categories.id });
       await tx.insert(auditLog).values({
@@ -842,9 +857,10 @@ export async function createCategory(input: {
 export async function updateCategory(
   categoryId: string,
   entityId: string,
-  input: { name: string; kind: "income" | "expense" },
+  input: { name: string; kind: "income" | "expense"; icon?: string | null },
 ): Promise<void> {
   const cleanName = normalizedName(input.name);
+  const icon = normalizeCategoryIcon(input.icon);
   const category = await loadOwnedCategory(categoryId, entityId);
   const entity = await loadEntity(entityId);
   if (category.kind !== input.kind) {
@@ -864,9 +880,12 @@ export async function updateCategory(
         throw new LedgerValidationError("manage.categoryKindImmutable");
       }
       if (cleanName !== prior.name) assertCategoryNameMutable(entity.type, prior.name);
+      // Existing non-UI callers may still omit icon; omission preserves the
+      // stored value, while an explicit empty value clears it.
+      const nextIcon = input.icon === undefined ? prior.icon : icon;
       await tx
         .update(categories)
-        .set({ name: cleanName, updatedAt: new Date() })
+        .set({ name: cleanName, icon: nextIcon, updatedAt: new Date() })
         .where(eq(categories.id, categoryId));
       await tx.insert(auditLog).values({
         tableName: "categories",

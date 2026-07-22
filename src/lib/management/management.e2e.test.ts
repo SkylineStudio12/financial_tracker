@@ -514,8 +514,34 @@ async function main(): Promise<void> {
       entityId: COMPANY_ID,
       name: "Fixture Parent",
       kind: "expense",
+      icon: "Home",
     });
     createdCategoryIds.push(parentId);
+    assert.equal(
+      (await listManagedCategories(COMPANY_ID)).find((category) => category.id === parentId)?.icon,
+      "Home",
+    );
+    await updateCategory(parentId, COMPANY_ID, {
+      name: "Fixture Parent",
+      kind: "expense",
+      icon: "Building2",
+    });
+    assert.equal(
+      (await listManagedCategories(COMPANY_ID)).find((category) => category.id === parentId)?.icon,
+      "Building2",
+    );
+    await updateCategory(parentId, COMPANY_ID, {
+      name: "Fixture Parent",
+      kind: "expense",
+    });
+    assert.equal(
+      (await listManagedCategories(COMPANY_ID)).find((category) => category.id === parentId)?.icon,
+      "Building2",
+    );
+    await expectCode(
+      () => createCategory({ entityId: COMPANY_ID, name: "Invalid icon", kind: "expense", icon: "Nope" }),
+      "manage.categoryIconInvalid",
+    );
     const childId = await createCategory({
       entityId: COMPANY_ID,
       name: "Fixture Child",
@@ -569,6 +595,7 @@ async function main(): Promise<void> {
       entityId: COMPANY_ID,
       name: "Fixture In Use",
       kind: "expense",
+      icon: "Receipt",
     });
     createdCategoryIds.push(inUseId);
     const companyAccounts = await db
@@ -601,29 +628,33 @@ async function main(): Promise<void> {
     const listedRaceRow = listed.rows.find((row) => row.id === categoryTransactionId);
     assert.ok(listedRaceRow);
     assert.equal(listedRaceRow?.category, "Fixture In Use");
+    assert.equal(listedRaceRow?.categoryIcon, "Receipt");
     assert.equal(listedRaceRow?.categoryDeleted, true);
     const detail = await getTransactionDetail(categoryTransactionId, skyline);
     const detailRacePosting = detail?.postings.find(
       (posting) => posting.categoryName === "Fixture In Use",
     );
     assert.equal(detailRacePosting?.categoryName, "Fixture In Use");
+    assert.equal(detailRacePosting?.categoryIcon, "Receipt");
     assert.ok(detailRacePosting?.categoryDeletedAt);
     const categoryLabelHtml = renderToStaticMarkup(
       createElement(CategoryLabel, {
         name: listedRaceRow.category,
+        icon: listedRaceRow.categoryIcon,
         deleted: listedRaceRow.categoryDeleted,
         deletedTooltip: "Category deleted — historical label",
       }),
     );
     assert.match(categoryLabelHtml, /text-text-muted/);
     assert.match(categoryLabelHtml, /lucide-archive/);
+    assert.match(categoryLabelHtml, /lucide-receipt/);
     assert.match(categoryLabelHtml, /Category deleted — historical label/);
     const regularFilters = await getFilterOptions(COMPANY_ID);
     assert.equal(regularFilters.categories.some((category) => category.id === inUseId), false);
     const pinnedFilters = await getFilterOptions(COMPANY_ID, undefined, { categoryId: inUseId });
     assert.deepEqual(
       pinnedFilters.categories.find((category) => category.id === inUseId),
-      { id: inUseId, name: "Fixture In Use", deleted: true },
+      { id: inUseId, name: "Fixture In Use", icon: "Receipt", deleted: true },
     );
     const listSource = await readFile("src/app/p/[profile]/transactions/page.tsx", "utf8");
     const detailSource = await readFile(

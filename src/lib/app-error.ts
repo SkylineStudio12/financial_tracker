@@ -82,6 +82,7 @@ export const ERROR_CODES = [
   "manage.sharedCategoryReadOnly",
   "manage.categoryDepthExceeded",
   "manage.categoryDuplicate",
+  "manage.categoryIconInvalid",
   "manage.categoryKindImmutable",
   "manage.categoryProtected",
   "manage.categoryInUse",

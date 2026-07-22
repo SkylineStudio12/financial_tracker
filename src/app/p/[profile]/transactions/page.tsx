@@ -19,7 +19,7 @@ import { DateFilter } from "@/components/ui/date-filter";
 import { DevDatabaseBadge } from "@/components/dev-database-badge";
 import { RowLink } from "@/components/row-link";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
-import { AccountLabel, CategoryLabel } from "@/components/category-label";
+import { AccountLabel, CategoryLabel, KindLabel, SplitLabel } from "@/components/category-label";
 
 export const dynamic = "force-dynamic";
 
@@ -160,6 +160,7 @@ export default async function TransactionsPage({
               <input type="hidden" name="category" value={selectedCategory.id} />
               <CategoryLabel
                 name={selectedCategory.name}
+                icon={selectedCategory.icon}
                 deleted
                 deletedTooltip={tManage("deletedCategoryTooltip")}
               />
@@ -257,15 +258,16 @@ export default async function TransactionsPage({
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
                 <td className={`${cellClass} text-text-muted`}>
                   {row.splitCount ? (
-                    t("split", { count: row.splitCount })
+                    <SplitLabel label={t("split", { count: row.splitCount })} />
                   ) : row.category ? (
                     <CategoryLabel
                       name={row.category}
+                      icon={row.categoryIcon}
                       deleted={row.categoryDeleted}
                       deletedTooltip={tManage("deletedCategoryTooltip")}
                     />
                   ) : (
-                    "—"
+                    <KindLabel kind={row.kind} label={tEnums(`transactionKind.${row.kind}`)} />
                   )}
                 </td>
                 <td className={`${cellClass} text-text-muted`}>

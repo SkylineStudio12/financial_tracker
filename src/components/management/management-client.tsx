@@ -34,6 +34,8 @@ import { errorClass, fieldClass, labelClass, moneyFieldClass } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CategoryLabel } from "@/components/category-label";
+import { CategoryIconPicker } from "@/components/management/category-icon-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,6 +85,7 @@ interface FormFields {
   name: string;
   kind: "income" | "expense";
   parentId: string;
+  icon: string;
   isActive: boolean;
   accountType: "bank" | "cash";
   currency: "RON" | "EUR" | "USD";
@@ -100,6 +103,7 @@ const emptyFields: FormFields = {
   name: "",
   kind: "expense",
   parentId: "",
+  icon: "",
   isActive: true,
   accountType: "bank",
   currency: "RON",
@@ -208,6 +212,7 @@ export function ManagementClient({
         name: next.category.name,
         kind: next.category.kind,
         parentId: next.category.parentId ?? "",
+        icon: next.category.icon ?? "",
       };
     } else if (next.type === "employee-edit") {
       nextFields = { ...emptyFields, name: next.employee.name, isActive: next.employee.isActive };
@@ -252,11 +257,13 @@ export function ManagementClient({
           name: fields.name,
           kind: fields.kind,
           parentId: fields.parentId || null,
+          icon: fields.icon || null,
         });
       } else if (dialog.type === "category-edit") {
         result = await updateCategoryAction(profileSlug, entityId, dialog.category.id, {
           name: fields.name,
           kind: fields.kind,
+          icon: fields.icon || null,
         });
       } else if (dialog.type === "employee-create") {
         result = await createEmployeeAction(profileSlug, entityId, fields.name);
@@ -568,7 +575,12 @@ export function ManagementClient({
                 <TableRow key={category.id}>
                   <TableCell>
                     <span className={`flex items-center gap-2 ${category.parentId ? "pl-4" : ""}`}>
-                      {category.name}
+                      <CategoryLabel
+                        name={category.name}
+                        icon={category.icon}
+                        deleted={false}
+                        deletedTooltip={t("deletedCategoryTooltip")}
+                      />
                       {category.shared && <Badge variant="secondary">{t("shared")}</Badge>}
                     </span>
                   </TableCell>
@@ -882,6 +894,13 @@ export function ManagementClient({
                     <option value="expense">{t("expense")}</option>
                   </select>
                 </label>
+                <div className={labelClass}>
+                  <span>{t("icon")}</span>
+                  <CategoryIconPicker
+                    value={fields.icon}
+                    onChange={(icon) => setFields({ ...fields, icon })}
+                  />
+                </div>
                 {dialog.type === "category-create" && (
                   <label className={labelClass}>
                     {t("parent")}

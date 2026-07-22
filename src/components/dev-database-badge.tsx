@@ -46,7 +46,7 @@ export function DevDatabaseBadge({
           : "inline-flex h-6 items-center gap-1 rounded-badge border border-border-hairline bg-surface-inactive px-2 text-micro uppercase text-text-muted"
       }
     >
-      <Database className="size-3.5" absoluteStrokeWidth strokeWidth={1.5} />
+      <Database className="size-[var(--icon-size-inline)]" absoluteStrokeWidth strokeWidth={1.5} />
       {info.label}
     </span>
   );

@@ -153,6 +153,7 @@ export async function createCategoryAction(
     name: string;
     kind: "income" | "expense";
     parentId?: string | null;
+    icon?: string | null;
   },
 ): Promise<ActionResult<string>> {
   const result = await runAction(() => createCategory(input));
@@ -164,7 +165,7 @@ export async function updateCategoryAction(
   profileSlug: string,
   entityId: string,
   categoryId: string,
-  input: { name: string; kind: "income" | "expense" },
+  input: { name: string; kind: "income" | "expense"; icon?: string | null },
 ): Promise<ActionResult> {
   const result = await runAction(() => updateCategory(categoryId, entityId, input));
   if ("ok" in result) refreshManage(profileSlug);

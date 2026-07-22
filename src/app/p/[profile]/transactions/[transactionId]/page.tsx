@@ -114,6 +114,7 @@ export default async function TransactionDetailPage({
                     {posting.categoryName ? (
                       <CategoryLabel
                         name={posting.categoryName}
+                        icon={posting.categoryIcon}
                         deleted={posting.categoryDeletedAt !== null}
                         deletedTooltip={tManage("deletedCategoryTooltip")}
                       />

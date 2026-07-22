@@ -10,7 +10,9 @@ Supervised loop — the owner accepts every unit of work and ratifies every
 lesson; nothing reviews, learns, or commits autonomously.
 
 1. **Before starting any unit of work:** read `docs/lessons.md` (rules +
-   entries) so known gotchas are applied, not rediscovered.
+   entries) so known gotchas are applied, not rediscovered. For every
+   session-start pass, use `docs/session-start-verification.md` as the
+   canonical checklist and report its read-only results before proceeding.
 2. **When a unit is finished:** run the review pass in
    `docs/review-standards.md` — gate on the OBJECTIVE items (tsc, eslint,
    token greps, scope guard, checklist), answer the four JUDGMENT flags, post
@@ -21,6 +23,18 @@ lesson; nothing reviews, learns, or commits autonomously.
    ratifies before anything is appended to `docs/lessons.md`.
 4. **Commits:** the owner confirms every commit (message proposed first);
    one concern per commit.
+
+## Documentation policies
+
+- New UI strings use next-intl keys with EN values. RO translation is
+  deferred to the end-purge unit; the current `ro.json` EN-mirroring
+  convention prevents runtime breakage when a key is missing.
+- L-0013's cache-cleared-`tsc` i18n rider is **SUSPENDED** for new feature
+  units during development. It MUST be reinstated for the end-purge unit.
+- The 14-02M category-icons unit predates the EN-values-only policy:
+  `manage.icon*` and `errors.manage.categoryIconInvalid` are already
+  RO-authored. The end-purge EN==RO identity grep correctly passes over
+  them; do not "correct" those keys.
 
 # Orchestration conventions
 
@@ -38,3 +52,7 @@ The prompt instructs the agent to open its report with
 - A report answering multiple prompts echoes one key per prompt.
 - The echo confirms correlation only, not compliance; STOP gates
   and review remain the compliance layer.
+
+Tombstone: the tier-suffix clarification is CLOSED. T/M/H/L are Codex
+tiers; only C and F are distinct agents. This was a one-time parallel-window
+relay error in chat 11, not a notation ambiguity. Do not reopen it.

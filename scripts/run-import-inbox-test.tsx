@@ -101,6 +101,14 @@ test("write service owns the transitions and confirmation delegates to createTra
   assert.doesNotMatch(source, /insert\(transactions\)/);
 });
 
+test("bulk UI discloses booked, auto-skipped owner transfers, and pending counts", () => {
+  const source = readFileSync("src/components/import/import-inbox.tsx", "utf8");
+  assert.match(source, /result\.summary\.booked/);
+  assert.match(source, /result\.summary\.ownerTransfersSkipped/);
+  assert.match(source, /result\.summary\.left/);
+  assert.match(source, /t\("ownerTransfersSkippedCount"/);
+});
+
 test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () => {
   const en = JSON.parse(readFileSync("messages/en.json", "utf8")).imports;
   const ro = JSON.parse(readFileSync("messages/ro.json", "utf8")).imports;
@@ -140,6 +148,7 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "detailResolvedReference",
     "detailRawLines",
     "balanceAfter",
+    "ownerTransfersSkippedCount",
   ];
   for (const key of keys) assert.equal(ro[key], en[key], key);
   assert.equal(ro.status.trashed, en.status.trashed);

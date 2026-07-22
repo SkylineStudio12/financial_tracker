@@ -12,6 +12,7 @@ import { toAppError, type AppError } from "@/lib/app-error";
 import { getProfile } from "@/lib/profiles";
 import { IngParseError } from "./ing/types";
 import {
+  assertImportBatchScope,
   assertImportRowScope,
   bookHighConfidenceRows,
   bookImportRow,
@@ -22,7 +23,16 @@ import {
 
 type ActionResult =
   | { error: AppError | string }
-  | { ok: true; status?: "duplicate"; summary?: { booked: number; duplicates: number; left: number } };
+  | {
+      ok: true;
+      status?: "duplicate";
+      summary?: {
+        booked: number;
+        duplicates: number;
+        ownerTransfersSkipped: number;
+        left: number;
+      };
+    };
 
 /** Validated /p/{slug}/imports base for redirects and revalidation. */
 function importsPath(profileSlug: string, entityId: string): string {
@@ -91,8 +101,11 @@ export async function bookHighConfidenceAction(payload: {
   batchId: string;
 }): Promise<ActionResult> {
   try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportBatchScope(payload);
     const result = await bookHighConfidenceRows(payload.batchId);
-    revalidatePath(`${importsPath(payload.profileSlug, payload.entityId)}/${payload.batchId}`);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
     if (result.errors.length) {
       return { error: { code: "imports.highConfidenceBookingFailed", params: { count: result.errors.length } } };
     }
@@ -101,6 +114,7 @@ export async function bookHighConfidenceAction(payload: {
       summary: {
         booked: result.booked,
         duplicates: result.duplicates,
+        ownerTransfersSkipped: result.ownerTransfersSkipped,
         left: result.left,
       },
     };

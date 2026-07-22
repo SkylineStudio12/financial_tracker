@@ -282,6 +282,7 @@
     "done": "Done",
     "bookedCount": "booked {count}",
     "duplicateCount": "{count} duplicate",
+    "ownerTransfersSkippedCount": "owner transfers auto-skipped: {count}",
     "leftForReviewCount": "{count} left for review",
     "kind": {
       "revenue": "revenue",

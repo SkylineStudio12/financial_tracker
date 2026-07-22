@@ -269,6 +269,24 @@ export async function assertImportRowScope(params: {
   if (!scoped) throw new LedgerValidationError("imports.rowNotFound");
 }
 
+/** Bulk-action ownership check: the client-supplied batch must belong to the
+ * profile entity before any row in it can be changed. */
+export async function assertImportBatchScope(params: {
+  batchId: string;
+  entityId: string;
+}): Promise<void> {
+  const [scoped] = await db
+    .select({ id: importBatches.id })
+    .from(importBatches)
+    .where(
+      and(
+        eq(importBatches.id, params.batchId),
+        eq(importBatches.entityId, params.entityId),
+      ),
+    );
+  if (!scoped) throw new LedgerValidationError("imports.batchNotFound");
+}
+
 /**
  * Book ONE confirmed inbox row into the ledger — through createTransaction,
  * the single write path. A unique-index hit is not an error: the movement is
@@ -397,16 +415,20 @@ export async function bookImportRow(params: {
 export interface BookHighConfidenceResult {
   booked: number;
   duplicates: number;
-  /** Rows left pending: low confidence, overlap-suspect, or no category. */
+  ownerTransfersSkipped: number;
+  /** Rows still pending after the run: low confidence, overlap-suspect, or no category. */
   left: number;
   errors: AppError[];
 }
 
+export const OWNER_TRANSFER_BULK_SKIP_REASON = "system.ownerTransferExcluded";
+
 /**
- * Book every pending HIGH-confidence row that needs no human input: not
- * overlap-suspect (those demand per-row confirmation by design) and either
- * category-free by shape or carrying a suggestion. Everything else stays in
- * the inbox.
+ * Book every pending HIGH-confidence row that needs no human input: not an
+ * owner transfer, not overlap-suspect (those demand per-row confirmation by
+ * design), and either category-free by shape or carrying a suggestion.
+ * Otherwise-eligible owner transfers are auto-skipped with a system reason
+ * because the salary flow may already own the same physical bank movement.
  */
 export async function bookHighConfidenceRows(batchId: string): Promise<BookHighConfidenceResult> {
   const rows = await db
@@ -421,27 +443,53 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
     .from(importRows)
     .where(and(eq(importRows.batchId, batchId), eq(importRows.status, "pending")));
 
-  const result: BookHighConfidenceResult = { booked: 0, duplicates: 0, left: 0, errors: [] };
+  const result: BookHighConfidenceResult = {
+    booked: 0,
+    duplicates: 0,
+    ownerTransfersSkipped: 0,
+    left: 0,
+    errors: [],
+  };
   for (const row of rows) {
-    const bookable =
+    const highConfidenceEligible =
       row.confidence === "high" &&
       !row.overlapSuspect &&
       (!bookingNeedsCategory(row.kind) || row.suggestedCategoryId !== null);
-    if (!bookable) {
-      result.left += 1;
+    if (highConfidenceEligible && row.kind === "owner_transfer") {
+      const [skipped] = await db
+        .update(importRows)
+        .set({
+          status: "skipped",
+          skipReasonCode: OWNER_TRANSFER_BULK_SKIP_REASON,
+          skipReasonNote: null,
+        })
+        .where(
+          and(
+            eq(importRows.id, row.id),
+            eq(importRows.status, "pending"),
+            eq(importRows.kind, "owner_transfer"),
+          ),
+        )
+        .returning({ id: importRows.id });
+      if (skipped) result.ownerTransfersSkipped += 1;
       continue;
     }
+    const bookable = highConfidenceEligible && row.kind !== "owner_transfer";
+    if (!bookable) continue;
     try {
       const booked = await bookImportRow({ rowId: row.id });
       if (booked.status === "booked") result.booked += 1;
       else result.duplicates += 1;
     } catch (error) {
-      result.left += 1;
       const appError = toAppError(error);
       if (appError) result.errors.push(appError);
       else throw error;
     }
   }
+  result.left = await db.$count(
+    importRows,
+    and(eq(importRows.batchId, batchId), eq(importRows.status, "pending")),
+  );
   return result;
 }
 

@@ -30,6 +30,7 @@
     "test:new-transaction-dialog": "tsx scripts/run-new-transaction-dialog-test.tsx",
     "test:date-field": "tsx scripts/run-date-field-test.tsx",
     "test:import-inbox": "tsx scripts/run-import-inbox-test.tsx",
+    "test:import-inbox-bulk": "tsx src/lib/import/bulk-confirm.e2e.test.ts",
     "test:pre-runner-db": "tsx scripts/run-pre-runner-db-tests.ts",
     "db:studio": "drizzle-kit studio"
   },

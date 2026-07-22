@@ -399,7 +399,8 @@ export function ImportInbox({
       else if (result.summary) {
         const parts = [t("bookedCount", { count: result.summary.booked })];
         if (result.summary.duplicates) parts.push(t("duplicateCount", { count: result.summary.duplicates }));
-        if (result.summary.left) parts.push(t("leftForReviewCount", { count: result.summary.left }));
+        parts.push(t("ownerTransfersSkippedCount", { count: result.summary.ownerTransfersSkipped }));
+        parts.push(t("leftForReviewCount", { count: result.summary.left }));
         setMessage(parts.join(", "));
       } else setMessage(t("done"));
     });

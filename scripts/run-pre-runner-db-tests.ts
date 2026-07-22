@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Client } from "pg";
 
 const SUITES = [
+  "src/lib/import/bulk-confirm.e2e.test.ts",
   "src/lib/import/delete-reimport.regression.test.ts",
   "src/lib/import/edit-guard.test.ts",
   "src/lib/import/revolut/booking.e2e.test.ts",

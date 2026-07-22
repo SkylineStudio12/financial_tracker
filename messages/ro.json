@@ -282,6 +282,7 @@
     "done": "Gata",
     "bookedCount": "înregistrate {count}",
     "duplicateCount": "{count} duplicat",
+    "ownerTransfersSkippedCount": "owner transfers auto-skipped: {count}",
     "leftForReviewCount": "{count} rămase pentru revizuire",
     "kind": {
       "revenue": "venit",

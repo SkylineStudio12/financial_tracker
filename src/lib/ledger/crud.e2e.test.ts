@@ -7,10 +7,12 @@ import { db, pool } from "@/db";
 import {
   accounts,
   auditLog,
+  categories,
   importRows,
   importSourceClaims,
   postings,
   taxAccruals,
+  taxRules,
   transactionImportLinks,
   transactions,
 } from "@/db/schema";
@@ -165,6 +167,7 @@ async function main(): Promise<void> {
     .returning();
   const servicesCategory = env.categoryId("Services|expense");
   const softwareCategory = env.categoryId("Software subscriptions|expense");
+  const revenueCategory = env.categoryId("Revenue|income");
 
   try {
     await fixture("description is optional, blank values persist as NULL, and text survives", async () => {
@@ -198,6 +201,177 @@ async function main(): Promise<void> {
       );
       const detail = await getTransactionDetail(describedId);
       assert.equal(detail?.transaction.description, "Existing description");
+    });
+
+    await fixture("revenue edit rebuilds micro-tax legs and period through the shared path", async () => {
+      const description = "Revenue accrual edit fixture";
+      const initialAmount = 1_000_000;
+      assert.deepEqual(
+        await saveStandardTransaction({
+          stay: true,
+          entityId: env.entityId,
+          accountId: env.bankAccountId,
+          date: "2026-07-24",
+          description,
+          direction: "income",
+          totalMinor: initialAmount,
+          splits: [{ categoryId: revenueCategory, amountMinor: initialAmount }],
+          tagNames: [],
+          counterparty: "Fixture client",
+        }),
+        { ok: true },
+      );
+      const [revenue] = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.description, description));
+      track(revenue.id);
+
+      const accrualState = (revision: number) =>
+        db
+          .select({
+            taxRuleId: taxAccruals.taxRuleId,
+            rateBps: taxRules.rateBps,
+            amount: postings.amount,
+            year: taxAccruals.year,
+            quarter: taxAccruals.quarter,
+          })
+          .from(taxAccruals)
+          .innerJoin(taxRules, eq(taxRules.id, taxAccruals.taxRuleId))
+          .innerJoin(postings, eq(postings.id, taxAccruals.postingId))
+          .where(
+            and(
+              eq(taxAccruals.transactionId, revenue.id),
+              eq(taxAccruals.revision, revision),
+              isNull(taxAccruals.deletedAt),
+            ),
+          );
+      const postingState = (revision: number) =>
+        db
+          .select({
+            accountType: accounts.type,
+            categoryName: categories.name,
+            amount: postings.amount,
+            amountRon: postings.amountRon,
+          })
+          .from(postings)
+          .innerJoin(accounts, eq(accounts.id, postings.accountId))
+          .leftJoin(categories, eq(categories.id, postings.categoryId))
+          .where(
+            and(
+              eq(postings.transactionId, revenue.id),
+              eq(postings.revision, revision),
+              isNull(postings.deletedAt),
+            ),
+          );
+
+      const [createdAccrual] = await accrualState(1);
+      assert.ok(createdAccrual);
+      const createdTax = Math.round((initialAmount * createdAccrual.rateBps) / 10_000);
+      assert.equal(createdAccrual.amount, -createdTax);
+      const createdRows = await postingState(1);
+      assert.equal(createdRows.length, 4);
+      assert.equal(
+        createdRows.find((row) => row.accountType === "bank")?.amount,
+        initialAmount,
+      );
+      assert.equal(
+        createdRows.find((row) => row.categoryName === "Revenue")?.amount,
+        -initialAmount,
+      );
+      assert.equal(
+        createdRows.find((row) => row.accountType === "tax_liability")?.amount,
+        -createdTax,
+      );
+      assert.equal(
+        createdRows.find((row) => row.categoryName === "Taxes")?.amount,
+        createdTax,
+      );
+      assert.equal(createdRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
+
+      const draft = await getTransactionEditDraft(revenue.id, env.entityId);
+      assert.equal(draft.type, "standard");
+      if (draft.type !== "standard") throw new Error("expected standard revenue draft");
+      assert.equal(draft.direction, "income");
+      assert.equal(draft.counterparty, "Fixture client");
+      assert.deepEqual(draft.splits, [{ categoryId: revenueCategory, amount: "10000,00" }]);
+
+      const editedAmount = 2_000_000;
+      assert.deepEqual(
+        await saveStandardTransaction({
+          transactionId: revenue.id,
+          expectedRevision: 1,
+          stay: true,
+          entityId: env.entityId,
+          accountId: env.bankAccountId,
+          date: "2026-10-05",
+          description: "",
+          direction: "income",
+          totalMinor: editedAmount,
+          splits: [{ categoryId: revenueCategory, amountMinor: editedAmount }],
+          tagNames: [],
+          counterparty: "Fixture client",
+        }),
+        { ok: true },
+      );
+
+      const [editedAccrual] = await accrualState(2);
+      assert.ok(editedAccrual);
+      const editedTax = Math.round((editedAmount * editedAccrual.rateBps) / 10_000);
+      assert.equal(editedAccrual.taxRuleId, createdAccrual.taxRuleId);
+      assert.equal(editedAccrual.amount, -editedTax);
+      assert.equal(editedAccrual.year, 2026);
+      assert.equal(editedAccrual.quarter, 4);
+
+      const editedRows = await postingState(2);
+      assert.equal(editedRows.length, 4);
+      assert.equal(
+        editedRows.find((row) => row.accountType === "bank")?.amount,
+        editedAmount,
+      );
+      assert.equal(
+        editedRows.find((row) => row.categoryName === "Revenue")?.amount,
+        -editedAmount,
+      );
+      assert.equal(
+        editedRows.find((row) => row.accountType === "tax_liability")?.amount,
+        -editedTax,
+      );
+      assert.equal(
+        editedRows.find((row) => row.categoryName === "Taxes")?.amount,
+        editedTax,
+      );
+      assert.equal(editedRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
+      const [editedTransaction] = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, revenue.id));
+      assert.equal(editedTransaction.currentRevision, 2);
+      assert.equal(editedTransaction.description, null);
+    });
+
+    await fixture("standard edit matcher still rejects multiple asset legs", async () => {
+      const unsupportedId = track(
+        await createTransaction({
+          entityId: env.entityId,
+          date: "2026-07-25",
+          description: "Unsupported edit shape",
+          kind: "standard",
+          postings: [
+            { accountId: env.bankAccountId, amount: -1_000 },
+            { accountId: secondBank.id, amount: -500 },
+            {
+              accountId: env.equityAccountId,
+              amount: 1_500,
+              categoryId: servicesCategory,
+            },
+          ],
+        }),
+      );
+      await expectCode(
+        getTransactionEditDraft(unsupportedId, env.entityId),
+        "ledger.transactionShapeUnsupported",
+      );
     });
 
     await fixture("manual expense delete is balanced, tombstoned, audited, and absent", async () => {
@@ -400,7 +574,31 @@ async function main(): Promise<void> {
         }),
         { ok: true },
       );
-      assert.equal((await getTransactionEditDraft(salary.id, env.entityId)).type, "salary");
+      const salaryDraft = await getTransactionEditDraft(salary.id, env.entityId);
+      assert.equal(salaryDraft.type, "salary");
+      if (salaryDraft.type !== "salary") throw new Error("expected salary draft");
+      assert.deepEqual(
+        {
+          payMonth: salaryDraft.payMonth,
+          paymentDate: salaryDraft.paymentDate,
+          gross: salaryDraft.gross,
+          cas: salaryDraft.cas,
+          cass: salaryDraft.cass,
+          incomeTax: salaryDraft.incomeTax,
+          cam: salaryDraft.cam,
+          net: salaryDraft.net,
+        },
+        {
+          payMonth: "2026-05",
+          paymentDate: "2026-06-10",
+          gross: "4600,00",
+          cas: "1150,00",
+          cass: "460,00",
+          incomeTax: "240,00",
+          cam: "103,00",
+          net: "2750,00",
+        },
+      );
       assert.equal((await getTransactionEditDraft(dividend.id, env.entityId)).type, "dividend");
 
       const openingId = track(
@@ -630,7 +828,7 @@ async function main(): Promise<void> {
       assert.equal(currentRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
     });
 
-    assert.equal(fixtures, 11);
+    assert.equal(fixtures, 13);
   } finally {
     const ids = [...fixtureTransactionIds];
     if (ids.length > 0) {
@@ -640,7 +838,7 @@ async function main(): Promise<void> {
     const residue = await db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(eq(transactions.entityId, env.entityId));
     assert.equal(residue[0].count, 0);
   }
-  console.log("PASS fixtures 1-11 and zero fixture residue");
+  console.log("PASS fixtures 1-13 and zero fixture residue");
 }
 
 main()

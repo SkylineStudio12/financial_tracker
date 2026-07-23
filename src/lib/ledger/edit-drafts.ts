@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
+  categories,
   entities,
   postings,
   salaryTransactionDetails,
@@ -218,10 +219,12 @@ export async function getTransactionEditDraft(
       amount: postings.amount,
       amountRon: postings.amountRon,
       categoryId: postings.categoryId,
+      categoryName: categories.name,
       counterparty: postings.counterparty,
     })
     .from(postings)
     .innerJoin(accounts, eq(accounts.id, postings.accountId))
+    .leftJoin(categories, eq(categories.id, postings.categoryId))
     .where(
       and(
         eq(postings.transactionId, transactionId),
@@ -376,19 +379,63 @@ export async function getTransactionEditDraft(
     };
   }
 
-  const realLegs = legs.filter((leg) => leg.accountType !== "equity");
+  const assetLegs = legs.filter(
+    (leg) => leg.accountType !== "equity" && leg.accountType !== "tax_liability",
+  );
+  const taxLiabilityLegs = legs.filter((leg) => leg.accountType === "tax_liability");
   const equityLegs = legs.filter((leg) => leg.accountType === "equity");
   if (
     (transaction.kind !== "standard" && transaction.kind !== "trade") ||
-    realLegs.length !== 1 ||
+    assetLegs.length !== 1 ||
     equityLegs.length === 0
   ) {
     throw new LedgerValidationError("ledger.transactionShapeUnsupported");
   }
-  const bankLeg = realLegs[0];
+  const bankLeg = assetLegs[0];
+  let editableEquityLegs = equityLegs;
+  if (taxLiabilityLegs.length > 0) {
+    const microAccrualRows = await db
+      .select({ postingId: taxAccruals.postingId, ruleType: taxRules.ruleType })
+      .from(taxAccruals)
+      .innerJoin(taxRules, eq(taxRules.id, taxAccruals.taxRuleId))
+      .where(
+        and(
+          eq(taxAccruals.transactionId, transactionId),
+          eq(taxAccruals.revision, transaction.currentRevision),
+          isNull(taxAccruals.deletedAt),
+        ),
+      );
+    const taxPostingIds = new Set(taxLiabilityLegs.map((leg) => leg.id));
+    const accruedPostingIds = new Set(microAccrualRows.map((row) => row.postingId));
+    const taxExpenseLegs = equityLegs.filter(
+      (leg) => leg.categoryName === "Taxes" && leg.amountRon > 0,
+    );
+    editableEquityLegs = equityLegs.filter((leg) => !taxExpenseLegs.includes(leg));
+    const liabilityRon = taxLiabilityLegs.reduce((sum, leg) => sum + leg.amountRon, 0);
+    const expenseRon = taxExpenseLegs.reduce((sum, leg) => sum + leg.amountRon, 0);
+    if (
+      transaction.kind !== "standard" ||
+      bankLeg.amount <= 0 ||
+      taxLiabilityLegs.some((leg) => leg.amountRon >= 0) ||
+      taxExpenseLegs.length !== 1 ||
+      editableEquityLegs.length === 0 ||
+      editableEquityLegs.some((leg) => leg.amountRon >= 0) ||
+      liabilityRon + expenseRon !== 0 ||
+      microAccrualRows.length !== taxLiabilityLegs.length ||
+      accruedPostingIds.size !== taxLiabilityLegs.length ||
+      microAccrualRows.some(
+        (row) => row.ruleType !== "micro_revenue_tax" || !taxPostingIds.has(row.postingId),
+      )
+    ) {
+      throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+    }
+  }
   const total = Math.abs(bankLeg.amount);
-  const equityRonTotal = equityLegs.reduce((sum, leg) => sum + Math.abs(leg.amountRon), 0);
-  const splitAmounts = equityLegs.map((leg) =>
+  const equityRonTotal = editableEquityLegs.reduce(
+    (sum, leg) => sum + Math.abs(leg.amountRon),
+    0,
+  );
+  const splitAmounts = editableEquityLegs.map((leg) =>
     equityRonTotal === 0 ? 0 : Math.round((total * Math.abs(leg.amountRon)) / equityRonTotal),
   );
   const allocated = splitAmounts.slice(0, -1).reduce((sum, value) => sum + value, 0);
@@ -404,7 +451,7 @@ export async function getTransactionEditDraft(
     description: transaction.description ?? "",
     direction: bankLeg.amount < 0 ? "expense" : "income",
     total: minorToInput(total),
-    splits: equityLegs.map((leg, index) => ({
+    splits: editableEquityLegs.map((leg, index) => ({
       categoryId: leg.categoryId ?? "",
       amount: minorToInput(splitAmounts[index]),
     })),

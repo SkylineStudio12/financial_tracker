@@ -249,6 +249,42 @@ Shared safety rules for any external LLM call:
 
 ---
 
+## Client / counterparty management (parked — priority order below)
+
+Raised chat 16. A cluster of related wants around managing clients on
+`/p/skyline/manage`. NOT yet designed. Depends on one unverified fact:
+whether a clients/counterparties TABLE exists today, or counterparties are
+free text on transactions. That decides whether this is "UI over existing
+structure" or "new first-class entity + migration + backfill." Verify before
+any Checkpoint A. Note: `postings.counterparty` exists as a text field
+(seen in 16-04T), which suggests counterparty is currently free text, not a
+first-class entity — confirm.
+
+Shares the list/add/archive/detail-page pattern with the employee
+edit/archive/salary-page design (Checkpoint A drafted chat 16); design them
+consistently.
+
+Priority 1 — Client registry + per-client page.
+- List all clients on /p/skyline/manage; add new; archive old (soft-delete,
+  no hard delete, restore symmetric).
+- Per-client page: that client's transactions + log/history (read-only
+  references into the ledger; posted rows immutable).
+- This is the coherent, purpose-serving core. Worth its own Checkpoint A.
+- Likely home for the parked "structured counterparty IBAN" idea
+  (Phase 3 imports roadmap): first-class client → auto-categorization by
+  IBAN becomes natural.
+
+Priority 2 — deferred, lower value.
+- Work reports per invoice + work-hours tracking.
+- This is INVOICING / TIME-TRACKING, a different product surface from a
+  finance tracker. Scope-creep risk. May not belong in this app at all;
+  possibly a separate tool. Do NOT bundle into the registry unit. Revisit
+  only after Priority 1 ships and only if the need is still real.
+
+Sequencing: queue BEHIND (a) the SKY0151 edit-support fix, (b) the employee
+Checkpoint A build. Verify the counterparty data model first; then Checkpoint A
+for Priority 1 only.
+
 ## Smaller parked items
 - Salary flow: gross salary is a FIXED CONFIGURABLE amount, NOT minimum wage.
   Confirmed from Skyline May-2026 payslip: Greg's gross = 4,500 RON (programmer).

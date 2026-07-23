@@ -11,6 +11,7 @@ import {
   purgeCategory,
   purgeManagedAccount,
   restoreCategory,
+  restoreEmployee,
   restoreManagedAccount,
   saveSalaryProfile,
   softDeleteCategory,
@@ -23,7 +24,7 @@ import {
   type SalaryProfileValues,
 } from "./service";
 
-type ActionResult<T = void> = { ok: true; value?: T } | { error: AppError };
+export type ActionResult<T = void> = { ok: true; value?: T } | { error: AppError };
 
 async function runAction<T>(operation: () => Promise<T>): Promise<ActionResult<T>> {
   try {
@@ -64,12 +65,37 @@ export async function updateEmployeeAction(
   return result;
 }
 
+export async function updateEmployeeDetailsAction(
+  profileSlug: string,
+  entityId: string,
+  employeeId: string,
+  input: { name: string; isActive: boolean },
+  profile: SalaryProfileValues | null,
+): Promise<ActionResult> {
+  const result = await runAction(async () => {
+    await updateEmployee(employeeId, entityId, input);
+    if (profile) await saveSalaryProfile(employeeId, entityId, profile);
+  });
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
 export async function deleteEmployeeAction(
   profileSlug: string,
   entityId: string,
   employeeId: string,
 ): Promise<ActionResult> {
   const result = await runAction(() => softDeleteEmployee(employeeId, entityId));
+  if ("ok" in result) refreshManage(profileSlug);
+  return result;
+}
+
+export async function restoreEmployeeAction(
+  profileSlug: string,
+  entityId: string,
+  employeeId: string,
+): Promise<ActionResult> {
+  const result = await runAction(() => restoreEmployee(employeeId, entityId));
   if ("ok" in result) refreshManage(profileSlug);
   return result;
 }

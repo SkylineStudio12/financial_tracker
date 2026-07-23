@@ -509,6 +509,7 @@
     "employeeCreate": "New employee",
     "employeeEdit": "Edit employee",
     "employeesEmpty": "No employees yet.",
+    "deletedEmployees": "Deleted employees ({count})",
     "profileEdit": "Salary profile",
     "profileDelete": "Remove salary profile",
     "profileReady": "Ready",

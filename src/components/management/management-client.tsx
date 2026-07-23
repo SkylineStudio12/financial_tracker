@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useRef, useState, useTransition } from "react";
-import { Pencil, Plus, RotateCcw, Trash2, Wallet, WalletCards } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Trash2, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateTime, formatMinor, minorToInput, parseAmountToMinor } from "@/lib/format";
@@ -17,11 +17,12 @@ import {
   purgeCategoryAction,
   purgeManagedAccountAction,
   restoreCategoryAction,
+  restoreEmployeeAction,
   restoreManagedAccountAction,
-  saveSalaryProfileAction,
   updateCategoryAction,
-  updateEmployeeAction,
+  updateEmployeeDetailsAction,
   updateManagedAccountAction,
+  type ActionResult,
 } from "@/lib/management/actions";
 import type {
   ManagedCategory,
@@ -70,8 +71,7 @@ type DialogMode =
   | { type: "category-create" }
   | { type: "category-edit"; category: ManagedCategory }
   | { type: "employee-create" }
-  | { type: "employee-edit"; employee: ManagedEmployee }
-  | { type: "profile-edit"; employee: ManagedEmployee };
+  | { type: "employee-edit"; employee: ManagedEmployee };
 
 type DeleteTarget =
   | { type: "account"; id: string; name: string }
@@ -79,7 +79,7 @@ type DeleteTarget =
   | { type: "employee"; id: string; name: string }
   | { type: "profile"; id: string; name: string };
 
-type RecoveryTarget = { type: "account" | "category"; id: string; name: string };
+type RecoveryTarget = { type: "account" | "category" | "employee"; id: string; name: string };
 
 interface FormFields {
   name: string;
@@ -122,6 +122,7 @@ function profileFields(employee: ManagedEmployee): FormFields {
   return {
     ...emptyFields,
     name: employee.name,
+    isActive: employee.isActive,
     gross: profile ? minorToInput(profile.grossMinor) : "",
     cas: profile ? minorToInput(profile.casMinor) : "",
     cass: profile ? minorToInput(profile.cassMinor) : "",
@@ -141,6 +142,7 @@ export function ManagementClient({
   categories,
   deletedCategories,
   employees,
+  deletedEmployees,
 }: {
   profileSlug: string;
   entityId: string;
@@ -150,6 +152,7 @@ export function ManagementClient({
   categories: ManagedCategory[];
   deletedCategories: ManagedCategory[];
   employees: ManagedEmployee[];
+  deletedEmployees: ManagedEmployee[];
 }) {
   const t = useTranslations("manage");
   const labels = useTranslations("enums");
@@ -215,8 +218,6 @@ export function ManagementClient({
         icon: next.category.icon ?? "",
       };
     } else if (next.type === "employee-edit") {
-      nextFields = { ...emptyFields, name: next.employee.name, isActive: next.employee.isActive };
-    } else if (next.type === "profile-edit") {
       nextFields = profileFields(next.employee);
     }
     setFields(nextFields);
@@ -238,7 +239,7 @@ export function ManagementClient({
   const submit = () => {
     if (!dialog) return;
     startTransition(async () => {
-      let result;
+      let result: ActionResult<unknown>;
       if (dialog.type === "account-create" || dialog.type === "account-edit") {
         const values = {
           name: fields.name,
@@ -268,12 +269,17 @@ export function ManagementClient({
       } else if (dialog.type === "employee-create") {
         result = await createEmployeeAction(profileSlug, entityId, fields.name);
       } else if (dialog.type === "employee-edit") {
-        result = await updateEmployeeAction(profileSlug, entityId, dialog.employee.id, {
-          name: fields.name,
-          isActive: fields.isActive,
-        });
-      } else {
-        const values = {
+        const salaryFields = [
+          fields.gross,
+          fields.cas,
+          fields.cass,
+          fields.incomeTax,
+          fields.cam,
+          fields.net,
+          fields.personalDeduction,
+        ];
+        const hasSalaryProfile = salaryFields.some((value) => value.trim() !== "");
+        const values = hasSalaryProfile ? {
           grossMinor: parseAmountToMinor(fields.gross),
           casMinor: parseAmountToMinor(fields.cas),
           cassMinor: parseAmountToMinor(fields.cass),
@@ -281,14 +287,17 @@ export function ManagementClient({
           camMinor: parseAmountToMinor(fields.cam),
           netMinor: parseAmountToMinor(fields.net),
           personalDeductionMinor: parseAmountToMinor(fields.personalDeduction),
-        };
-        if (Object.values(values).some((value) => value === null)) return;
-        result = await saveSalaryProfileAction(
+        } : null;
+        if (values && Object.values(values).some((value) => value === null)) return;
+        result = await updateEmployeeDetailsAction(
           profileSlug,
           entityId,
           dialog.employee.id,
-          values as SalaryProfileValues,
+          { name: fields.name, isActive: fields.isActive },
+          values as SalaryProfileValues | null,
         );
+      } else {
+        return;
       }
       if ("error" in result) setError(result.error);
       else saved();
@@ -320,7 +329,9 @@ export function ManagementClient({
       const result =
         target.type === "account"
           ? await restoreManagedAccountAction(profileSlug, entityId, target.id)
-          : await restoreCategoryAction(profileSlug, entityId, target.id);
+          : target.type === "category"
+            ? await restoreCategoryAction(profileSlug, entityId, target.id)
+            : await restoreEmployeeAction(profileSlug, entityId, target.id);
       if ("error" in result) setError(result.error);
       else {
         setError(null);
@@ -378,9 +389,7 @@ export function ManagementClient({
             ? t("categoryEdit")
             : dialog?.type === "employee-create"
               ? t("employeeCreate")
-              : dialog?.type === "employee-edit"
-                ? t("employeeEdit")
-                : t("profileEdit");
+              : t("employeeEdit");
   const editingAccount = dialog?.type === "account-edit" ? dialog.account : null;
   const accountShapeLocked = Boolean(editingAccount && editingAccount.postingCount > 0);
   const accountOwnerMissing =
@@ -725,15 +734,6 @@ export function ManagementClient({
                           type="button"
                           size="icon-sm"
                           variant="ghost"
-                          aria-label={t("salaryProfile")}
-                          onClick={() => openDialog({ type: "profile-edit", employee })}
-                        >
-                          <WalletCards {...ICON_PROPS} />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
                           aria-label={t("edit")}
                           onClick={() => openDialog({ type: "employee-edit", employee })}
                         >
@@ -757,6 +757,50 @@ export function ManagementClient({
               </TableBody>
             </Table>
           </div>
+          {deletedEmployees.length > 0 && (
+            <details className="border-t border-border-hairline pt-2">
+              <summary className="cursor-pointer text-secondary text-text-primary outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
+                {t("deletedEmployees", { count: deletedEmployees.length })}
+              </summary>
+              <div className="mt-2 overflow-hidden border border-border-hairline bg-surface">
+                <Table>
+                  <TableBody>
+                    {deletedEmployees.map((employee) => (
+                      <TableRow key={employee.id}>
+                        <TableCell>{employee.name}</TableCell>
+                        <TableCell>
+                          {employee.profile ? t("profileReady") : t("profileMissing")}
+                        </TableCell>
+                        <TableCell className="text-text-muted">
+                          {formatDateTime(employee.deletedAt!, locale)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={pending}
+                              onClick={() =>
+                                restore({
+                                  type: "employee",
+                                  id: employee.id,
+                                  name: employee.name,
+                                })
+                              }
+                            >
+                              <RotateCcw {...ICON_PROPS} />
+                              {t("restore")}
+                            </Button>
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </details>
+          )}
         </section>
       )}
 
@@ -943,9 +987,8 @@ export function ManagementClient({
                 )}
               </>
             )}
-            {dialog?.type === "profile-edit" && (
+            {dialog?.type === "employee-edit" && (
               <>
-                <p className="text-secondary text-text-muted">{dialog.employee.name}</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {([
                     ["gross", t("gross")],

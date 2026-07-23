@@ -45,11 +45,14 @@ import {
   createManagedAccount,
   deleteSalaryProfile,
   getEmployeeSalaryPrefill,
+  listEmployeeOptions,
   listManagedAccounts,
   listManagedCategories,
+  listManagedEmployees,
   purgeCategory,
   purgeManagedAccount,
   restoreCategory,
+  restoreEmployee,
   restoreManagedAccount,
   saveSalaryProfile,
   seedRevenueCategories,
@@ -76,6 +79,26 @@ const canonicalProfile: SalaryProfileValues = {
   camMinor: 10_100,
   netMinor: 269_500,
   personalDeductionMinor: 62_800,
+};
+
+const revisedProfile: SalaryProfileValues = {
+  grossMinor: 500_000,
+  casMinor: 125_000,
+  cassMinor: 50_000,
+  incomeTaxMinor: 25_000,
+  camMinor: 11_250,
+  netMinor: 300_000,
+  personalDeductionMinor: 50_000,
+};
+
+const combinedProfile: SalaryProfileValues = {
+  grossMinor: 510_000,
+  casMinor: 127_500,
+  cassMinor: 51_000,
+  incomeTaxMinor: 25_500,
+  camMinor: 11_475,
+  netMinor: 306_000,
+  personalDeductionMinor: 51_000,
 };
 
 async function expectCode(operation: () => Promise<unknown>, code: string): Promise<void> {
@@ -192,6 +215,94 @@ async function main(): Promise<void> {
     await saveSalaryProfile(recreatedEmployee, COMPANY_ID, canonicalProfile);
     console.log(
       "PASS fixture 2 salary profile: 450000/112500/45000/23000/10100/269500/62800 stored verbatim; one-ban mismatch refused; audit restored prior seven values",
+    );
+
+    await updateEmployee(recreatedEmployee, COMPANY_ID, {
+      name: "Fixture Combined Name Only",
+      isActive: true,
+    });
+    assert.deepEqual(
+      (await listManagedEmployees(COMPANY_ID)).find(
+        (employee) => employee.id === recreatedEmployee,
+      )?.profile,
+      canonicalProfile,
+    );
+    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, revisedProfile);
+    const salaryOnly = (await listManagedEmployees(COMPANY_ID)).find(
+      (employee) => employee.id === recreatedEmployee,
+    );
+    assert.equal(salaryOnly?.name, "Fixture Combined Name Only");
+    assert.deepEqual(salaryOnly?.profile, revisedProfile);
+    await updateEmployee(recreatedEmployee, COMPANY_ID, {
+      name: "Fixture Combined Both",
+      isActive: false,
+    });
+    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, combinedProfile);
+    const bothUpdated = (await listManagedEmployees(COMPANY_ID)).find(
+      (employee) => employee.id === recreatedEmployee,
+    );
+    assert.deepEqual(
+      bothUpdated && {
+        name: bothUpdated.name,
+        isActive: bothUpdated.isActive,
+        profile: bothUpdated.profile,
+      },
+      {
+        name: "Fixture Combined Both",
+        isActive: false,
+        profile: combinedProfile,
+      },
+    );
+    await updateEmployee(recreatedEmployee, COMPANY_ID, {
+      name: "Fixture Employee Renamed",
+      isActive: true,
+    });
+    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, canonicalProfile);
+    console.log(
+      "PASS fixture 2a combined edit: name-only preserved profile; salary-only preserved name; both persisted through updateEmployee + saveSalaryProfile",
+    );
+
+    const restoreEmployeeId = await createEmployee(COMPANY_ID, "Fixture Restore Employee");
+    createdEmployeeIds.push(restoreEmployeeId);
+    await saveSalaryProfile(restoreEmployeeId, COMPANY_ID, revisedProfile);
+    await updateEmployee(restoreEmployeeId, COMPANY_ID, {
+      name: "Fixture Restore Employee",
+      isActive: false,
+    });
+    await softDeleteEmployee(restoreEmployeeId, COMPANY_ID);
+    const archivedEmployee = (await listManagedEmployees(COMPANY_ID, "deleted")).find(
+      (employee) => employee.id === restoreEmployeeId,
+    );
+    assert.ok(archivedEmployee?.deletedAt);
+    assert.deepEqual(archivedEmployee.profile, revisedProfile);
+    await restoreEmployee(restoreEmployeeId, COMPANY_ID);
+    const restoredEmployee = (await listManagedEmployees(COMPANY_ID)).find(
+      (employee) => employee.id === restoreEmployeeId,
+    );
+    assert.equal(restoredEmployee?.deletedAt, null);
+    assert.equal(restoredEmployee?.isActive, true);
+    assert.deepEqual(restoredEmployee?.profile, revisedProfile);
+    assert.ok(
+      (await listEmployeeOptions(COMPANY_ID)).some(
+        (employee) => employee.id === restoreEmployeeId,
+      ),
+    );
+    const employeeLifecycleAudits = await db
+      .select({ action: auditLog.action })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.tableName, "employees"),
+          eq(auditLog.rowId, restoreEmployeeId),
+          inArray(auditLog.action, ["delete", "restore"]),
+        ),
+      );
+    assert.deepEqual(
+      employeeLifecycleAudits.map((row) => row.action).sort(),
+      ["delete", "restore"],
+    );
+    console.log(
+      "PASS fixture 2b employee restore: deletedAt set then cleared, delete+restore audits written, active option restored, salary profile untouched",
     );
 
     const serviceSource = await readFile("src/lib/management/service.ts", "utf8");
@@ -440,9 +551,18 @@ async function main(): Promise<void> {
     assert.match(managementClientSource, /t\("systemAccountsCaption"\)/);
     assert.match(managementClientSource, /deletedAccounts\.length > 0/);
     assert.match(managementClientSource, /deletedCategories\.length > 0/);
+    assert.match(managementClientSource, /deletedEmployees\.length > 0/);
+    assert.doesNotMatch(managementClientSource, /WalletCards/);
+    assert.match(managementClientSource, /updateEmployeeDetailsAction/);
+    assert.match(managementClientSource, /dialog\?\.type === "employee-edit"/);
     assert.match(managementClientSource, /t\("deactivateInstead"\)/);
+    const managementActionsSource = await readFile("src/lib/management/actions.ts", "utf8");
+    assert.match(
+      managementActionsSource,
+      /await updateEmployee\(employeeId, entityId, input\);[\s\S]*if \(profile\) await saveSalaryProfile/,
+    );
     console.log(
-      "PASS fixture 4b account UI: three historical-shape controls lock, company owner column absent, honest empty/system copy, zero-count disclosures absent, in-use delete offers Deactivate",
+      "PASS fixture 4b management UI: account guards intact; employee UI has one combined edit action, no WalletCards split, and archived restore disclosure",
     );
 
     let repeatCalls = 0;

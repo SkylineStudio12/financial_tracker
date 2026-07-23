@@ -32,6 +32,7 @@ export interface EmployeeOption {
 export interface ManagedEmployee extends EmployeeOption {
   isActive: boolean;
   profile: SalaryProfileValues | null;
+  deletedAt: string | null;
 }
 
 export interface ManagedCategory {
@@ -287,13 +288,17 @@ export async function listEmployeeOptions(entityId: string): Promise<EmployeeOpt
     .orderBy(asc(employees.name));
 }
 
-export async function listManagedEmployees(entityId: string): Promise<ManagedEmployee[]> {
+export async function listManagedEmployees(
+  entityId: string,
+  mode: "live" | "deleted" = "live",
+): Promise<ManagedEmployee[]> {
   await requireCompany(entityId);
   const rows = await db
     .select({
       id: employees.id,
       name: employees.name,
       isActive: employees.isActive,
+      deletedAt: employees.deletedAt,
       grossMinor: employeeSalaryProfiles.grossMinor,
       casMinor: employeeSalaryProfiles.casMinor,
       cassMinor: employeeSalaryProfiles.cassMinor,
@@ -304,12 +309,18 @@ export async function listManagedEmployees(entityId: string): Promise<ManagedEmp
     })
     .from(employees)
     .leftJoin(employeeSalaryProfiles, eq(employeeSalaryProfiles.employeeId, employees.id))
-    .where(and(eq(employees.entityId, entityId), isNull(employees.deletedAt)))
+    .where(
+      and(
+        eq(employees.entityId, entityId),
+        mode === "live" ? isNull(employees.deletedAt) : isNotNull(employees.deletedAt),
+      ),
+    )
     .orderBy(asc(employees.name));
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
     isActive: row.isActive,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
     profile:
       row.grossMinor === null
         ? null
@@ -444,6 +455,43 @@ export async function softDeleteEmployee(employeeId: string, entityId: string): 
       previousValues: prior,
     });
   });
+}
+
+export async function restoreEmployee(employeeId: string, entityId: string): Promise<void> {
+  await requireCompany(entityId);
+  let employeeName = "";
+  try {
+    await db.transaction(async (tx) => {
+      const [prior] = await tx
+        .select()
+        .from(employees)
+        .where(
+          and(
+            eq(employees.id, employeeId),
+            eq(employees.entityId, entityId),
+            isNotNull(employees.deletedAt),
+          ),
+        )
+        .for("update");
+      if (!prior) throw new LedgerValidationError("manage.employeeNotFound", { employeeId });
+      employeeName = prior.name;
+      await tx
+        .update(employees)
+        .set({ deletedAt: null, isActive: true, updatedAt: new Date() })
+        .where(eq(employees.id, employeeId));
+      await tx.insert(auditLog).values({
+        tableName: "employees",
+        rowId: employeeId,
+        action: "restore",
+        previousValues: prior,
+      });
+    });
+  } catch (error) {
+    if (isUniqueViolation(error, "employees_entity_lower_name_live_uidx")) {
+      throw new LedgerValidationError("manage.restoreNameTaken", { name: employeeName });
+    }
+    throw error;
+  }
 }
 
 export async function saveSalaryProfile(

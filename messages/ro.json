@@ -509,6 +509,7 @@
     "employeeCreate": "Angajat nou",
     "employeeEdit": "Editează angajatul",
     "employeesEmpty": "Niciun angajat încă.",
+    "deletedEmployees": "Deleted employees ({count})",
     "profileEdit": "Profil salarial",
     "profileDelete": "Elimină profilul salarial",
     "profileReady": "Pregătit",

@@ -19,13 +19,17 @@ export default async function ManagePage({
   const profile = getProfile(slug);
   if (!profile) notFound();
   const t = await getTranslations("manage");
-  const [accounts, deletedAccounts, categories, deletedCategories, employees] = await Promise.all([
-    listManagedAccounts(profile.entityId),
-    listManagedAccounts(profile.entityId, "deleted"),
-    listManagedCategories(profile.entityId),
-    listManagedCategories(profile.entityId, "deleted"),
-    profile.companyFlows ? listManagedEmployees(profile.entityId) : Promise.resolve([]),
-  ]);
+  const [accounts, deletedAccounts, categories, deletedCategories, employees, deletedEmployees] =
+    await Promise.all([
+      listManagedAccounts(profile.entityId),
+      listManagedAccounts(profile.entityId, "deleted"),
+      listManagedCategories(profile.entityId),
+      listManagedCategories(profile.entityId, "deleted"),
+      profile.companyFlows ? listManagedEmployees(profile.entityId) : Promise.resolve([]),
+      profile.companyFlows
+        ? listManagedEmployees(profile.entityId, "deleted")
+        : Promise.resolve([]),
+    ]);
 
   return (
     <div className="density-compact flex max-w-6xl flex-col gap-[var(--density-section-gap)]">
@@ -39,6 +43,7 @@ export default async function ManagePage({
         categories={categories}
         deletedCategories={deletedCategories}
         employees={employees}
+        deletedEmployees={deletedEmployees}
       />
     </div>
   );

@@ -63,9 +63,6 @@ async function validateAndPrepare(
   if (!DATE_RE.test(input.date)) {
     throw new LedgerValidationError("ledger.invalidTransactionDate", { date: input.date });
   }
-  if (!input.description.trim()) {
-    throw new LedgerValidationError("ledger.descriptionRequired");
-  }
   if (input.postings.length < 2) {
     throw new LedgerValidationError("ledger.postingsNeedAtLeastTwo");
   }
@@ -219,13 +216,14 @@ async function insertTransactionRows(
   existingId?: string,
   revision = 1,
 ) {
+  const description = input.description?.trim() || null;
   const [transaction] = existingId
     ? await tx
         .update(transactions)
         .set({
           entityId: input.entityId,
           date: input.date,
-          description: input.description,
+          description,
           kind: input.kind,
           notes: input.notes ?? null,
           currentRevision: revision,
@@ -237,7 +235,7 @@ async function insertTransactionRows(
         .values({
           entityId: input.entityId,
           date: input.date,
-          description: input.description,
+          description,
           kind: input.kind,
           notes: input.notes ?? null,
           currentRevision: revision,

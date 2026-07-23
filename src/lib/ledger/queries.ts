@@ -46,7 +46,7 @@ export interface TransactionFilters {
 export interface TransactionListRow {
   id: string;
   date: string;
-  description: string;
+  description: string | null;
   kind: TransactionKind;
   /** Single category name when all legs share one; null otherwise. */
   category: string | null;
@@ -445,7 +445,9 @@ export async function hasLikelyRestoreCollision(transactionId: string): Promise<
       and(
         eq(transactions.entityId, deleted.entityId),
         eq(transactions.date, deleted.date),
-        eq(transactions.description, deleted.description),
+        deleted.description === null
+          ? isNull(transactions.description)
+          : eq(transactions.description, deleted.description),
         isNull(transactions.deletedAt),
       ),
     );

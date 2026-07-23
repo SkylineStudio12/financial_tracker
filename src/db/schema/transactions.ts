@@ -24,7 +24,7 @@ export const transactions = pgTable(
       .notNull()
       .references(() => entities.id),
     date: date("date").notNull(),
-    description: text("description").notNull(),
+    description: text("description"),
     kind: transactionKind("kind").notNull().default("standard"),
     notes: text("notes"),
     currentRevision: integer("current_revision").notNull().default(1),

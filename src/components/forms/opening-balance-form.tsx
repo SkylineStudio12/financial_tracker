@@ -42,7 +42,7 @@ export function OpeningBalanceForm({
   const translateError = useTranslatedError();
   const amountMinor = parseAmountToMinor(amount);
   const currency = accounts.find((account) => account.id === accountId)?.currency ?? "RON";
-  const valid = Boolean(accountId && date && description.trim() && amountMinor && amountMinor > 0);
+  const valid = Boolean(accountId && date && amountMinor && amountMinor > 0);
 
   return (
     <form

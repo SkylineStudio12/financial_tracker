@@ -115,12 +115,12 @@ export function StandardForm({
     isSplit && totalMinor !== null && splitSum !== null && splitSum !== totalMinor;
 
   const valid = useMemo(() => {
-    if (!accountId || !date || !description.trim()) return false;
+    if (!accountId || !date) return false;
     if (totalMinor === null || totalMinor <= 0) return false;
     if (splits.some((s) => !s.categoryId)) return false;
     if (isSplit && (splitSum === null || splitSum !== totalMinor)) return false;
     return true;
-  }, [accountId, date, description, totalMinor, splits, isSplit, splitSum]);
+  }, [accountId, date, totalMinor, splits, isSplit, splitSum]);
 
   /** After a modal save: clear the entry fields, keep account/date/direction
    * context, and put the cursor back in the amount for the next receipt. */

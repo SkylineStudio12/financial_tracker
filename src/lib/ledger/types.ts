@@ -46,7 +46,7 @@ export interface TransactionInput {
   entityId: string;
   /** YYYY-MM-DD */
   date: string;
-  description: string;
+  description?: string | null;
   kind: TransactionKind;
   notes?: string | null;
   tagIds?: string[];

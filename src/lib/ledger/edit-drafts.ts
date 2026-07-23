@@ -265,7 +265,7 @@ export async function getTransactionEditDraft(
       expectedRevision: transaction.currentRevision,
       accountId: accountLeg.accountId,
       date: transaction.date,
-      description: transaction.description,
+      description: transaction.description ?? "",
       amount: minorToInput(Math.abs(accountLeg.amount)),
     };
   }
@@ -401,7 +401,7 @@ export async function getTransactionEditDraft(
     storedKind: transaction.kind,
     accountId: bankLeg.accountId,
     date: transaction.date,
-    description: transaction.description,
+    description: transaction.description ?? "",
     direction: bankLeg.amount < 0 ? "expense" : "income",
     total: minorToInput(total),
     splits: equityLegs.map((leg, index) => ({

@@ -65,7 +65,7 @@ async function main() {
       .select()
       .from(transactions)
       .where(eq(transactions.id, buy.transactionId));
-    assert.ok(unchanged.description.startsWith("Buy 10 TST"));
+    assert.ok(unchanged.description?.startsWith("Buy 10 TST"));
     assert.equal(unchanged.date, "2031-02-01");
     ok("editing a trade transaction is refused; the transaction is untouched");
 

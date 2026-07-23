@@ -167,6 +167,39 @@ async function main(): Promise<void> {
   const softwareCategory = env.categoryId("Software subscriptions|expense");
 
   try {
+    await fixture("description is optional, blank values persist as NULL, and text survives", async () => {
+      for (const description of ["", "   ", null, undefined]) {
+        const input = expenseInput(
+          env.entityId,
+          env.bankAccountId,
+          env.equityAccountId,
+          servicesCategory,
+          "placeholder",
+        );
+        input.description = description;
+        const id = track(await createTransaction(input));
+        const [transaction] = await db
+          .select({ description: transactions.description })
+          .from(transactions)
+          .where(eq(transactions.id, id));
+        assert.equal(transaction.description, null);
+      }
+
+      const describedId = track(
+        await createTransaction(
+          expenseInput(
+            env.entityId,
+            env.bankAccountId,
+            env.equityAccountId,
+            servicesCategory,
+            "Existing description",
+          ),
+        ),
+      );
+      const detail = await getTransactionDetail(describedId);
+      assert.equal(detail?.transaction.description, "Existing description");
+    });
+
     await fixture("manual expense delete is balanced, tombstoned, audited, and absent", async () => {
       const id = track(
         await createTransaction(
@@ -597,7 +630,7 @@ async function main(): Promise<void> {
       assert.equal(currentRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
     });
 
-    assert.equal(fixtures, 10);
+    assert.equal(fixtures, 11);
   } finally {
     const ids = [...fixtureTransactionIds];
     if (ids.length > 0) {
@@ -607,7 +640,7 @@ async function main(): Promise<void> {
     const residue = await db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(eq(transactions.entityId, env.entityId));
     assert.equal(residue[0].count, 0);
   }
-  console.log("PASS fixtures 1-10 and zero fixture residue");
+  console.log("PASS fixtures 1-11 and zero fixture residue");
 }
 
 main()

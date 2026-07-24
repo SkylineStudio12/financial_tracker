@@ -136,6 +136,7 @@ function profileFields(employee: ManagedEmployee): FormFields {
 export function ManagementClient({
   profileSlug,
   entityId,
+  salaryProfileReferenceDate,
   company,
   accounts,
   deletedAccounts,
@@ -146,6 +147,7 @@ export function ManagementClient({
 }: {
   profileSlug: string;
   entityId: string;
+  salaryProfileReferenceDate: string;
   company: boolean;
   accounts: ManagedAccount[];
   deletedAccounts: ManagedAccount[];
@@ -293,6 +295,7 @@ export function ManagementClient({
           profileSlug,
           entityId,
           dialog.employee.id,
+          salaryProfileReferenceDate,
           { name: fields.name, isActive: fields.isActive },
           values as SalaryProfileValues | null,
         );
@@ -314,7 +317,12 @@ export function ManagementClient({
           ? await deleteCategoryAction(profileSlug, entityId, deleteTarget.id)
           : deleteTarget.type === "employee"
             ? await deleteEmployeeAction(profileSlug, entityId, deleteTarget.id)
-            : await deleteSalaryProfileAction(profileSlug, entityId, deleteTarget.id);
+            : await deleteSalaryProfileAction(
+                profileSlug,
+                entityId,
+                deleteTarget.id,
+                salaryProfileReferenceDate,
+              );
       if ("error" in result) setError(result.error);
       else {
         setError(null);

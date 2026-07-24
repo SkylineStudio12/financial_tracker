@@ -301,6 +301,7 @@ export function SalaryFlow({
                       const prefill = await getEmployeeSalaryPrefillAction(
                         companyId,
                         nextEmployeeId,
+                        `${payMonth}-01`,
                       );
                       if ("error" in prefill) {
                         if (prefillRequest.current !== request) return;

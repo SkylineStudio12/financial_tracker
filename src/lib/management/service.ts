@@ -1,4 +1,17 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -113,7 +126,6 @@ function validateProfile(values: SalaryProfileValues): void {
     ["gross", values.grossMinor],
     ["cas", values.casMinor],
     ["cass", values.cassMinor],
-    ["incomeTax", values.incomeTaxMinor],
     ["cam", values.camMinor],
     ["net", values.netMinor],
   ] as const;
@@ -121,6 +133,9 @@ function validateProfile(values: SalaryProfileValues): void {
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new LedgerValidationError("manage.salaryProfileAmountInvalid", { field });
     }
+  }
+  if (!Number.isSafeInteger(values.incomeTaxMinor) || values.incomeTaxMinor < 0) {
+    throw new LedgerValidationError("manage.salaryProfileAmountInvalid", { field: "incomeTax" });
   }
   if (!Number.isSafeInteger(values.personalDeductionMinor) || values.personalDeductionMinor < 0) {
     throw new LedgerValidationError("manage.salaryProfileAmountInvalid", {
@@ -290,6 +305,7 @@ export async function listEmployeeOptions(entityId: string): Promise<EmployeeOpt
 
 export async function listManagedEmployees(
   entityId: string,
+  referenceDate: string,
   mode: "live" | "deleted" = "live",
 ): Promise<ManagedEmployee[]> {
   await requireCompany(entityId);
@@ -299,6 +315,11 @@ export async function listManagedEmployees(
       name: employees.name,
       isActive: employees.isActive,
       deletedAt: employees.deletedAt,
+      hasAnyProfile: sql<boolean>`exists (
+        SELECT 1
+        FROM public.employee_salary_profiles any_profile
+        WHERE any_profile.employee_id = ${employees.id}
+      )`,
       grossMinor: employeeSalaryProfiles.grossMinor,
       casMinor: employeeSalaryProfiles.casMinor,
       cassMinor: employeeSalaryProfiles.cassMinor,
@@ -308,7 +329,19 @@ export async function listManagedEmployees(
       personalDeductionMinor: employeeSalaryProfiles.personalDeductionMinor,
     })
     .from(employees)
-    .leftJoin(employeeSalaryProfiles, eq(employeeSalaryProfiles.employeeId, employees.id))
+    .leftJoin(
+      employeeSalaryProfiles,
+      and(
+        eq(employeeSalaryProfiles.employeeId, employees.id),
+        lte(employeeSalaryProfiles.effectiveFrom, referenceDate),
+        sql`${employeeSalaryProfiles.effectiveFrom} = (
+          SELECT max(profile.effective_from)
+          FROM public.employee_salary_profiles profile
+          WHERE profile.employee_id = ${employees.id}
+            AND profile.effective_from <= ${referenceDate}
+        )`,
+      ),
+    )
     .where(
       and(
         eq(employees.entityId, entityId),
@@ -316,29 +349,35 @@ export async function listManagedEmployees(
       ),
     )
     .orderBy(asc(employees.name));
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    isActive: row.isActive,
-    deletedAt: row.deletedAt?.toISOString() ?? null,
-    profile:
-      row.grossMinor === null
-        ? null
-        : {
-            grossMinor: row.grossMinor,
-            casMinor: row.casMinor!,
-            cassMinor: row.cassMinor!,
-            incomeTaxMinor: row.incomeTaxMinor!,
-            camMinor: row.camMinor!,
-            netMinor: row.netMinor!,
-            personalDeductionMinor: row.personalDeductionMinor!,
-          },
-  }));
+  return rows.map((row) => {
+    if (row.grossMinor === null && row.hasAnyProfile) {
+      throw new LedgerValidationError("manage.salaryProfileNotFound");
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      isActive: row.isActive,
+      deletedAt: row.deletedAt?.toISOString() ?? null,
+      profile:
+        row.grossMinor === null
+          ? null
+          : {
+              grossMinor: row.grossMinor,
+              casMinor: row.casMinor!,
+              cassMinor: row.cassMinor!,
+              incomeTaxMinor: row.incomeTaxMinor!,
+              camMinor: row.camMinor!,
+              netMinor: row.netMinor!,
+              personalDeductionMinor: row.personalDeductionMinor!,
+            },
+    };
+  });
 }
 
 export async function getEmployeeSalaryPrefill(
   entityId: string,
   employeeId: string,
+  referenceDate: string,
 ): Promise<{ employee: EmployeeOption; profile: SalaryProfileValues | null }> {
   const employee = await requireEmployee(employeeId, entityId);
   if (!employee.isActive) {
@@ -347,7 +386,22 @@ export async function getEmployeeSalaryPrefill(
   const [profile] = await db
     .select()
     .from(employeeSalaryProfiles)
-    .where(eq(employeeSalaryProfiles.employeeId, employeeId));
+    .where(
+      and(
+        eq(employeeSalaryProfiles.employeeId, employeeId),
+        lte(employeeSalaryProfiles.effectiveFrom, referenceDate),
+      ),
+    )
+    .orderBy(desc(employeeSalaryProfiles.effectiveFrom))
+    .limit(1);
+  if (!profile) {
+    const [futureProfile] = await db
+      .select({ effectiveFrom: employeeSalaryProfiles.effectiveFrom })
+      .from(employeeSalaryProfiles)
+      .where(eq(employeeSalaryProfiles.employeeId, employeeId))
+      .limit(1);
+    if (futureProfile) throw new LedgerValidationError("manage.salaryProfileNotFound");
+  }
   return {
     employee: { id: employee.id, name: employee.name },
     profile: profile
@@ -497,6 +551,7 @@ export async function restoreEmployee(employeeId: string, entityId: string): Pro
 export async function saveSalaryProfile(
   employeeId: string,
   entityId: string,
+  referenceDate: string,
   values: SalaryProfileValues,
 ): Promise<void> {
   validateProfile(values);
@@ -517,15 +572,35 @@ export async function saveSalaryProfile(
     const [prior] = await tx
       .select()
       .from(employeeSalaryProfiles)
-      .where(eq(employeeSalaryProfiles.employeeId, employeeId))
+      .where(
+        and(
+          eq(employeeSalaryProfiles.employeeId, employeeId),
+          lte(employeeSalaryProfiles.effectiveFrom, referenceDate),
+        ),
+      )
+      .orderBy(desc(employeeSalaryProfiles.effectiveFrom))
+      .limit(1)
       .for("update");
     if (prior) {
       await tx
         .update(employeeSalaryProfiles)
         .set({ ...values, updatedAt: new Date() })
-        .where(eq(employeeSalaryProfiles.employeeId, employeeId));
+        .where(
+          and(
+            eq(employeeSalaryProfiles.employeeId, employeeId),
+            eq(employeeSalaryProfiles.effectiveFrom, prior.effectiveFrom),
+          ),
+        );
     } else {
-      await tx.insert(employeeSalaryProfiles).values({ employeeId, ...values });
+      const [futureProfile] = await tx
+        .select({ effectiveFrom: employeeSalaryProfiles.effectiveFrom })
+        .from(employeeSalaryProfiles)
+        .where(eq(employeeSalaryProfiles.employeeId, employeeId))
+        .limit(1);
+      if (futureProfile) throw new LedgerValidationError("manage.salaryProfileNotFound");
+      await tx
+        .insert(employeeSalaryProfiles)
+        .values({ employeeId, effectiveFrom: referenceDate, ...values });
     }
     await tx.insert(auditLog).values({
       tableName: "employee_salary_profiles",
@@ -536,7 +611,11 @@ export async function saveSalaryProfile(
   });
 }
 
-export async function deleteSalaryProfile(employeeId: string, entityId: string): Promise<void> {
+export async function deleteSalaryProfile(
+  employeeId: string,
+  entityId: string,
+  referenceDate: string,
+): Promise<void> {
   await requireCompany(entityId);
   await db.transaction(async (tx) => {
     const [employee] = await tx
@@ -553,12 +632,24 @@ export async function deleteSalaryProfile(employeeId: string, entityId: string):
     const [prior] = await tx
       .select()
       .from(employeeSalaryProfiles)
-      .where(eq(employeeSalaryProfiles.employeeId, employeeId))
+      .where(
+        and(
+          eq(employeeSalaryProfiles.employeeId, employeeId),
+          lte(employeeSalaryProfiles.effectiveFrom, referenceDate),
+        ),
+      )
+      .orderBy(desc(employeeSalaryProfiles.effectiveFrom))
+      .limit(1)
       .for("update");
     if (!prior) throw new LedgerValidationError("manage.salaryProfileNotFound");
     await tx
       .delete(employeeSalaryProfiles)
-      .where(eq(employeeSalaryProfiles.employeeId, employeeId));
+      .where(
+        and(
+          eq(employeeSalaryProfiles.employeeId, employeeId),
+          eq(employeeSalaryProfiles.effectiveFrom, prior.effectiveFrom),
+        ),
+      );
     await tx.insert(auditLog).values({
       tableName: "employee_salary_profiles",
       rowId: employeeId,

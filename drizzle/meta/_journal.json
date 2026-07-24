@@ -120,6 +120,13 @@
       "when": 1784806896726,
       "tag": "0016_perpetual_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784833471312,
+      "tag": "0017_flawless_the_initiative",
+      "breakpoints": true
     }
   ]
 }

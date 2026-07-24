@@ -66,6 +66,7 @@ import {
 } from "./service";
 
 const COMPANY_ID = ENTITY_IDS.skyline;
+const PROFILE_REFERENCE_DATE = "2026-07-23";
 const createdCategoryIds: string[] = [];
 const createdAccountIds: string[] = [];
 const createdEmployeeIds: string[] = [];
@@ -169,7 +170,12 @@ async function main(): Promise<void> {
       `PASS fixture 1 employees CRUD: duplicate refused, rename/inactivate/delete audited, soft-deleted name recreated as ${recreatedEmployee}`,
     );
 
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, canonicalProfile);
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      canonicalProfile,
+    );
     const [stored] = await db
       .select()
       .from(employeeSalaryProfiles)
@@ -188,14 +194,19 @@ async function main(): Promise<void> {
     );
     await expectCode(
       () =>
-        saveSalaryProfile(recreatedEmployee, COMPANY_ID, {
+        saveSalaryProfile(recreatedEmployee, COMPANY_ID, PROFILE_REFERENCE_DATE, {
           ...canonicalProfile,
           netMinor: canonicalProfile.netMinor + 1,
         }),
       "manage.salaryProfileNetMismatch",
     );
     const updatedProfile = { ...canonicalProfile, personalDeductionMinor: 45_000 };
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, updatedProfile);
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      updatedProfile,
+    );
     const auditRows = await db
       .select({ previousValues: auditLog.previousValues })
       .from(auditLog)
@@ -210,9 +221,14 @@ async function main(): Promise<void> {
       (auditRows.at(-1)?.previousValues as SalaryProfileValues).personalDeductionMinor,
       62_800,
     );
-    await deleteSalaryProfile(recreatedEmployee, COMPANY_ID);
+    await deleteSalaryProfile(recreatedEmployee, COMPANY_ID, PROFILE_REFERENCE_DATE);
     assert.equal(await db.$count(employeeSalaryProfiles), 0);
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, canonicalProfile);
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      canonicalProfile,
+    );
     console.log(
       "PASS fixture 2 salary profile: 450000/112500/45000/23000/10100/269500/62800 stored verbatim; one-ban mismatch refused; audit restored prior seven values",
     );
@@ -222,13 +238,18 @@ async function main(): Promise<void> {
       isActive: true,
     });
     assert.deepEqual(
-      (await listManagedEmployees(COMPANY_ID)).find(
+      (await listManagedEmployees(COMPANY_ID, PROFILE_REFERENCE_DATE)).find(
         (employee) => employee.id === recreatedEmployee,
       )?.profile,
       canonicalProfile,
     );
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, revisedProfile);
-    const salaryOnly = (await listManagedEmployees(COMPANY_ID)).find(
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      revisedProfile,
+    );
+    const salaryOnly = (await listManagedEmployees(COMPANY_ID, PROFILE_REFERENCE_DATE)).find(
       (employee) => employee.id === recreatedEmployee,
     );
     assert.equal(salaryOnly?.name, "Fixture Combined Name Only");
@@ -237,8 +258,13 @@ async function main(): Promise<void> {
       name: "Fixture Combined Both",
       isActive: false,
     });
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, combinedProfile);
-    const bothUpdated = (await listManagedEmployees(COMPANY_ID)).find(
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      combinedProfile,
+    );
+    const bothUpdated = (await listManagedEmployees(COMPANY_ID, PROFILE_REFERENCE_DATE)).find(
       (employee) => employee.id === recreatedEmployee,
     );
     assert.deepEqual(
@@ -257,26 +283,40 @@ async function main(): Promise<void> {
       name: "Fixture Employee Renamed",
       isActive: true,
     });
-    await saveSalaryProfile(recreatedEmployee, COMPANY_ID, canonicalProfile);
+    await saveSalaryProfile(
+      recreatedEmployee,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      canonicalProfile,
+    );
     console.log(
       "PASS fixture 2a combined edit: name-only preserved profile; salary-only preserved name; both persisted through updateEmployee + saveSalaryProfile",
     );
 
     const restoreEmployeeId = await createEmployee(COMPANY_ID, "Fixture Restore Employee");
     createdEmployeeIds.push(restoreEmployeeId);
-    await saveSalaryProfile(restoreEmployeeId, COMPANY_ID, revisedProfile);
+    await saveSalaryProfile(
+      restoreEmployeeId,
+      COMPANY_ID,
+      PROFILE_REFERENCE_DATE,
+      revisedProfile,
+    );
     await updateEmployee(restoreEmployeeId, COMPANY_ID, {
       name: "Fixture Restore Employee",
       isActive: false,
     });
     await softDeleteEmployee(restoreEmployeeId, COMPANY_ID);
-    const archivedEmployee = (await listManagedEmployees(COMPANY_ID, "deleted")).find(
+    const archivedEmployee = (
+      await listManagedEmployees(COMPANY_ID, PROFILE_REFERENCE_DATE, "deleted")
+    ).find(
       (employee) => employee.id === restoreEmployeeId,
     );
     assert.ok(archivedEmployee?.deletedAt);
     assert.deepEqual(archivedEmployee.profile, revisedProfile);
     await restoreEmployee(restoreEmployeeId, COMPANY_ID);
-    const restoredEmployee = (await listManagedEmployees(COMPANY_ID)).find(
+    const restoredEmployee = (
+      await listManagedEmployees(COMPANY_ID, PROFILE_REFERENCE_DATE)
+    ).find(
       (employee) => employee.id === restoreEmployeeId,
     );
     assert.equal(restoredEmployee?.deletedAt, null);
@@ -580,7 +620,11 @@ async function main(): Promise<void> {
     assert.equal(fromRepeat.source, "repeat-last");
     const blank = await resolveAutomaticSalaryPrefill(null, async () => null);
     assert.equal(blank.source, "blank");
-    const loadedProfile = await getEmployeeSalaryPrefill(COMPANY_ID, recreatedEmployee);
+    const loadedProfile = await getEmployeeSalaryPrefill(
+      COMPANY_ID,
+      recreatedEmployee,
+      PROFILE_REFERENCE_DATE,
+    );
     assert.deepEqual(loadedProfile.profile, canonicalProfile);
     console.log(
       "PASS fixture 4 prefill precedence: profile wins without repeat call; no profile uses repeat-last; neither stays blank; edit guard remains profile-free",

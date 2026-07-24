@@ -40,8 +40,12 @@ function refreshManage(profileSlug: string): void {
   revalidatePath(`/p/${profileSlug}/manage`);
 }
 
-export async function getEmployeeSalaryPrefillAction(entityId: string, employeeId: string) {
-  return runAction(() => getEmployeeSalaryPrefill(entityId, employeeId));
+export async function getEmployeeSalaryPrefillAction(
+  entityId: string,
+  employeeId: string,
+  referenceDate: string,
+) {
+  return runAction(() => getEmployeeSalaryPrefill(entityId, employeeId, referenceDate));
 }
 
 export async function createEmployeeAction(
@@ -69,12 +73,13 @@ export async function updateEmployeeDetailsAction(
   profileSlug: string,
   entityId: string,
   employeeId: string,
+  referenceDate: string,
   input: { name: string; isActive: boolean },
   profile: SalaryProfileValues | null,
 ): Promise<ActionResult> {
   const result = await runAction(async () => {
     await updateEmployee(employeeId, entityId, input);
-    if (profile) await saveSalaryProfile(employeeId, entityId, profile);
+    if (profile) await saveSalaryProfile(employeeId, entityId, referenceDate, profile);
   });
   if ("ok" in result) refreshManage(profileSlug);
   return result;
@@ -104,9 +109,12 @@ export async function saveSalaryProfileAction(
   profileSlug: string,
   entityId: string,
   employeeId: string,
+  referenceDate: string,
   values: SalaryProfileValues,
 ): Promise<ActionResult> {
-  const result = await runAction(() => saveSalaryProfile(employeeId, entityId, values));
+  const result = await runAction(() =>
+    saveSalaryProfile(employeeId, entityId, referenceDate, values),
+  );
   if ("ok" in result) refreshManage(profileSlug);
   return result;
 }
@@ -115,8 +123,9 @@ export async function deleteSalaryProfileAction(
   profileSlug: string,
   entityId: string,
   employeeId: string,
+  referenceDate: string,
 ): Promise<ActionResult> {
-  const result = await runAction(() => deleteSalaryProfile(employeeId, entityId));
+  const result = await runAction(() => deleteSalaryProfile(employeeId, entityId, referenceDate));
   if ("ok" in result) refreshManage(profileSlug);
   return result;
 }

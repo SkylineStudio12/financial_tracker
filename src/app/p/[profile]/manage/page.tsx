@@ -19,15 +19,18 @@ export default async function ManagePage({
   const profile = getProfile(slug);
   if (!profile) notFound();
   const t = await getTranslations("manage");
+  const referenceDate = new Date().toISOString().slice(0, 10);
   const [accounts, deletedAccounts, categories, deletedCategories, employees, deletedEmployees] =
     await Promise.all([
       listManagedAccounts(profile.entityId),
       listManagedAccounts(profile.entityId, "deleted"),
       listManagedCategories(profile.entityId),
       listManagedCategories(profile.entityId, "deleted"),
-      profile.companyFlows ? listManagedEmployees(profile.entityId) : Promise.resolve([]),
       profile.companyFlows
-        ? listManagedEmployees(profile.entityId, "deleted")
+        ? listManagedEmployees(profile.entityId, referenceDate)
+        : Promise.resolve([]),
+      profile.companyFlows
+        ? listManagedEmployees(profile.entityId, referenceDate, "deleted")
         : Promise.resolve([]),
     ]);
 
@@ -37,6 +40,7 @@ export default async function ManagePage({
       <ManagementClient
         profileSlug={profile.slug}
         entityId={profile.entityId}
+        salaryProfileReferenceDate={referenceDate}
         company={profile.companyFlows}
         accounts={accounts}
         deletedAccounts={deletedAccounts}

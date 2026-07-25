@@ -17,7 +17,9 @@ import { pool } from "@/db";
  * This test (1) proves that Postgres behaviour directly, and (2) asserts 0009
  * still uses the RECREATE form — so a future `drizzle-kit generate` that
  * rewrites it to ADD VALUE (the default drizzle output) fails here instead of
- * on a production migration.
+ * on a production migration. (3) asserts the same for migration 0018's
+ * tax_config_parameter, whose re-added kind check USEs 'micro_revenue_tax'
+ * in the same wrapping transaction.
  */
 async function main(): Promise<void> {
   const databaseName = decodeURIComponent(new URL(process.env.DATABASE_URL!).pathname.slice(1));
@@ -83,7 +85,78 @@ async function main(): Promise<void> {
     "0009 must NOT ADD VALUE the import_row_status values it uses in the same transaction",
   );
 
+  // (3) 0018 must use the RECREATE form for tax_config_parameter.
+  const migration0018 = readFileSync(
+    join(import.meta.dirname, "0018_sharp_hulk.sql"),
+    "utf8",
+  );
+  assert.ok(
+    migration0018.includes(
+      'ALTER TYPE "public"."tax_config_parameter" RENAME TO "tax_config_parameter_old"',
+    ),
+    "0018 must RECREATE tax_config_parameter (rename to _old), not ADD VALUE",
+  );
+  assert.ok(
+    migration0018.includes(
+      `CREATE TYPE "public"."tax_config_parameter" AS ENUM('cas_employee_rate', 'cass_employee_rate', 'cam_employer_rate', 'income_tax_rate', 'dividend_tax_rate', 'minimum_wage', 'personal_deduction', 'cass_investment_brackets', 'micro_revenue_tax')`,
+    ),
+    "0018 must recreate tax_config_parameter with all 9 members including micro_revenue_tax",
+  );
+  assert.ok(
+    migration0018.includes(
+      'ALTER TABLE "tax_config" ALTER COLUMN "parameter" TYPE "public"."tax_config_parameter" USING "parameter"::text::"public"."tax_config_parameter"',
+    ),
+    "0018 must re-cast tax_config.parameter through text onto the recreated type",
+  );
+  assert.ok(
+    migration0018.includes('DROP TYPE "public"."tax_config_parameter_old"'),
+    "0018 must drop the renamed old tax_config_parameter type",
+  );
+  assert.ok(
+    !migration0018.includes('ALTER TYPE "public"."tax_config_parameter" ADD VALUE') &&
+      !migration0018.includes(`ADD VALUE 'micro_revenue_tax'`),
+    "0018 must NOT ADD VALUE the tax_config_parameter value it uses in the same transaction",
+  );
+  const newTypeAt = migration0018.indexOf('CREATE TYPE "public"."tax_config_parameter" AS ENUM(');
+  const reAddedKindCheckAt = migration0018.indexOf(
+    'ADD CONSTRAINT "tax_config_parameter_kind_check"',
+  );
+  assert.ok(
+    newTypeAt !== -1 && reAddedKindCheckAt > newTypeAt,
+    "0018 must re-ADD tax_config_parameter_kind_check only after the recreated type exists",
+  );
+  // tax_config_bracket_parent_trigger's column list (OF parameter, value_kind)
+  // is a dependency on "parameter" that blocks ALTER COLUMN ... TYPE, so 0018
+  // must drop it before the re-cast and recreate it (0008's definition) after.
+  const triggerDropAt = migration0018.indexOf(
+    'DROP TRIGGER "tax_config_bracket_parent_trigger" ON "tax_config"',
+  );
+  const triggerRecreateAt = migration0018.indexOf(
+    'CREATE CONSTRAINT TRIGGER "tax_config_bracket_parent_trigger"',
+  );
+  const reCastAt = migration0018.indexOf(
+    'ALTER TABLE "tax_config" ALTER COLUMN "parameter" TYPE "public"."tax_config_parameter"',
+  );
+  assert.ok(
+    triggerDropAt !== -1 && triggerDropAt < reCastAt,
+    "0018 must DROP tax_config_bracket_parent_trigger before the parameter re-cast",
+  );
+  assert.ok(
+    triggerRecreateAt > reCastAt,
+    "0018 must re-CREATE tax_config_bracket_parent_trigger after the parameter re-cast",
+  );
+  assert.ok(
+    migration0018.includes(
+      'CREATE CONSTRAINT TRIGGER "tax_config_bracket_parent_trigger"\n' +
+        'AFTER INSERT OR UPDATE OF parameter, value_kind ON "tax_config"\n' +
+        'DEFERRABLE INITIALLY DEFERRED\n' +
+        'FOR EACH ROW EXECUTE FUNCTION "tax_config_bracket_trigger"();',
+    ),
+    "0018 must recreate tax_config_bracket_parent_trigger with 0008's exact definition",
+  );
+
   console.log("PASS migration enum safety: 0009 recreates import_row_status; ADD VALUE would 55P04");
+  console.log("PASS migration enum safety: 0018 recreates tax_config_parameter for micro_revenue_tax");
 }
 
 main()

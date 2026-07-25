@@ -13,6 +13,7 @@ export const TAX_CONFIG_VALUE_KIND = {
   minimum_wage: "amount_minor",
   personal_deduction: "amount_minor",
   cass_investment_brackets: "bracket_set",
+  micro_revenue_tax: "rate_bps",
 } as const satisfies Record<TaxConfigParameter, TaxConfigValueKind>;
 
 export interface TaxConfigWindowInput {

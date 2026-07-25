@@ -78,7 +78,8 @@ export const taxConfig = pgTable(
           'cass_employee_rate',
           'cam_employer_rate',
           'income_tax_rate',
-          'dividend_tax_rate'
+          'dividend_tax_rate',
+          'micro_revenue_tax'
         ) and ${table.valueKind} = 'rate_bps'
       ) or (
         ${table.parameter} in ('minimum_wage', 'personal_deduction')

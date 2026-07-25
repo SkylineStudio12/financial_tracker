@@ -69,6 +69,7 @@ export const taxConfigParameter = pgEnum("tax_config_parameter", [
   "minimum_wage",
   "personal_deduction",
   "cass_investment_brackets",
+  "micro_revenue_tax",
 ]);
 
 export const taxConfigValueKind = pgEnum("tax_config_value_kind", [

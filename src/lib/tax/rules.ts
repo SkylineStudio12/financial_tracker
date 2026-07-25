@@ -13,6 +13,15 @@ export interface ActiveRule {
   notes: string | null;
 }
 
+export interface ActiveTaxRule {
+  ruleType: TaxRuleType;
+  rateBps: number;
+  validFrom: string;
+  thresholdMin: number | null;
+  thresholdMax: number | null;
+  notes: string | null;
+}
+
 /** The rule of a given type active on a date (validity window match). */
 export async function getActiveRule(type: TaxRuleType, date: string): Promise<ActiveRule> {
   const [rule] = await db
@@ -37,6 +46,28 @@ export async function getActiveRule(type: TaxRuleType, date: string): Promise<Ac
     throw new LedgerValidationError("tax.taxRuleMissing", { type, date });
   }
   return rule;
+}
+
+/** The latest active rule for each type, using getActiveRule's validity predicate. */
+export async function listActiveTaxRules(date: string): Promise<ActiveTaxRule[]> {
+  return db
+    .selectDistinctOn([taxRules.ruleType], {
+      ruleType: taxRules.ruleType,
+      rateBps: taxRules.rateBps,
+      validFrom: taxRules.validFrom,
+      thresholdMin: taxRules.thresholdMin,
+      thresholdMax: taxRules.thresholdMax,
+      notes: taxRules.notes,
+    })
+    .from(taxRules)
+    .where(
+      and(
+        lte(taxRules.validFrom, date),
+        or(isNull(taxRules.validTo), gte(taxRules.validTo, date)),
+        isNull(taxRules.deletedAt),
+      ),
+    )
+    .orderBy(taxRules.ruleType, desc(taxRules.validFrom));
 }
 
 export const quarterOf = (date: string): number =>

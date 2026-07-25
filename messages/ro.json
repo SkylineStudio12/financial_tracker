@@ -578,6 +578,24 @@
     "keepEditing": "Continuă editarea",
     "discard": "Renunță"
   },
+  "taxRules": {
+    "title": "Reguli fiscale",
+    "groupSalary": "Salariu",
+    "groupDividend": "Dividende",
+    "groupMicro": "Venit micro",
+    "label": {
+      "salary_cas": "CAS (pensie)",
+      "salary_cass": "CASS (sănătate)",
+      "salary_income_tax": "Impozit pe venit",
+      "cam": "CAM (angajator)",
+      "dividend_tax": "Impozit pe dividende",
+      "cass_dividend": "CASS pe dividende",
+      "micro_revenue_tax": "Impozit pe venitul micro"
+    },
+    "effectiveFrom": "Valabil de la",
+    "rate": "Cotă",
+    "empty": "Nicio regulă fiscală configurată"
+  },
   "icons": {
     "Home": "Casă",
     "Building2": "Clădire",

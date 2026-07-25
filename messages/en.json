@@ -578,6 +578,24 @@
     "keepEditing": "Keep editing",
     "discard": "Discard"
   },
+  "taxRules": {
+    "title": "Tax rules",
+    "groupSalary": "Salary",
+    "groupDividend": "Dividend",
+    "groupMicro": "Micro-revenue",
+    "label": {
+      "salary_cas": "CAS (pension)",
+      "salary_cass": "CASS (health)",
+      "salary_income_tax": "Income tax",
+      "cam": "CAM (employer)",
+      "dividend_tax": "Dividend tax",
+      "cass_dividend": "CASS on dividends",
+      "micro_revenue_tax": "Micro-revenue tax"
+    },
+    "effectiveFrom": "Effective from",
+    "rate": "Rate",
+    "empty": "No tax rules configured"
+  },
   "icons": {
     "Home": "Home",
     "Building2": "Building",

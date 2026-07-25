@@ -128,7 +128,10 @@ Judgment flags:
   2 Domain semantics: …
   3 Abstraction fit: …
   4 Scope deviations: …
-Proposed lessons: none | <draft entries for docs/lessons.md — await ratification>
+Reviewer verdict (Tier 2–3, verbatim from .claude/agents/unit-reviewer.md):
+  <the reviewer's block, unedited — a CLAIM per L-0020/L-0021, gating nothing>
+Response to findings: <per finding — agree+fixed / agree+deferred / dispute+evidence>
+Lesson candidates: none | <appended to docs/lessons/proposed.md AND quoted here>
 ```
 
 Tier 3 adds: `Invariants touched: <list>` and the explicit line

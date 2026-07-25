@@ -30,6 +30,21 @@ SELECT current_database() AS database_name,
 
 Expected: `financial_tracker` / `::1` / `5432`.
 
+## Step 0.5 — load the lessons (executable, do this before any work)
+
+Read, don't skim-from-memory. Report the entry count you loaded.
+
+```sh
+wc -l docs/lessons.md docs/lessons/claude-code.md docs/lessons/proposed.md
+grep -c '^### L-\|^## L-' docs/lessons.md
+```
+
+Then: read `docs/lessons.md` (rules + index + every entry), read your
+harness's scoped file in full — `docs/lessons/claude-code.md` for CC/Fable,
+`docs/lessons/codex.md` for Codex tiers — and skim `docs/lessons/proposed.md`
+for open candidates in your lane (they are NOT in force; know they exist so
+you neither re-propose nor act on them).
+
 ## Section A — ANCHORS (STOP on unexpected change)
 
 ### A1 — Git state (ANCHOR)

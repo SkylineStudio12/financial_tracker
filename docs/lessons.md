@@ -21,29 +21,50 @@ cost it twice. **Read this file before starting any unit of work.**
 6. **Supersede, don't rewrite.** A wrong lesson gets a new entry that
    supersedes it (`status: superseded by L-NNNN`); history stays honest.
 
+## Where lessons live
+
+This file is the **shared ratified ledger** and the master index for every
+ratified lesson, whatever file it lives in. Alongside it:
+
+- `lessons/claude-code.md` — ratified lessons scoped to the CC/Fable harness;
+- `lessons/codex.md` — ratified lessons scoped to Codex agents;
+- `lessons/proposed.md` — **staging**: candidates awaiting ratification, the
+  only lessons file agents may write to, and append-only at that.
+
+Scoping rule: a lesson is scoped only when it is about that harness's
+*behavior or tooling*; domain, repo, and process lessons stay shared. When
+in doubt, shared. One L-number sequence spans all ratified files, allocated
+at ratification. Where a scoped lesson contradicts a shared one, the shared
+one wins until the owner rules.
+
 ## Index
 
-| ID | Category | Lesson (short) |
-|---|---|---|
-| L-0001 | styling | Focus states are part of "done" for interactive elements |
-| L-0002 | primitives | Every `shadcn` add/init must be reconciled to our tokens |
-| L-0003 | primitives | Strip `dark:` and exit-animation classes from imported primitives |
-| L-0004 | base-ui | Popups need the animations-disabled flag; refresh after close completes |
-| L-0005 | react | `autoFocus` doesn't fire on hydration — focus via effect |
-| L-0006 | verification | Headless tabs can't hold window focus — prove `:focus` via compiled CSS |
-| L-0007 | process | One concern per commit; untangle mixed files before committing |
-| L-0008 | verification | Synthetic pointer events need `pointerType: "mouse"` for Base UI |
-| L-0009 | tooling | Token value changes require `rm -rf .next` — HMR won't pick them up |
-| L-0010 | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
-| L-0011 | db | Partial unique index on a soft-deleted table must scope to live rows |
-| L-0012 | ledger | Generic ledger mutations must account for dependent structures |
-| L-0013 | tooling | i18n tsc key-completeness masked by incremental build cache |
-| L-0014 | i18n | Code-only error classes must convert all producers |
-| L-0015 | import | Verify external rate and ratio direction empirically |
-| L-0016 | assumption | Sample-based inferences must be labeled as hypotheses |
-| L-0017 | process | Ambiguous continuation does not waive a STOP gate |
-| L-0018 | provenance | Untracked material keeps its provenance label |
-| L-0019 | review | Tier-3 checkpoint evidence must be durable in the repo |
+| ID | Scope | Category | Lesson (short) |
+|---|---|---|---|
+| L-0001 | shared | styling | Focus states are part of "done" for interactive elements |
+| L-0002 | shared | primitives | Every `shadcn` add/init must be reconciled to our tokens |
+| L-0003 | shared | primitives | Strip `dark:` and exit-animation classes from imported primitives |
+| L-0004 | shared | base-ui | Popups need the animations-disabled flag; refresh after close completes |
+| L-0005 | shared | react | `autoFocus` doesn't fire on hydration — focus via effect |
+| L-0006 | shared | verification | Headless tabs can't hold window focus — prove `:focus` via compiled CSS |
+| L-0007 | shared | process | One concern per commit; untangle mixed files before committing |
+| L-0008 | shared | verification | Synthetic pointer events need `pointerType: "mouse"` for Base UI |
+| L-0009 | shared | tooling | Token value changes require `rm -rf .next` — HMR won't pick them up |
+| L-0010 | shared | assumption | Long-ref import dedup key: stability unverified AND coverage known-partial |
+| L-0011 | shared | db | Partial unique index on a soft-deleted table must scope to live rows |
+| L-0012 | shared | ledger | Generic ledger mutations must account for dependent structures |
+| L-0013 | shared | tooling | i18n tsc key-completeness masked by incremental build cache |
+| L-0014 | shared | i18n | Code-only error classes must convert all producers |
+| L-0015 | shared | import | Verify external rate and ratio direction empirically |
+| L-0016 | shared | assumption | Sample-based inferences must be labeled as hypotheses |
+| L-0017 | shared | process | Ambiguous continuation does not waive a STOP gate |
+| L-0018 | shared | provenance | Untracked material keeps its provenance label |
+| L-0019 | shared | review | Tier-3 checkpoint evidence must be durable in the repo |
+
+Every entry above and every entry below is `shared`; the scoped files start
+empty and fill only through ratification. **Known gap (not fixed here):**
+this index stops at L-0019 while the ledger runs to L-0036 — indexing the
+remainder is a separate owner-gated pass.
 
 ---
 

@@ -10,19 +10,34 @@ Supervised loop — the owner accepts every unit of work and ratifies every
 lesson; nothing reviews, learns, or commits autonomously.
 
 1. **Before starting any unit of work:** read `docs/lessons.md` (rules +
-   entries) so known gotchas are applied, not rediscovered. For every
-   session-start pass, use `docs/session-start-verification.md` as the
-   canonical checklist and report its read-only results before proceeding.
+   entries) plus your harness's scoped file (`docs/lessons/claude-code.md`
+   or `docs/lessons/codex.md`) so known gotchas are applied, not
+   rediscovered. For every session-start pass, use
+   `docs/session-start-verification.md` as the canonical checklist and
+   report its read-only results before proceeding.
 2. **When a unit is finished:** run the review pass in
    `docs/review-standards.md` — gate on the OBJECTIVE items (tsc, eslint,
    token greps, scope guard, checklist), answer the four JUDGMENT flags, post
    the report in its format, and wait for owner acceptance. Tier-3 paths
    (ledger service/actions/flow-actions, tax, fx, db, drizzle) escalate to
-   the owner by default.
-3. **Lessons:** the review may end with *proposed* ledger entries; the owner
-   ratifies before anything is appended to `docs/lessons.md`.
+   the owner by default. For Tier 2–3 units the review pass also includes an
+   independent reviewer run (`.claude/agents/unit-reviewer.md`); its verdict
+   is a claim (L-0020/L-0021), gates nothing on its own, and rides in the
+   report with the implementer's response to each finding.
+3. **Lessons:** the review may end with *proposed* ledger entries;
+   candidates are appended to `docs/lessons/proposed.md` and quoted in the
+   report ("none" is stated explicitly), and the owner ratifies in batch
+   before anything reaches `docs/lessons.md` or a scoped file.
 4. **Commits:** the owner confirms every commit (message proposed first);
    one concern per commit.
+
+## Memory precedence
+
+The repo ledger is canonical. Claude Code's auto memory
+(`~/.claude/projects/<project>/memory/`) is machine-local, unratified, and
+invisible to Codex agents: it may hold harness mechanics only (commands,
+environment quirks), never domain rules, process rules, or anything that
+belongs in `docs/lessons.md`. Where the two disagree, the ledger wins.
 
 ## Documentation policies
 
@@ -53,6 +68,20 @@ The prompt instructs the agent to open its report with
 - A report answering multiple prompts echoes one key per prompt.
 - The echo confirms correlation only, not compliance; STOP gates
   and review remain the compliance layer.
+
+## Standing brief template
+
+No template file exists outside this section; these two lines are fixed
+furniture in every implementation brief, whatever the tier:
+
+- **Open:** "Before work: read `docs/lessons.md` and
+  `docs/lessons/<claude-code|codex>.md`; apply, don't rediscover."
+- **Close:** "Close with the reviewer verdict (Tier 2–3) and lesson
+  candidates appended to `docs/lessons/proposed.md` and quoted in the
+  report, or the explicit line 'Lesson candidates: none'."
+
+Codex sessions never load `CLAUDE.md`, so for them the open line is the
+only thing that delivers the ledger.
 
 Tombstone: the tier-suffix clarification is CLOSED. T/M/H/L are Codex
 tiers; only C and F are distinct agents. This was a one-time parallel-window

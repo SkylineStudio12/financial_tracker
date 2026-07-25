@@ -417,3 +417,14 @@ pairs unless the accepted design defines both directions. "Confirm/un-confirm"
 and "book/un-book" imply a symmetry ledger operations rarely have — a booking
 reverses through posting reversal, not a state toggle. Name each direction
 against its design section.
+
+## L-0036
+
+The "EN-value keys during development, ro.json in bulk at end-purge" i18n
+policy assumed English as the fallback locale. The app's default locale is
+Romanian with NO configured fallback, so an EN-only next-intl key renders its
+raw key path and throws MISSING_MESSAGE on the default route. Until an
+EN-fallback is configured, new next-intl keys that render on a default-locale
+route must be authored in BOTH locales at creation (bilingual-from-birth), not
+EN-only. The end-purge deferral applies ONLY to keys that do not render before
+the purge runs.

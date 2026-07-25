@@ -44,6 +44,17 @@ export default async function TransactionDetailPage({
   );
 
   const postingById = new Map(postings.map((p) => [p.id, p]));
+  const ruleTypeByPostingId = new Map(accruals.map((accrual) => [accrual.postingId, accrual.ruleType]));
+  const salaryTaxLegLabelByRuleType = new Map([
+    ["salary_cas", t("taxLegLabel.salary_cas")],
+    ["salary_cass", t("taxLegLabel.salary_cass")],
+    ["salary_income_tax", t("taxLegLabel.salary_income_tax")],
+    ["cam", t("taxLegLabel.cam")],
+  ]);
+  const salaryTaxLegLabel = (postingId: string) => {
+    const ruleType = ruleTypeByPostingId.get(postingId);
+    return ruleType ? salaryTaxLegLabelByRuleType.get(ruleType) : undefined;
+  };
 
   return (
     <div className="density-compact flex flex-col gap-[var(--density-section-gap)] max-w-4xl">
@@ -105,7 +116,7 @@ export default async function TransactionDetailPage({
                 <tr key={posting.id} className="border-t border-border-hairline">
                   <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
                     <AccountLabel
-                      name={posting.accountName}
+                      name={salaryTaxLegLabel(posting.id) ?? posting.accountName}
                       deleted={posting.accountDeletedAt !== null}
                       deletedTooltip={tManage("deletedAccountTooltip")}
                     />

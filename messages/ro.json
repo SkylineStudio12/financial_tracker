@@ -129,6 +129,12 @@
     "colCounterparty": "Contrapartidă",
     "colRate": "Curs",
     "taxAccruals": "Acumulări fiscale",
+    "taxLegLabel": {
+      "salary_cas": "CAS (pensie)",
+      "salary_cass": "CASS (sănătate)",
+      "salary_income_tax": "Impozit pe venit",
+      "cam": "CAM (angajator)"
+    },
     "colRule": "Regulă",
     "colPeriod": "Perioadă",
     "backToDetail": "← Înapoi la detalii",

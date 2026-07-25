@@ -129,6 +129,12 @@
     "colCounterparty": "Counterparty",
     "colRate": "Rate",
     "taxAccruals": "Tax accruals",
+    "taxLegLabel": {
+      "salary_cas": "CAS (pension)",
+      "salary_cass": "CASS (health)",
+      "salary_income_tax": "Income tax",
+      "cam": "CAM (employer)"
+    },
     "colRule": "Rule",
     "colPeriod": "Period",
     "backToDetail": "← Back to detail",

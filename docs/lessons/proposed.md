@@ -150,3 +150,66 @@ available to compare against. The restoration was later confirmed by an
 independent read (21-02T item 4, run in the owner's shell), which is the
 available substitute but not equivalent to hash identity.
 **Status:** proposed
+
+### P-20260726-06 · proposed by 20-15-NIGHT · target: shared
+**Candidate:** A guard that skips on "dirty tree" must EXCLUDE the job's own
+output path, or the job self-disables from run two onward: run 1 leaves an
+untracked artifact, run 2 sees it and skips, forever. Generalises to any
+unattended job whose artifact lands inside the state it inspects. With git,
+the exclusion also needs `-uall`, because `git status --porcelain` collapses
+untracked directories and a pathspec exclusion cannot match the collapsed
+entry.
+**Evidence:** 20-15-NIGHT reviewer finding 2 — `scripts/nightly-audit.sh`
+guarded on bare `git status --porcelain` while writing its docket to the
+non-ignored `docs/briefs/reports/`; the shipped
+`docs/briefs/reports/nightly-2026-07-26.md` listed `?? docs/briefs/` as its
+own reason for skipping. Fixed before the STOP gate.
+**Status:** proposed
+
+### P-20260726-07 · proposed by 20-15-NIGHT · target: shared
+**Candidate:** An unattended agent's "read-only" or "no edits" limit is
+unenforceable while ANY general-purpose shell command sits in the allow list.
+`sed -i`, `tee`, and any allowed command plus `>` redirection are write
+vectors, so removing the Edit tool while pre-approving `Bash(sed:*)` or
+`Bash(cat:*)` is theatre. Allow only commands whose write surface is bounded
+by their own name, and let the read TOOLS serve reads.
+**Evidence:** 20-15-NIGHT reviewer finding 1 — the launcher denied `Edit` and
+excluded it from `--tools` while allowing `Bash(sed:*)`, `Bash(cat:*)`,
+`Bash(grep:*)`; any of the three could have rewritten a tracked file at 2am.
+**Status:** proposed
+
+### P-20260726-08 · proposed by 20-15-NIGHT · target: shared
+**Candidate:** For an unattended job, EVERY exit path must write to the
+durable artifact the owner actually reads. When failures are recorded only in
+a gitignored log, "the job failed" is indistinguishable from "cron never
+fired" — and the most likely 2am failure is the environment itself (cron's
+PATH is `/usr/bin:/bin`, so Homebrew binaries are absent). Verify tool
+availability under a cron-shaped environment, not an interactive one.
+**Evidence:** 20-15-NIGHT reviewer finding 3 — refusals and agent failures
+exited 2/3/4 leaving no docket, and `command -v claude` under
+`env -i PATH=/usr/bin:/bin` resolved nothing (`/opt/homebrew/bin/claude`).
+Both fixed before the STOP gate.
+**Status:** proposed
+
+### P-20260726-09 · proposed by 20-15-NIGHT · target: shared
+**Candidate:** Never cite a lesson id from memory. Grep `docs/lessons.md` for
+the id and read the entry before invoking it, especially when the citation is
+the justification for narrowing an owner instruction — a wrong id turns a
+scope reduction into an unfounded one, and the ledger may say the opposite of
+what the citation claims.
+**Evidence:** 20-15-NIGHT reviewer finding 4 — the nightly brief refused to
+append lesson candidates to `docs/lessons/proposed.md`, citing "append-only
+discipline (L-0023)"; L-0023 is about one prompt delivered to two agents,
+while the ledger's own rules preamble explicitly names `proposed.md` as the
+one lessons file agents MAY append to. The narrowing was reversed.
+**Status:** proposed
+
+### P-20260726-10 · proposed by 21-10 (owner-supplied, ratified for staging 2026-07-26) · target: shared
+**Candidate:** An append to an append-only ledger must anchor on a structural
+feature (end of file, a section boundary, a footnote block) and never on a
+token inserted into existing content. Inserting an anchor is a modification of
+the thing the append-only rule protects, even when reverted.
+**Evidence:** 21-04 planted a placeholder token in review-log row 20-12-U3 to
+anchor an append, self-caught and reverted with byte-identity proved before
+proceeding; the append then succeeded anchored on the footnote block.
+**Status:** proposed

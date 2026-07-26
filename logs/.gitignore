@@ -1,0 +1,5 @@
+# Nightly-audit transcripts stay local. The durable artifacts are the dockets
+# under docs/briefs/reports/ and any candidates staged in
+# docs/lessons/proposed.md — not these logs.
+*
+!.gitignore

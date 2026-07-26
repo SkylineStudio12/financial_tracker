@@ -75,6 +75,7 @@ The prompt instructs the agent to open its report with
 - A report answering multiple prompts echoes one key per prompt.
 - The echo confirms correlation only, not compliance; STOP gates
   and review remain the compliance layer.
+- `NIGHT-[date]` is the unattended nightly-audit family (`docs/briefs/nightly-audit.md` via `scripts/nightly-audit.sh`): findings-only, fixes and commits nothing, owner reads the morning docket in `docs/briefs/reports/`.
 
 ## Standing brief template
 

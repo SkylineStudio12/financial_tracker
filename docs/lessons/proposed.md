@@ -66,6 +66,20 @@ the registry pickup itself must be re-verified in the next session.
 **Evidence:** 20-14-LOOP Part D — `subagent_type: "unit-reviewer"` failed
 immediately after creating `.claude/agents/unit-reviewer.md`; the fallback
 produced the verdict.
+**Status:** SUPERSEDED by P-20260725-04R below — the "needs a fresh session"
+claim was falsified; original text kept for its observation history.
+
+### P-20260725-04R · proposed by 20-17-PROP · target: claude-code
+_Supersedes P-20260725-04 above._
+**Candidate:** A newly created `.claude/agents/*.md` is not immediately
+invocable by name, and pickup is NOT triggered by committing it — but it can
+become resolvable later in the same session without a restart. The refresh
+trigger is not understood. Therefore: probe the subagent by name first, fall
+back to a fresh general-purpose agent that reads the definition if
+unresolved, and RE-PROBE on later passes rather than assuming the earlier
+failure still holds.
+**Evidence:** 20-14-LOOP Part D (failed on create); 20-12.1-U3 gate f
+(failed post-commit); 20-12.2-U3 (resolved mid-session, no restart).
 **Status:** proposed
 
 ### P-20260725-05 · proposed by 20-14-LOOP · target: shared
@@ -78,4 +92,27 @@ with the material).
 `[paste the full 20-12-U3 brief text here when relaying]`; the brief text
 was sourced verbatim from the session transcript and the substitution
 declared before the reviewer ran.
+**Status:** proposed
+
+### P-20260726-01 · proposed by 20-12.1-U3 · target: shared
+**Candidate:** A test that exercises a *sibling* of the changed function
+pins nothing. When a fix applies to N call sites of the same rule,
+enumerate the sites and assert each one; verify the test fails with the
+fix reverted at THAT site, not merely somewhere in the file.
+**Evidence:** 20-12.1-U3 reviewer finding 1 — the fail-loud test covered
+`previewDividend` (which never called `getActiveRule`, so it passed
+pre-fix) while the actual F3 swap lived in `saveDividend`, leaving half
+the change unpinned until a follow-up test was added.
+**Status:** proposed
+
+### P-20260726-02 · proposed by 20-12.1-U3 · target: shared
+**Candidate:** A negative assertion (`doesNotMatch`) against a string that
+never existed in the repo's history can never fail. When pinning a
+corrected user-facing string, assert the *invariant* (the wrong framing is
+absent in any form) and confirm with `git log -S` that the assertion could
+ever have fired; a positive assertion that is a verbatim substring of the
+implementation is close to a tautology.
+**Evidence:** 20-12.1-U3 reviewer finding 3 — `/as the YTD basis/` appeared
+nowhere in git history (the wrong wording was only ever in an uncommitted
+tree); replaced with a ban on `\bYTD\b` framing.
 **Status:** proposed

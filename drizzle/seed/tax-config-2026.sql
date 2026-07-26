@@ -11,7 +11,17 @@
 -- Bracket ordinals are 0-based (0..3): the deferred
 -- tax_config_cass_bracket_ranges_check requires a contiguous 0-based
 -- series whose ordinal 0 opens at lower_minor 0, matching
--- CONFIRMED_CASS_INVESTMENT_BRACKETS in src/db/tax-config-seed.ts.
+-- CASS_INVESTMENT_BRACKETS_2026 in src/db/tax-config-seed.ts.
+--
+-- APPLIED TO LIVE 2026-07-25 (20-09-U2b) byte-identically at sha1
+-- 6913cda9bf9a07cde010083e58e4c1b89c6d5fe3. That hash pins WHAT RAN: it is
+-- the hash of the file AS APPLIED (retrievable at commit ba4c870), not of
+-- this working file, whose hash necessarily differs once a comment-only
+-- correction lands. Verify with: git show ba4c870:<this path> | shasum -a 1.
+-- Any edit after that apply is COMMENT-ONLY by rule — no SQL statement
+-- in this file may change, because the live rows were produced by the
+-- statements as they stood at that sha1. A statement change here needs
+-- a new file, not an edit to this one.
 BEGIN;
 
 DO $guard$

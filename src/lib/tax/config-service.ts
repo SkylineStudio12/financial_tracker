@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
-import { taxConfig } from "@/db/schema";
+import { taxConfig, taxConfigCassInvestmentBrackets } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/ledger";
 import {
   assertTaxDate,
@@ -72,7 +72,7 @@ export async function resolveTaxConfig(
   return rows[0];
 }
 
-function requireRate(row: ResolvedTaxConfig): number {
+export function requireRate(row: ResolvedTaxConfig): number {
   if (row.valueKind !== "rate_bps" || row.rateBps === null) {
     throw new LedgerValidationError("tax.configValueInvalid", {
       field: row.parameter,
@@ -130,6 +130,73 @@ export function roundTaxRateToWholeRonMinor(
     });
   }
   return Number(result);
+}
+
+export interface CassInvestmentBracketBand {
+  ordinal: number;
+  lowerMinor: number;
+  upperMinor: number | null;
+  baseMinor: number;
+  cassMinor: number;
+}
+
+export interface ResolvedCassBrackets {
+  /** The bracket-set parent window — carries status/source for ESTIMATE flagging. */
+  config: ResolvedTaxConfig;
+  bands: CassInvestmentBracketBand[];
+}
+
+/** The investment-CASS bracket set valid on a date: parent window + its
+ * 0-based children, ordinal-ordered. Fails loud when no window covers the
+ * date (resolveTaxConfig) or the set has no bands. */
+export async function resolveCassInvestmentBrackets(
+  date: string,
+  client: TaxClient = db,
+): Promise<ResolvedCassBrackets> {
+  const config = await resolveTaxConfig("cass_investment_brackets", date, client);
+  const bands = await client
+    .select({
+      ordinal: taxConfigCassInvestmentBrackets.ordinal,
+      lowerMinor: taxConfigCassInvestmentBrackets.lowerMinor,
+      upperMinor: taxConfigCassInvestmentBrackets.upperMinor,
+      baseMinor: taxConfigCassInvestmentBrackets.baseMinor,
+      cassMinor: taxConfigCassInvestmentBrackets.cassMinor,
+    })
+    .from(taxConfigCassInvestmentBrackets)
+    .where(eq(taxConfigCassInvestmentBrackets.taxConfigId, config.id))
+    .orderBy(asc(taxConfigCassInvestmentBrackets.ordinal));
+  if (bands.length === 0) {
+    throw new LedgerValidationError("tax.configValueInvalid", {
+      field: "cassInvestmentBrackets",
+      value: "empty",
+    });
+  }
+  return { config, bands };
+}
+
+/** Band lookup on half-open [lowerMinor, upperMinor); NULL upper = open top band. */
+export function cassBandForBasis(
+  bands: readonly CassInvestmentBracketBand[],
+  basisMinor: number,
+): CassInvestmentBracketBand {
+  if (!Number.isSafeInteger(basisMinor) || basisMinor < 0) {
+    throw new LedgerValidationError("tax.calculationInputInvalid", {
+      field: "cassBasisMinor",
+      value: basisMinor,
+    });
+  }
+  const band = bands.find(
+    (candidate) =>
+      candidate.lowerMinor <= basisMinor &&
+      (candidate.upperMinor === null || basisMinor < candidate.upperMinor),
+  );
+  if (!band) {
+    throw new LedgerValidationError("tax.configValueInvalid", {
+      field: "cassInvestmentBrackets",
+      value: `no band covers ${basisMinor}`,
+    });
+  }
+  return band;
 }
 
 export interface SalaryTaxResult {

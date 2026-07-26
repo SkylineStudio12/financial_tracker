@@ -23,6 +23,12 @@ import {
 } from "@/lib/ledger";
 import { toAppError, type AppError } from "@/lib/app-error";
 import { computeDividend } from "@/lib/tax/compute";
+import {
+  cassBandForBasis,
+  requireRate,
+  resolveCassInvestmentBrackets,
+  resolveTaxConfig,
+} from "@/lib/tax/config-service";
 import { getActiveRule, quarterOf, yearOf } from "@/lib/tax/rules";
 import { profileForEntity } from "@/lib/profiles";
 import { getLastCompleteSalaryDraft, type SalaryDraft } from "./edit-drafts";
@@ -353,15 +359,16 @@ export async function previewDividend(
   payload: Pick<DividendFlowPayload, "date" | "grossMinor">,
 ): Promise<DividendPreview | { error: AppError }> {
   try {
-    const dividendRule = await getActiveRule("dividend_tax", payload.date);
-    const cassRule = await getActiveRule("cass_dividend", payload.date);
-    const b = computeDividend(payload.grossMinor, dividendRule.rateBps, cassRule.rateBps);
+    const dividendConfig = await resolveTaxConfig("dividend_tax_rate", payload.date);
+    const cassBrackets = await resolveCassInvestmentBrackets(payload.date);
+    const cassBand = cassBandForBasis(cassBrackets.bands, payload.grossMinor);
+    const b = computeDividend(payload.grossMinor, requireRate(dividendConfig), cassBand.cassMinor);
     return {
       gross: b.grossMinor,
       withholdingTax: b.withholdingTaxMinor,
       net: b.netMinor,
       cassEstimate: b.cassEstimateMinor,
-      rateNote: `Rates: dividend tax ${dividendRule.rateBps / 100}%, CASS ${cassRule.rateBps / 100}% of gross as a rough ESTIMATE (real CASS is capped in minimum-wage multiples; placeholder values — confirm)`,
+      rateNote: `Rates: dividend tax ${requireRate(dividendConfig) / 100}%, CASS ${(cassBand.cassMinor / 100).toFixed(2)} RON — the bracket matched on THIS distribution's gross alone, not a year-to-date total. Provisional ESTIMATE; the annual CASS figure is determined by your full-year dividend total and settled via the annual return; each distribution here books its own provisional estimate, so repeat distributions accumulate until that true-up.`,
     };
   } catch (error) {
     const appError = toAppError(error);
@@ -379,17 +386,21 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
       throw new LedgerValidationError("flows.invalidDate", { date: payload.date });
     }
     const { company, bank, taxLiability, equity } = await loadCompanyAccounts(payload.companyId);
+    // tax_config is the rate authority and is resolved FIRST, so an uncovered
+    // date surfaces tax.configCoverageMissing (the cutover's error) rather than
+    // tax_rules' tax.taxRuleMissing. getActiveRule follows for the accrual FKs'
+    // provenance ids only.
+    const dividendConfig = await resolveTaxConfig("dividend_tax_rate", payload.date);
+    const cassBrackets = await resolveCassInvestmentBrackets(payload.date);
     const dividendRule = await getActiveRule("dividend_tax", payload.date);
     const cassRule = await getActiveRule("cass_dividend", payload.date);
-    const b = computeDividend(payload.grossMinor, dividendRule.rateBps, cassRule.rateBps);
+    const cassBand = cassBandForBasis(cassBrackets.bands, payload.grossMinor);
+    const b = computeDividend(payload.grossMinor, requireRate(dividendConfig), cassBand.cassMinor);
 
     const postingInputs: PostingInput[] = [
       { accountId: bank.id, amount: -b.netMinor, counterparty: "Shareholder" },
       { accountId: payload.personalAccountId, amount: b.netMinor, counterparty: company.name },
       { accountId: taxLiability.id, amount: -b.withholdingTaxMinor },
-      // Clearly-labeled ESTIMATE: real CASS is settled via the annual return.
-      { accountId: taxLiability.id, amount: -b.cassEstimateMinor, counterparty: "ESTIMATE" },
-      { accountId: equity.id, amount: b.withholdingTaxMinor + b.cassEstimateMinor },
     ];
     const accruals: AccrualInput[] = [
       {
@@ -398,13 +409,27 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
         year: yearOf(payload.date),
         quarter: quarterOf(payload.date),
       },
-      {
+    ];
+    if (b.cassEstimateMinor > 0) {
+      // Clearly-labeled ESTIMATE: real CASS is settled via the annual return.
+      // Band 0 of the bracket set carries zero CASS — a zero leg would be an
+      // empty booking artifact, so the leg and its accrual are omitted there.
+      postingInputs.push({
+        accountId: taxLiability.id,
+        amount: -b.cassEstimateMinor,
+        counterparty: "ESTIMATE",
+      });
+      accruals.push({
         postingIndex: 3,
         taxRuleId: cassRule.id,
         year: yearOf(payload.date),
         quarter: null, // CASS on dividends settles annually
-      },
-    ];
+      });
+    }
+    postingInputs.push({
+      accountId: equity.id,
+      amount: b.withholdingTaxMinor + b.cassEstimateMinor,
+    });
 
     const input = {
       entityId: payload.companyId,

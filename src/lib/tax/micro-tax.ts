@@ -7,10 +7,12 @@
  * refactor, Stage 4 amendment 4): same lookups, same rounding, same error
  * messages, same posting/accrual shapes.
  *
- * The rate is NEVER a literal here or in any caller: it comes from the
- * active `micro_revenue_tax` row in `tax_rules` (seeded as a PLACEHOLDER
- * until the accountant confirms), resolved by validity window at the
- * transaction date via getActiveRule.
+ * The rate is NEVER a literal here or in any caller: since the U3 cutover it
+ * comes from the `micro_revenue_tax` window in `tax_config`, resolved at the
+ * transaction date via resolveTaxConfig (fail-loud on uncovered dates).
+ * `tax_rules` is queried ONLY for the accrual's tax_rule_id provenance link —
+ * tax_accruals.tax_rule_id is a NOT NULL FK to tax_rules until the provenance
+ * cutover unit (U5+) re-homes it.
  */
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -20,6 +22,7 @@ import {
   type AccrualInput,
   type PostingInput,
 } from "@/lib/ledger/types";
+import { requireRate, resolveTaxConfig } from "./config-service";
 import { getActiveRule, quarterOf, yearOf } from "./rules";
 
 export interface MicroTaxAccrualPlan {
@@ -58,8 +61,13 @@ export async function planMicroTaxAccrual(params: {
   if (entity?.type !== "company") {
     return { postings: [], accruals: [] };
   }
+  // tax_config is the rate authority and is resolved FIRST, so an uncovered
+  // date surfaces tax.configCoverageMissing (the cutover's error) rather than
+  // tax_rules' tax.taxRuleMissing. getActiveRule follows for the accrual FK's
+  // provenance id only.
+  const microConfig = await resolveTaxConfig("micro_revenue_tax", params.date);
   const microRule = await getActiveRule("micro_revenue_tax", params.date);
-  const microTax = Math.round((params.revenueRonMinor * microRule.rateBps) / 10_000);
+  const microTax = Math.round((params.revenueRonMinor * requireRate(microConfig)) / 10_000);
   if (microTax <= 0) {
     return { postings: [], accruals: [] };
   }

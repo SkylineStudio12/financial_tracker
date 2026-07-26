@@ -1,9 +1,8 @@
 /**
  * Pure Romanian payroll/dividend arithmetic on integer minor units (bani).
- * Rates come from tax_rules rows (basis points) — nothing is hardcoded here.
- * NOTE: personal deductions and CASS income caps are NOT modeled; the seeded
- * rules carry placeholder rates. Results are estimates until rates and rules
- * are confirmed.
+ * Rates come from resolved tax_config windows (basis points) — nothing is
+ * hardcoded here. NOTE: personal deductions and CASS income caps are NOT
+ * modeled here; callers resolve those from tax_config where applicable.
  */
 
 const bps = (amountMinor: number, rateBps: number): number =>
@@ -53,21 +52,24 @@ export interface DividendBreakdown {
   grossMinor: number;
   withholdingTaxMinor: number;
   netMinor: number;
-  /** CASS on dividends is an ESTIMATE: the real base is capped in
-   * minimum-wage multiples and settled via the annual tax return. */
+  /** CASS on dividends is an ESTIMATE: the annual-bracket amount for the
+   * basis at booking time, trued up via the annual tax return. */
   cassEstimateMinor: number;
 }
 
+/** Withholding is computed here (same integer rounding as always); the CASS
+ * estimate arrives pre-resolved from the tax_config bracket set (U3 cutover)
+ * and passes through unchanged. */
 export function computeDividend(
   grossMinor: number,
   dividendTaxBps: number,
-  cassBps: number,
+  cassEstimateMinor: number,
 ): DividendBreakdown {
   const withholdingTaxMinor = bps(grossMinor, dividendTaxBps);
   return {
     grossMinor,
     withholdingTaxMinor,
     netMinor: grossMinor - withholdingTaxMinor,
-    cassEstimateMinor: bps(grossMinor, cassBps),
+    cassEstimateMinor,
   };
 }

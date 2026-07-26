@@ -1,8 +1,9 @@
 # Checkpoint A — Continuous-improvement loop (review agent + per-agent lessons)
 
-Status: DRAFT (20-10P, Fable/CC, 2026-07-25). Design only — nothing here is
-implemented, committed, or in force until owner rulings land. Zero file
-overlap with the tax-cutover workstream (U2–U6).
+Status: RATIFIED. Q1–Q6 ruled as recommended and Stages 1–2 implemented
+2026-07-25 (20-10P design, 20-14-LOOP implementation, committed 5a09aa9);
+§1 termination rule added and owner-ratified 2026-07-26 (20-12.2-U3-R).
+Zero file overlap with the tax-cutover workstream (U2–U6).
 
 Owner goal: every completed unit gets an automated agent review before the
 owner gate, and lessons from every unit are captured, stored per-agent, and
@@ -107,6 +108,17 @@ L-0020/L-0021 it is a claim that informs the owner gate. If implementer and
 reviewer disagree, both positions go to the owner verbatim; the implementer
 never silently resolves a reviewer finding out of existence (it may fix and
 re-run the reviewer, stating both rounds).
+
+**Termination (owner-ratified 2026-07-26).** Remediating reviewer findings
+triggers a SECOND reviewer pass only when the fixes touch production
+**logic**. Test-only, comment-only, doc-only, and user-visible-string fixes
+— where a test assertion pins the string — close the loop with the
+implementer's response recorded in the report. Rationale: without a
+termination rule the review loop does not converge; every remediation
+invites a fresh pass, each pass can always find one more note, and the
+owner's gate recedes indefinitely. The rule bounds the loop without
+weakening it, because the excluded classes cannot change what the code
+computes. A logic fix still earns a second pass.
 
 ## 2. Lessons architecture
 

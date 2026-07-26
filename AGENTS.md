@@ -23,7 +23,14 @@ lesson; nothing reviews, learns, or commits autonomously.
    the owner by default. For Tier 2–3 units the review pass also includes an
    independent reviewer run (`.claude/agents/unit-reviewer.md`); its verdict
    is a claim (L-0020/L-0021), gates nothing on its own, and rides in the
-   report with the implementer's response to each finding.
+   report with the implementer's response to each finding. Invoke the
+   registered `unit-reviewer` subagent by name when it resolves; use the
+   general-purpose fallback only when it does not. The registered entry is
+   read-only by capability (Read/Grep/Glob/Bash, no Edit/Write); the fallback
+   is read-only only by instruction. Each report states which form was used.
+   Remediating findings earns a SECOND reviewer pass only when the fixes touch
+   production logic; test-only, comment-only, doc-only, and string-only fixes
+   (with a test pinning the string) close the loop with the recorded response.
 3. **Lessons:** the review may end with *proposed* ledger entries;
    candidates are appended to `docs/lessons/proposed.md` and quoted in the
    report ("none" is stated explicitly), and the owner ratifies in batch

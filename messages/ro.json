@@ -129,6 +129,8 @@
     "colCounterparty": "Contrapartidă",
     "colRate": "Curs",
     "taxAccruals": "Acumulări fiscale",
+    "taxAttributionTranscribed": "Transcris din fluturaș",
+    "taxAttributionUnavailable": "Neatribuibil",
     "taxLegLabel": {
       "salary_cas": "CAS (pensie)",
       "salary_cass": "CASS (sănătate)",
@@ -595,6 +597,36 @@
     "effectiveFrom": "Valabil de la",
     "rate": "Cotă",
     "empty": "Nicio regulă fiscală configurată"
+  },
+  "taxConfig": {
+    "title": "Parametri fiscali",
+    "groupSalary": "Salariu",
+    "groupDividend": "Dividende",
+    "groupMicro": "Venit micro",
+    "groupReference": "Valori de referință",
+    "label": {
+      "cas_employee_rate": "CAS (pensie)",
+      "cass_employee_rate": "CASS (sănătate)",
+      "cam_employer_rate": "CAM (angajator)",
+      "income_tax_rate": "Impozit pe venit",
+      "dividend_tax_rate": "Impozit pe dividende",
+      "micro_revenue_tax": "Impozit pe venitul micro",
+      "minimum_wage": "Salariu minim",
+      "personal_deduction": "Deducere personală",
+      "cass_investment_brackets": "CASS pe venituri din investiții"
+    },
+    "status": {
+      "confirmed": "Confirmat",
+      "estimate": "Estimare"
+    },
+    "value": "Valoare",
+    "effectiveFrom": "Valabil de la",
+    "until": "Până la",
+    "source": "Sursă",
+    "bands": "Praguri anuale",
+    "bandOpenTop": "și peste",
+    "empty": "Niciun parametru fiscal configurat",
+    "noneGrouped": "{count} parametri configurați nu apar în nicio grupă — verifică gruparea din vizualizare."
   },
   "icons": {
     "Home": "Casă",

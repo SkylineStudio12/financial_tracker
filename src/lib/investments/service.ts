@@ -49,7 +49,13 @@ import {
   transactions,
 } from "@/db/schema";
 import { convertMinorToRon } from "@/lib/fx";
-import { getActiveRule, type ActiveRule } from "@/lib/tax/rules";
+import {
+  cassBandForBasis,
+  requireRate,
+  resolveCassInvestmentBrackets,
+  resolveTaxConfig,
+  type AppliedTaxConfig,
+} from "@/lib/tax/config-service";
 import {
   createTransaction,
   LedgerValidationError,
@@ -1136,24 +1142,75 @@ export interface DividendTaxEstimate {
    * real annual CASS threshold calculation is Phase 5. */
   estimate: true;
   dividendTaxRonMinor: number;
-  cassRonMinor: number;
-  dividendTaxRule: ActiveRule;
-  cassRule: ActiveRule;
+  /** Null when no bracket set covers the date: this panel does not render CASS
+   * (U5.1 finding 4), so a missing bracket window must not break the estimate. */
+  cassRonMinor: number | null;
+  dividendTaxRateBps: number;
+  /** 0-based band the CASS figure came from; null with cassRonMinor. */
+  cassBandOrdinal: number | null;
+  /** The tax_config windows behind the figures (status/source for flagging). */
+  appliedConfig: AppliedTaxConfig[];
 }
 
-/** Flagged per-dividend ESTIMATE from the seeded (placeholder) tax rules. */
+/**
+ * Flagged per-dividend ESTIMATE, resolved from tax_config (U5 cutover).
+ *
+ * The CASS figure is the annual bracket amount for this dividend as the basis
+ * — the SAME lookup previewDividend/saveDividend use — so the investments
+ * screen and the dividend flow can no longer disagree for one gross. Like
+ * every repointed path it fails loud (tax.configCoverageMissing) on a date no
+ * window covers; it never falls back to tax_rules.
+ *
+ * Rounding note: the withholding keeps bani-level `Math.round(x*bps/10_000)`,
+ * matching computeDividend, deliberately NOT calculateDividendTax's whole-RON
+ * half-up. The divergence between those two is a standing owner ruling.
+ */
 export async function estimateDividendTaxes(
   date: string,
   dividendRonMinor: number,
 ): Promise<DividendTaxEstimate> {
-  const dividendTaxRule = await getActiveRule("dividend_tax", date);
-  const cassRule = await getActiveRule("cass_dividend", date);
-  const byBps = (bps: number) => Math.round((dividendRonMinor * bps) / 10_000);
+  // The withholding IS displayed, so its window stays fail-loud.
+  const dividendConfig = await resolveTaxConfig("dividend_tax_rate", date);
+  const dividendTaxRateBps = requireRate(dividendConfig);
+  const appliedConfig: AppliedTaxConfig[] = [
+    {
+      id: dividendConfig.id,
+      parameter: dividendConfig.parameter,
+      status: dividendConfig.status,
+      source: dividendConfig.source,
+    },
+  ];
+
+  // CASS is NOT rendered on this panel, so a missing bracket window degrades to
+  // "no CASS figure" instead of erroring a panel the value never reaches.
+  let cassRonMinor: number | null = null;
+  let cassBandOrdinal: number | null = null;
+  try {
+    const brackets = await resolveCassInvestmentBrackets(date);
+    const band = cassBandForBasis(brackets.bands, dividendRonMinor);
+    cassRonMinor = band.cassMinor;
+    cassBandOrdinal = band.ordinal;
+    appliedConfig.push({
+      id: brackets.config.id,
+      parameter: brackets.config.parameter,
+      status: brackets.config.status,
+      source: brackets.config.source,
+    });
+  } catch (error) {
+    if (
+      !(error instanceof LedgerValidationError) ||
+      (error.code !== "tax.configCoverageMissing" && error.code !== "tax.configValueInvalid")
+    ) {
+      throw error;
+    }
+  }
+
   return {
     estimate: true,
-    dividendTaxRonMinor: byBps(dividendTaxRule.rateBps),
-    cassRonMinor: byBps(cassRule.rateBps),
-    dividendTaxRule,
-    cassRule,
+    dividendTaxRonMinor: Math.round((dividendRonMinor * dividendTaxRateBps) / 10_000),
+    cassRonMinor,
+    dividendTaxRateBps,
+    cassBandOrdinal,
+    appliedConfig,
   };
 }

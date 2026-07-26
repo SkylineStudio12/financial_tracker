@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { TransactionRowActions } from "@/components/transaction-row-actions";
 import { AccountLabel, CategoryLabel } from "@/components/category-label";
-import { formatBpsPercent, formatDate, formatImpliedRate, formatMinor } from "@/lib/format";
+import {
+  formatBpsPercent,
+  formatDate,
+  formatImpliedRate,
+  formatMinor,
+  formatMinorNumber,
+} from "@/lib/format";
 import { resolveRonRate } from "@/lib/fx";
 import { getFormOptions } from "@/lib/ledger/form-options";
 import { getTransactionDetail } from "@/lib/ledger/queries";
@@ -29,6 +35,7 @@ export default async function TransactionDetailPage({
   const tEnums = await getTranslations("enums");
   const tCommon = await getTranslations("common");
   const tManage = await getTranslations("manage");
+  const tTaxConfig = await getTranslations("taxConfig");
   const detail = await getTransactionDetail(transactionId, profile);
   if (!detail) notFound();
   const { transaction, postings, tagNames, accruals, crudAvailable, importLink } = detail;
@@ -178,14 +185,49 @@ export default async function TransactionDetailPage({
                     <tr key={accrual.id} className="border-t border-border-hairline">
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-primary">
                         {tEnums(`taxRuleType.${accrual.ruleType}`)}
-                        {accrual.ruleType === "cass_dividend" && (
-                          <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
-                            {tCommon("estimate")}
-                          </span>
+                        {/* Driven by the tax_config status enum — but dividend
+                            CASS is an estimate BY CONSTRUCTION (annual true-up),
+                            so it keeps the marker even when the figure cannot be
+                            attributed to a band. An estimate must never read as
+                            final (review-standards §3.2). */}
+                        {(accrual.ruleType === "cass_dividend" ||
+                          ("status" in accrual.attribution &&
+                            accrual.attribution.status === "estimate")) && (
+                            <span className="ml-2 rounded-badge px-1.5 py-0.5 text-micro uppercase bg-surface-inactive text-status-warning-text">
+                              {tCommon("estimate")}
+                            </span>
+                          )}
+                        {"source" in accrual.attribution && (
+                          <p className="mt-1 text-caption text-text-muted">
+                            {tTaxConfig("source")}: {accrual.attribution.source}
+                          </p>
                         )}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
-                        {formatBpsPercent(accrual.rateBps, locale, { minFractionDigits: 2 })}
+                        {/* Only a genuinely rate-derived figure gets a rate. A
+                            bracket figure shows its band; a payslip-transcribed
+                            leg shows neither; an unattributable one says so. */}
+                        {accrual.attribution.kind === "rate" ? (
+                          formatBpsPercent(accrual.attribution.rateBps, locale, {
+                            minFractionDigits: 2,
+                          })
+                        ) : accrual.attribution.kind === "band" ? (
+                          <span className="font-numeric tabular-nums">
+                            {accrual.attribution.upperMinor === null
+                              ? `${formatMinorNumber(accrual.attribution.lowerMinor, locale)} ${tTaxConfig("bandOpenTop")}`
+                              : `${formatMinorNumber(accrual.attribution.lowerMinor, locale)}–${formatMinorNumber(accrual.attribution.upperMinor, locale)}`}
+                            {" → "}
+                            {formatMinor(accrual.attribution.cassMinor, "RON", locale)}
+                          </span>
+                        ) : accrual.attribution.kind === "transcribed" ? (
+                          <span className="text-caption text-text-muted">
+                            {t("taxAttributionTranscribed")}
+                          </span>
+                        ) : (
+                          <span className="text-caption text-text-muted">
+                            {t("taxAttributionUnavailable")}
+                          </span>
+                        )}
                       </td>
                       <td className="px-[var(--density-row-padding-x)] py-[var(--density-row-padding-y)] text-text-secondary">
                         {accrual.quarter

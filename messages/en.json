@@ -129,6 +129,8 @@
     "colCounterparty": "Counterparty",
     "colRate": "Rate",
     "taxAccruals": "Tax accruals",
+    "taxAttributionTranscribed": "Transcribed from payslip",
+    "taxAttributionUnavailable": "Not attributable",
     "taxLegLabel": {
       "salary_cas": "CAS (pension)",
       "salary_cass": "CASS (health)",
@@ -595,6 +597,36 @@
     "effectiveFrom": "Effective from",
     "rate": "Rate",
     "empty": "No tax rules configured"
+  },
+  "taxConfig": {
+    "title": "Tax parameters",
+    "groupSalary": "Salary",
+    "groupDividend": "Dividend",
+    "groupMicro": "Micro-revenue",
+    "groupReference": "Reference amounts",
+    "label": {
+      "cas_employee_rate": "CAS (pension)",
+      "cass_employee_rate": "CASS (health)",
+      "cam_employer_rate": "CAM (employer)",
+      "income_tax_rate": "Income tax",
+      "dividend_tax_rate": "Dividend tax",
+      "micro_revenue_tax": "Micro-revenue tax",
+      "minimum_wage": "Minimum wage",
+      "personal_deduction": "Personal deduction",
+      "cass_investment_brackets": "CASS on investment income"
+    },
+    "status": {
+      "confirmed": "Confirmed",
+      "estimate": "Estimate"
+    },
+    "value": "Value",
+    "effectiveFrom": "Effective from",
+    "until": "Until",
+    "source": "Source",
+    "bands": "Annual bands",
+    "bandOpenTop": "and above",
+    "empty": "No tax parameters configured",
+    "noneGrouped": "{count} configured parameters are not shown in any group — check the viewer's grouping."
   },
   "icons": {
     "Home": "Home",

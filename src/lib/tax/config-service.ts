@@ -9,7 +9,7 @@ import {
 } from "./config-validation";
 
 type TaxClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
-type TaxConfigStatus = "confirmed" | "estimate";
+export type TaxConfigStatus = "confirmed" | "estimate";
 
 export interface ResolvedTaxConfig {
   id: string;
@@ -199,6 +199,63 @@ export function cassBandForBasis(
   return band;
 }
 
+export interface TaxConfigViewRow extends ResolvedTaxConfig {
+  /** Populated only for the bracket_set parameter; ordinal-ordered. */
+  bands: CassInvestmentBracketBand[];
+}
+
+/**
+ * Every tax_config window covering a date, for the read-only /manage viewer.
+ * Unlike resolveTaxConfig this does NOT fail loud on a missing parameter: a
+ * viewer reports what is configured, and an absent parameter is information
+ * the owner needs to see rather than an error that blanks the section.
+ */
+export async function listTaxConfigAsOf(
+  date: string,
+  client: TaxClient = db,
+): Promise<TaxConfigViewRow[]> {
+  assertTaxDate(date);
+  const rows = await client
+    .select({
+      id: taxConfig.id,
+      parameter: taxConfig.parameter,
+      valueKind: taxConfig.valueKind,
+      rateBps: taxConfig.rateBps,
+      amountMinor: taxConfig.amountMinor,
+      validFrom: taxConfig.validFrom,
+      validTo: taxConfig.validTo,
+      status: taxConfig.status,
+      source: taxConfig.source,
+    })
+    .from(taxConfig)
+    .where(
+      and(
+        lte(taxConfig.validFrom, date),
+        or(isNull(taxConfig.validTo), gt(taxConfig.validTo, date)),
+      ),
+    )
+    .orderBy(asc(taxConfig.parameter));
+
+  const bracketParents = rows.filter((row) => row.valueKind === "bracket_set");
+  const bandsByConfigId = new Map<string, CassInvestmentBracketBand[]>();
+  for (const parent of bracketParents) {
+    const bands = await client
+      .select({
+        ordinal: taxConfigCassInvestmentBrackets.ordinal,
+        lowerMinor: taxConfigCassInvestmentBrackets.lowerMinor,
+        upperMinor: taxConfigCassInvestmentBrackets.upperMinor,
+        baseMinor: taxConfigCassInvestmentBrackets.baseMinor,
+        cassMinor: taxConfigCassInvestmentBrackets.cassMinor,
+      })
+      .from(taxConfigCassInvestmentBrackets)
+      .where(eq(taxConfigCassInvestmentBrackets.taxConfigId, parent.id))
+      .orderBy(asc(taxConfigCassInvestmentBrackets.ordinal));
+    bandsByConfigId.set(parent.id, bands);
+  }
+
+  return rows.map((row) => ({ ...row, bands: bandsByConfigId.get(row.id) ?? [] }));
+}
+
 export interface SalaryTaxResult {
   grossMinor: number;
   casMinor: number;
@@ -283,6 +340,20 @@ export interface DividendTaxResult {
   appliedConfig: AppliedTaxConfig;
 }
 
+/**
+ * NOT WIRED: no production caller reaches this function — only the tax-config
+ * e2e suite does. Do NOT wire it without answering the open question below.
+ *
+ * It rounds HALF-UP TO WHOLE RON (roundTaxRateToWholeRonMinor), while the live
+ * booking path — computeDividend via saveDividend/previewDividend — rounds at
+ * BANI level. On identical inputs the two can differ by up to 99 bani (worked
+ * case, pinned in the suite: gross 10,313 bani at 16% gives 1,700 here and
+ * 1,650 there). Whole-leu rounding follows ANAF D100 material; bani-level is
+ * what the ledger currently books. WHICH ONE IS CORRECT IS AN OPEN ACCOUNTANT
+ * QUESTION (U5 rounding-divergence report, 2026-07-26) — until it is answered
+ * neither figure is authoritative, and wiring this one would silently change
+ * booked money.
+ */
 export async function calculateDividendTax(input: {
   grossDividendMinor: number;
   distributionDate: string;

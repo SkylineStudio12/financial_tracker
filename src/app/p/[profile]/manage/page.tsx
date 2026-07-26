@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ManagementClient } from "@/components/management/management-client";
-import { TaxRulesSection } from "@/components/management/tax-rules-section";
+import { TaxConfigSection } from "@/components/management/tax-config-section";
 import {
   listManagedAccounts,
   listManagedCategories,
   listManagedEmployees,
 } from "@/lib/management/service";
 import { getProfile } from "@/lib/profiles";
-import { listActiveTaxRules } from "@/lib/tax/rules";
+import { listTaxConfigAsOf } from "@/lib/tax/config-service";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export default async function ManagePage({
   if (!profile) notFound();
   const t = await getTranslations("manage");
   const referenceDate = new Date().toISOString().slice(0, 10);
-  const [accounts, deletedAccounts, categories, deletedCategories, employees, deletedEmployees, taxRules] =
+  const [accounts, deletedAccounts, categories, deletedCategories, employees, deletedEmployees, taxConfigRows] =
     await Promise.all([
       listManagedAccounts(profile.entityId),
       listManagedAccounts(profile.entityId, "deleted"),
@@ -34,7 +34,7 @@ export default async function ManagePage({
       profile.companyFlows
         ? listManagedEmployees(profile.entityId, referenceDate, "deleted")
         : Promise.resolve([]),
-      listActiveTaxRules(referenceDate),
+      listTaxConfigAsOf(referenceDate),
     ]);
 
   return (
@@ -52,7 +52,7 @@ export default async function ManagePage({
         employees={employees}
         deletedEmployees={deletedEmployees}
       />
-      <TaxRulesSection rules={taxRules} />
+      <TaxConfigSection rows={taxConfigRows} />
     </div>
   );
 }

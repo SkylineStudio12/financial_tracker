@@ -104,7 +104,7 @@ export async function estimateDividendAction(payload: {
     const estimate = await estimateDividendTaxes(payload.date, payload.dividendRonMinor);
     return {
       dividendTaxRonMinor: estimate.dividendTaxRonMinor,
-      dividendTaxRateBps: estimate.dividendTaxRule.rateBps,
+      dividendTaxRateBps: estimate.dividendTaxRateBps,
     };
   } catch (error) {
     const appError = toAppError(error);

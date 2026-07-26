@@ -13,15 +13,6 @@ export interface ActiveRule {
   notes: string | null;
 }
 
-export interface ActiveTaxRule {
-  ruleType: TaxRuleType;
-  rateBps: number;
-  validFrom: string;
-  thresholdMin: number | null;
-  thresholdMax: number | null;
-  notes: string | null;
-}
-
 /** The rule of a given type active on a date (validity window match). */
 export async function getActiveRule(type: TaxRuleType, date: string): Promise<ActiveRule> {
   const [rule] = await db
@@ -48,27 +39,9 @@ export async function getActiveRule(type: TaxRuleType, date: string): Promise<Ac
   return rule;
 }
 
-/** The latest active rule for each type, using getActiveRule's validity predicate. */
-export async function listActiveTaxRules(date: string): Promise<ActiveTaxRule[]> {
-  return db
-    .selectDistinctOn([taxRules.ruleType], {
-      ruleType: taxRules.ruleType,
-      rateBps: taxRules.rateBps,
-      validFrom: taxRules.validFrom,
-      thresholdMin: taxRules.thresholdMin,
-      thresholdMax: taxRules.thresholdMax,
-      notes: taxRules.notes,
-    })
-    .from(taxRules)
-    .where(
-      and(
-        lte(taxRules.validFrom, date),
-        or(isNull(taxRules.validTo), gte(taxRules.validTo, date)),
-        isNull(taxRules.deletedAt),
-      ),
-    )
-    .orderBy(taxRules.ruleType, desc(taxRules.validFrom));
-}
+// listActiveTaxRules removed in U5: the /manage viewer now reads tax_config
+// (listTaxConfigAsOf). getActiveRule stays — it still supplies the accrual
+// FK's provenance id until the tax_accruals re-home (R5 prerequisite).
 
 export const quarterOf = (date: string): number =>
   Math.floor((Number(date.slice(5, 7)) - 1) / 3) + 1;

@@ -6,17 +6,22 @@ import {
   accounts,
   auditLog,
   postings,
+  taxAccruals,
   taxConfig,
   taxConfigCassInvestmentBrackets,
+  taxRules,
   transactions,
 } from "@/db/schema";
 import { LedgerValidationError } from "@/lib/ledger";
+import { estimateDividendTaxes } from "@/lib/investments/service";
 import { previewDividend, saveDividend } from "@/lib/ledger/flow-actions";
+import { getTransactionDetail } from "@/lib/ledger/queries";
 import { ENTITY_IDS } from "@/lib/profiles";
 import {
   calculateDividendTax,
   calculateSalary,
   cassBandForBasis,
+  listTaxConfigAsOf,
   resolveCassInvestmentBrackets,
   resolveTaxConfig,
   roundTaxRateToWholeRonMinor,
@@ -511,6 +516,279 @@ async function main(): Promise<void> {
   assert.equal(await db.$count(taxConfig), 9);
   assert.equal(await db.$count(taxConfigCassInvestmentBrackets), 4);
   ok("zero residue: ledger and audit back to baseline; config still 9 + 4");
+
+  // ---- U5 reader repoint: viewer + investments estimate (20-21-U5) --------
+
+  const viewer = await listTaxConfigAsOf("2026-07-15");
+  assert.equal(viewer.length, 9);
+  // Sorted by name in the assertion, not in the query: a Postgres enum column
+  // orders by DECLARATION order, and the viewer regroups by parameter anyway,
+  // so the row order is incidental and deliberately not pinned.
+  assert.deepEqual(
+    viewer.map((row) => [row.parameter, row.status]).sort((a, b) => a[0].localeCompare(b[0])),
+    [
+      ["cam_employer_rate", "confirmed"],
+      ["cas_employee_rate", "confirmed"],
+      ["cass_employee_rate", "confirmed"],
+      ["cass_investment_brackets", "estimate"],
+      ["dividend_tax_rate", "confirmed"],
+      ["income_tax_rate", "estimate"],
+      ["micro_revenue_tax", "confirmed"],
+      ["minimum_wage", "confirmed"],
+      ["personal_deduction", "estimate"],
+    ],
+  );
+  // Only the bracket_set parameter carries bands, and it carries all four.
+  assert.deepEqual(
+    viewer.filter((row) => row.bands.length > 0).map((row) => row.parameter),
+    ["cass_investment_brackets"],
+  );
+  assert.deepEqual(
+    viewer.find((row) => row.parameter === "cass_investment_brackets")!.bands.map((b) => b.ordinal),
+    [0, 1, 2, 3],
+  );
+  // Every row carries the badge input and a non-blank source.
+  assert.ok(viewer.every((row) => row.status === "confirmed" || row.status === "estimate"));
+  assert.ok(viewer.every((row) => row.source.trim().length > 0));
+  // A viewer reports what is configured; an uncovered date is empty, not a throw.
+  assert.deepEqual(await listTaxConfigAsOf("2025-12-31"), []);
+  ok("viewer: 9 parameters as of date with statuses, bands only on the bracket set, empty pre-2026");
+
+  // The contradiction U5 closes: investments and the dividend flow must agree.
+  const investmentsEstimate = await estimateDividendTaxes("2026-07-15", 5_500_000);
+  assert.equal(investmentsEstimate.cassRonMinor, 486_000);
+  assert.equal(investmentsEstimate.cassBandOrdinal, 2);
+  assert.equal(investmentsEstimate.dividendTaxRateBps, 1_600);
+  assert.equal(investmentsEstimate.dividendTaxRonMinor, preview.withholdingTax);
+  assert.equal(investmentsEstimate.cassRonMinor, preview.cassEstimate);
+  await expectCode(
+    estimateDividendTaxes("2025-12-31", 5_500_000),
+    "tax.configCoverageMissing",
+    { parameter: "dividend_tax_rate", date: "2025-12-31" },
+  );
+  ok("investments estimate agrees with previewDividend (880000/486000, band 2) and fails loud pre-2026");
+
+  // ---- U5.1: accrual attribution never shows a rate it cannot attribute ----
+
+  // A dividend big enough to carry a CASS leg: band 2 at 55,000 RON.
+  const bandBooking = await saveDividend({
+    companyId: ENTITY_IDS.skyline,
+    date: "2026-07-15",
+    grossMinor: 5_500_000,
+    personalAccountId: householdBank.id,
+    stay: true,
+  });
+  assert.deepEqual(bandBooking, { ok: true });
+  const [bandTx] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.kind, "dividend"), isNull(transactions.deletedAt)));
+  const bandDetail = await getTransactionDetail(bandTx.id);
+  const cassAccrual = bandDetail!.accruals.find((row) => row.ruleType === "cass_dividend")!;
+  const withholdingAccrual = bandDetail!.accruals.find((row) => row.ruleType === "dividend_tax")!;
+  // CASS: the band, NOT a rate (the 10% tax_rules rate must never appear).
+  assert.equal(cassAccrual.attribution.kind, "band");
+  assert.deepEqual(
+    cassAccrual.attribution.kind === "band"
+      ? [
+          cassAccrual.attribution.lowerMinor,
+          cassAccrual.attribution.upperMinor,
+          cassAccrual.attribution.cassMinor,
+          cassAccrual.attribution.status,
+        ]
+      : null,
+    [4_860_000, 9_720_000, 486_000, "estimate"],
+  );
+  // Withholding IS rate-derived, so it keeps a rate — from tax_config.
+  assert.equal(withholdingAccrual.attribution.kind, "rate");
+  assert.equal(
+    withholdingAccrual.attribution.kind === "rate"
+      ? withholdingAccrual.attribution.rateBps
+      : null,
+    1_600,
+  );
+  ok("dividend detail: CASS shows its band (4,860,000-9,720,000 -> 486,000, estimate), never a rate");
+
+  const bandLegs = await db
+    .select({ id: postings.id })
+    .from(postings)
+    .where(eq(postings.transactionId, bandTx.id));
+  await db.delete(auditLog).where(inArray(auditLog.rowId, [bandTx.id, ...bandLegs.map((l) => l.id)]));
+  await db.delete(transactions).where(eq(transactions.id, bandTx.id));
+
+  // Salary legs are payslip-transcribed and a pre-2026 micro leg has no window:
+  // one fixture pins both "transcribed" and "unavailable" (no tax_rules fallback).
+  const [salaryRule] = await db
+    .select({ id: taxRules.id })
+    .from(taxRules)
+    .where(eq(taxRules.ruleType, "salary_cas"));
+  const [microRule] = await db
+    .select({ id: taxRules.id })
+    .from(taxRules)
+    .where(eq(taxRules.ruleType, "micro_revenue_tax"));
+  const [skylineTaxAccount] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.entityId, ENTITY_IDS.skyline),
+        eq(accounts.type, "tax_liability"),
+        isNull(accounts.deletedAt),
+      ),
+    );
+  const fixtureTxId = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(transactions)
+      .values({
+        entityId: ENTITY_IDS.skyline,
+        date: "2025-12-31",
+        description: "U5.1 attribution fixture",
+        kind: "salary",
+      })
+      .returning({ id: transactions.id });
+    const inserted = await tx
+      .insert(postings)
+      .values([
+        { transactionId: created.id, accountId: skylineTaxAccount.id, amount: -112_500, amountRon: -112_500, currency: "RON" },
+        { transactionId: created.id, accountId: skylineTaxAccount.id, amount: -25_540, amountRon: -25_540, currency: "RON" },
+      ])
+      .returning({ id: postings.id });
+    await tx.insert(taxAccruals).values([
+      { transactionId: created.id, postingId: inserted[0].id, taxRuleId: salaryRule.id, year: 2025, quarter: 4 },
+      { transactionId: created.id, postingId: inserted[1].id, taxRuleId: microRule.id, year: 2025, quarter: 4 },
+    ]);
+    return created.id;
+  });
+  const fixtureDetail = await getTransactionDetail(fixtureTxId);
+  assert.equal(
+    fixtureDetail!.accruals.find((row) => row.ruleType === "salary_cas")!.attribution.kind,
+    "transcribed",
+  );
+  assert.equal(
+    fixtureDetail!.accruals.find((row) => row.ruleType === "micro_revenue_tax")!.attribution.kind,
+    "unavailable",
+  );
+  // No attribution object may carry a rate for these two.
+  assert.ok(
+    fixtureDetail!.accruals.every((row) => !("rateBps" in row.attribution)),
+    "a transcribed or unattributable leg must never expose a rate",
+  );
+  await db.delete(transactions).where(eq(transactions.id, fixtureTxId));
+  ok("salary leg reads transcribed; pre-2026 micro leg reads unavailable with no tax_rules fallback");
+
+  // ---- 21-01-U5.1-A: the band match reads the RON mirror, not the leg's own
+  // currency. Every other fixture in this suite books RON legs (amount ===
+  // amountRon), so reverting queries.ts to postings.amount keeps them all
+  // green; only a non-RON tax leg can tell the two fields apart. Nothing
+  // constrains a tax_liability account to RON (seed convention only), so this
+  // case is reachable in production. (R2 finding 4.)
+  const [eurTaxAccount] = await db
+    .insert(accounts)
+    .values({
+      entityId: ENTITY_IDS.skyline,
+      name: "U5.1-A EUR tax liability fixture",
+      type: "tax_liability",
+      currency: "EUR",
+    })
+    .returning({ id: accounts.id });
+  const [cassDividendRule] = await db
+    .select({ id: taxRules.id })
+    .from(taxRules)
+    .where(eq(taxRules.ruleType, "cass_dividend"));
+  const fxFixture = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(transactions)
+      .values({
+        entityId: ENTITY_IDS.skyline,
+        date: "2026-07-15",
+        description: "U5.1-A non-RON CASS leg fixture",
+        kind: "dividend",
+      })
+      .returning({ id: transactions.id });
+    const legs = await tx
+      .insert(postings)
+      .values([
+        // 972.00 EUR at 5.0 -> 4,860.00 RON: the RON mirror IS band 2's
+        // cassMinor while the EUR amount matches no band's cassMinor at all,
+        // so reading the wrong field loses the band entirely.
+        { transactionId: created.id, accountId: eurTaxAccount.id, amount: -97_200, amountRon: -486_000, currency: "EUR" },
+        // A deliberately synthetic 2.0 rate: the one ratio at which two seeded
+        // bands collide. The RON mirror is band 3's cassMinor while the EUR
+        // amount is band 2's, so reading the wrong field does not merely lose
+        // the band — it reports a different band as fact.
+        { transactionId: created.id, accountId: eurTaxAccount.id, amount: -486_000, amountRon: -972_000, currency: "EUR" },
+      ])
+      .returning({ id: postings.id });
+    await tx.insert(taxAccruals).values(
+      legs.map((leg) => ({
+        transactionId: created.id,
+        postingId: leg.id,
+        taxRuleId: cassDividendRule.id,
+        year: 2026,
+        quarter: 3,
+      })),
+    );
+    return { transactionId: created.id, legIds: legs.map((leg) => leg.id) };
+  });
+  const fxDetail = await getTransactionDetail(fxFixture.transactionId);
+  const fxLegById = new Map(fxDetail!.postings.map((row) => [row.id, row]));
+  const fxAttributionByLeg = new Map(
+    fxDetail!.accruals.map((row) => [row.postingId, row.attribution]),
+  );
+  // The precondition the whole pin rests on: these legs are NOT RON-identical.
+  assert.ok(
+    fxFixture.legIds.every((id) => fxLegById.get(id)!.amount !== fxLegById.get(id)!.amountRon),
+    "the fixture legs must differ in amount and amountRon or they pin nothing",
+  );
+  const bandByOrdinal = (ordinal: number) => {
+    const band = bracketRows.find((row) => row.ordinal === ordinal)!;
+    return [band.lowerMinor, band.upperMinor, band.cassMinor];
+  };
+  const attributedBand = (legId: string) => {
+    const attribution = fxAttributionByLeg.get(legId)!;
+    assert.equal(attribution.kind, "band");
+    return attribution.kind === "band"
+      ? [attribution.lowerMinor, attribution.upperMinor, attribution.cassMinor]
+      : null;
+  };
+  // Ordinals identified by their seeded edges, not by re-typed literals.
+  assert.deepEqual(attributedBand(fxFixture.legIds[0]), bandByOrdinal(2));
+  assert.deepEqual(attributedBand(fxFixture.legIds[1]), bandByOrdinal(3));
+  // ...and the collision leg must NOT read as the band its EUR amount names.
+  assert.notDeepEqual(attributedBand(fxFixture.legIds[1]), bandByOrdinal(2));
+  await db.delete(transactions).where(eq(transactions.id, fxFixture.transactionId));
+  await db.delete(accounts).where(eq(accounts.id, eurTaxAccount.id));
+  ok("non-RON CASS legs attribute by the RON mirror (bands 2 and 3), never by the EUR amount");
+
+  // The investments panel must survive a missing bracket window (it renders no
+  // CASS) but still fail loud on a missing dividend_tax_rate window (it does).
+  const bracketParentForPanel = await db
+    .select({ id: taxConfig.id })
+    .from(taxConfig)
+    .where(eq(taxConfig.parameter, "cass_investment_brackets"));
+  await db
+    .update(taxConfig)
+    .set({ validFrom: "2026-08-01" })
+    .where(eq(taxConfig.id, bracketParentForPanel[0].id));
+  const degraded = await estimateDividendTaxes("2026-07-15", 5_500_000);
+  assert.equal(degraded.cassRonMinor, null);
+  assert.equal(degraded.cassBandOrdinal, null);
+  assert.equal(degraded.dividendTaxRonMinor, 880_000);
+  assert.deepEqual(degraded.appliedConfig.map((row) => row.parameter), ["dividend_tax_rate"]);
+  await db
+    .update(taxConfig)
+    .set({ validFrom: "2026-01-01" })
+    .where(eq(taxConfig.id, bracketParentForPanel[0].id));
+  await expectCode(
+    estimateDividendTaxes("2025-12-31", 5_500_000),
+    "tax.configCoverageMissing",
+    { parameter: "dividend_tax_rate", date: "2025-12-31" },
+  );
+  ok("investments panel degrades on a missing bracket window, still fails loud on the displayed rate");
+
+  assert.equal(await db.$count(taxConfig), 9);
+  assert.equal(await db.$count(transactions), ledgerBefore);
+  ok("U5.1 zero residue: config still 9 rows, ledger back to baseline");
 
   console.log("Tax config suite green: all checks passed.");
 }

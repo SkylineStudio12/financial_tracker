@@ -21,11 +21,15 @@ import {
   postings,
   securities,
   taxAccruals,
-  taxRules,
   trades,
   transactions,
 } from "@/db/schema";
 import { LedgerValidationError, softDeleteTransaction } from "@/lib/ledger";
+import {
+  cassBandForBasis,
+  resolveCassInvestmentBrackets,
+  resolveTaxConfig,
+} from "@/lib/tax/config-service";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import { estimateDividendTaxes, executeTrade } from "./service";
 import { setupTradeTestEntity, teardownTradeTestEntity, type TradeTestEnv } from "./test-support";
@@ -234,19 +238,26 @@ async function run(env: TradeTestEnv) {
   assert.equal(divTrade.kind, "dividend");
   ok("dividend: cash + income (Dividends), trades row recorded, ZERO tax accruals booked");
 
+  // U5: the estimate is tax_config-sourced. Withholding is the resolved rate;
+  // CASS is the annual BAND amount for this dividend as the basis — the same
+  // lookup previewDividend uses, so the two screens cannot disagree.
   const estimate = await estimateDividendTaxes("2026-07-01", 5_000);
-  const [divRule] = await db
-    .select()
-    .from(taxRules)
-    .where(and(eq(taxRules.ruleType, "dividend_tax"), isNull(taxRules.deletedAt)));
-  const [cassRule] = await db
-    .select()
-    .from(taxRules)
-    .where(and(eq(taxRules.ruleType, "cass_dividend"), isNull(taxRules.deletedAt)));
+  const dividendConfig = await resolveTaxConfig("dividend_tax_rate", "2026-07-01");
+  const bands = await resolveCassInvestmentBrackets("2026-07-01");
+  const band = cassBandForBasis(bands.bands, 5_000);
   assert.equal(estimate.estimate, true);
-  assert.equal(estimate.dividendTaxRonMinor, Math.round((5_000 * divRule.rateBps) / 10_000));
-  assert.equal(estimate.cassRonMinor, Math.round((5_000 * cassRule.rateBps) / 10_000));
-  ok("dividend estimate is display-only and sourced from tax_rules config, never a literal");
+  assert.equal(estimate.dividendTaxRateBps, dividendConfig.rateBps);
+  assert.equal(
+    estimate.dividendTaxRonMinor,
+    Math.round((5_000 * dividendConfig.rateBps!) / 10_000),
+  );
+  assert.equal(estimate.cassRonMinor, band.cassMinor);
+  assert.equal(estimate.cassBandOrdinal, band.ordinal);
+  assert.deepEqual(
+    estimate.appliedConfig.map((row) => row.parameter),
+    ["dividend_tax_rate", "cass_investment_brackets"],
+  );
+  ok("dividend estimate is display-only and sourced from tax_config, never a literal");
 
   // ------------------------------ 7. Fee: with and without a security
   const fee = await executeTrade({

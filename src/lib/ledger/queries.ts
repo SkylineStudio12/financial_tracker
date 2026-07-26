@@ -31,7 +31,106 @@ import {
   transactionTags,
 } from "@/db/schema";
 import type { AccountOwner, Profile } from "@/lib/profiles";
+import {
+  requireRate,
+  resolveCassInvestmentBrackets,
+  resolveTaxConfig,
+  type TaxConfigStatus,
+} from "@/lib/tax/config-service";
+import type { TaxConfigParameter } from "@/lib/tax/config-validation";
+import type { TaxRuleType } from "@/lib/tax/rules";
+import { LedgerValidationError } from "@/lib/app-error";
 import type { TransactionKind } from "./types";
+
+type AttributionStrategy =
+  /** Payslip-transcribed: never computed, so no rate can be attributed. */
+  | { via: "transcribed" }
+  /** Booked as a tax_config rate applied to a base. */
+  | { via: "rate"; parameter: TaxConfigParameter }
+  /** Booked as a fixed amount from the investment-CASS bracket set. */
+  | { via: "band" };
+
+/** EXHAUSTIVE over TaxRuleType (the config-validation.ts:17 pattern): an eighth
+ * enum member becomes a tsc error here instead of silently rendering as
+ * "not attributable" (U5.1 finding 5). */
+const ATTRIBUTION_BY_RULE_TYPE = {
+  salary_cas: { via: "transcribed" },
+  salary_cass: { via: "transcribed" },
+  salary_income_tax: { via: "transcribed" },
+  cam: { via: "transcribed" },
+  micro_revenue_tax: { via: "rate", parameter: "micro_revenue_tax" },
+  dividend_tax: { via: "rate", parameter: "dividend_tax_rate" },
+  cass_dividend: { via: "band" },
+} as const satisfies Record<TaxRuleType, AttributionStrategy>;
+
+/**
+ * What actually produced an accrual's figure. Never a guess: where tax_config
+ * cannot account for the number, the answer is `unavailable` rather than a
+ * tax_rules value that did not produce it (U5.1 finding 1, L-0018).
+ */
+export type AccrualAttribution =
+  | { kind: "transcribed" }
+  | { kind: "rate"; rateBps: number; status: TaxConfigStatus; source: string }
+  | {
+      kind: "band";
+      lowerMinor: number;
+      upperMinor: number | null;
+      cassMinor: number;
+      status: TaxConfigStatus;
+      source: string;
+    }
+  | { kind: "unavailable" };
+
+function isCoverageMissing(error: unknown): boolean {
+  return error instanceof LedgerValidationError && error.code === "tax.configCoverageMissing";
+}
+
+async function attributeAccrual(
+  ruleType: TaxRuleType,
+  date: string,
+  /** The booked leg in RON minor units — the same unit as band.cassMinor. */
+  bookedRonMinor: number | null,
+): Promise<AccrualAttribution> {
+  const strategy: AttributionStrategy = ATTRIBUTION_BY_RULE_TYPE[ruleType];
+
+  // Salary legs are payslip-transcribed, never computed, so ANY rate shown
+  // against them is a false attribution — including the legacy tax_rules one.
+  if (strategy.via === "transcribed") return { kind: "transcribed" };
+
+  if (strategy.via === "rate") {
+    try {
+      const row = await resolveTaxConfig(strategy.parameter, date);
+      return { kind: "rate", rateBps: requireRate(row), status: row.status, source: row.source };
+    } catch (error) {
+      // Pre-cutover dates have no window: report nothing, never fall back.
+      if (isCoverageMissing(error)) return { kind: "unavailable" };
+      throw error;
+    }
+  }
+
+  try {
+    const brackets = await resolveCassInvestmentBrackets(date);
+    // The booking writes exactly band.cassMinor, so the band is identifiable
+    // from the booked amount. A figure matching no band was not bracket-derived
+    // (a pre-cutover flat-rate row) and stays unattributed. Amount equality is
+    // sound only while cassMinor values are distinct within a set — true of the
+    // 2026 seed; a repeated amount would need an explicit distinctness rule.
+    const booked = bookedRonMinor === null ? null : Math.abs(bookedRonMinor);
+    const band = brackets.bands.find((candidate) => candidate.cassMinor === booked);
+    if (!band) return { kind: "unavailable" };
+    return {
+      kind: "band",
+      lowerMinor: band.lowerMinor,
+      upperMinor: band.upperMinor,
+      cassMinor: band.cassMinor,
+      status: brackets.config.status,
+      source: brackets.config.source,
+    };
+  } catch (error) {
+    if (isCoverageMissing(error)) return { kind: "unavailable" };
+    throw error;
+  }
+}
 
 export interface TransactionFilters {
   from?: string;
@@ -324,14 +423,17 @@ export async function getTransactionDetail(
     .innerJoin(tags, eq(tags.id, transactionTags.tagId))
     .where(eq(transactionTags.transactionId, transactionId));
 
+  // tax_rules is joined ONLY for ruleType — the accrual's own category, carried
+  // by the NOT NULL FK until the tax_accruals re-home (R5 prerequisite). Its
+  // rate is deliberately NOT selected: since the U3 cutover the figure booked
+  // may come from a tax_config bracket (a fixed amount) or from a payslip, so a
+  // tax_rules rate would be a false attribution (U5.1 finding 1, L-0018).
   const accrualRows = await db
     .select({
       id: taxAccruals.id,
       year: taxAccruals.year,
       quarter: taxAccruals.quarter,
       ruleType: taxRules.ruleType,
-      rateBps: taxRules.rateBps,
-      ruleNotes: taxRules.notes,
       postingId: taxAccruals.postingId,
     })
     .from(taxAccruals)
@@ -339,6 +441,20 @@ export async function getTransactionDetail(
     .where(
       and(eq(taxAccruals.transactionId, transactionId), isNull(taxAccruals.deletedAt)),
     );
+
+  // amountRon, NOT amount: band.cassMinor is RON minor, so comparing against a
+  // transaction-currency amount would silently mis-attribute a non-RON tax leg.
+  const ronAmountByPostingId = new Map(postingRows.map((row) => [row.id, row.amountRon]));
+  const accruals = await Promise.all(
+    accrualRows.map(async (accrual) => ({
+      ...accrual,
+      attribution: await attributeAccrual(
+        accrual.ruleType,
+        transaction.date,
+        ronAmountByPostingId.get(accrual.postingId) ?? null,
+      ),
+    })),
+  );
 
   const [trade] = await db
     .select({ id: trades.id })
@@ -355,7 +471,7 @@ export async function getTransactionDetail(
     transaction,
     postings: postingRows,
     tagNames: tagRows.map((t) => t.name),
-    accruals: accrualRows,
+    accruals,
     crudAvailable: !trade,
     importLink: importLink ?? null,
   };

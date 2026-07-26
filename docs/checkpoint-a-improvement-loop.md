@@ -109,6 +109,18 @@ reviewer disagree, both positions go to the owner verbatim; the implementer
 never silently resolves a reviewer finding out of existence (it may fix and
 re-run the reviewer, stating both rounds).
 
+**Tier-3 owner review, adapted (owner-ratified 2026-07-26).** For this
+project, the Tier-3 requirement that "the owner reviews the diff itself"
+(`docs/review-standards.md` §1) is satisfied by three things together:
+(a) an independent reviewer pass re-derived from the actual diff, never from
+the implementer's report; (b) the implementer's explicit `Invariants
+touched:` line; and (c) an owner ruling on every finding. Rationale: the
+owner is non-technical, so a nominal diff read would be weaker evidence
+than the above — and recording it as though it happened would be the
+dishonest option. This adapts the evidence, not the authority: the owner
+still rules on every finding and gates every commit. Tier-3 units state
+which of the three they carry.
+
 **Termination (owner-ratified 2026-07-26).** Remediating reviewer findings
 triggers a SECOND reviewer pass only when the fixes touch production
 **logic**. Test-only, comment-only, doc-only, and user-visible-string fixes

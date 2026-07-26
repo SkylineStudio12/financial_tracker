@@ -116,3 +116,37 @@ implementation is close to a tautology.
 nowhere in git history (the wrong wording was only ever in an uncommitted
 tree); replaced with a ban on `\bYTD\b` framing.
 **Status:** proposed
+
+### P-20260726-03 · proposed by 20-21-U5 · target: shared
+**Candidate:** A Postgres **enum** column orders by DECLARATION order, not
+lexically, so `ORDER BY <enum col>` yields declaration order. Never pin a
+lexical expectation against one; when the consumer regroups the rows anyway,
+assert order-independently rather than pinning an incidental detail.
+**Evidence:** 20-21-U5 — the viewer pin asserted alphabetical parameter order
+and failed against `asc(taxConfig.parameter)`, which returned enum order.
+**Status:** proposed
+
+### P-20260726-04 · proposed by 20-21-U5 · target: shared
+**Candidate:** A "repoint X so screen A agrees with screen B" brief must first
+verify screen A actually DISPLAYS the disputed value. If it does not, the
+repoint closes no visible contradiction and can add a failure mode to a path
+that never shows the number — check the render site before accepting the
+premise.
+**Evidence:** 20-21-U5 reviewer finding 4 — `estimateDividendTaxes`' CASS was
+computed, dropped by `estimateDividendAction`, and never rendered by
+`trade-form.tsx`, while `resolveCassInvestmentBrackets` became fatal on that
+panel's critical path (made non-fatal in 20-22-U5.1).
+**Status:** proposed
+
+### P-20260726-05 · proposed by 21-03 (owner-supplied, ratified for staging 2026-07-26) · target: shared
+**Candidate:** A unit that temporarily edits a production file to demonstrate
+a pin failing must record the file's content hash before the edit and prove
+the identical hash after restoration. Greps and marker sweeps are indicative,
+not conclusive: they confirm the absence of the specific string looked for,
+not the absence of change.
+**Evidence:** 21-01-U5.1-A restored two temporary edits to
+`src/lib/ledger/queries.ts` and proved it by grep, with no pre-edit hash
+available to compare against. The restoration was later confirmed by an
+independent read (21-02T item 4, run in the owner's shell), which is the
+available substitute but not equivalent to hash identity.
+**Status:** proposed

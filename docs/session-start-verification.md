@@ -52,7 +52,11 @@ you neither re-propose nor act on them).
 ```sh
 git status -sb
 git rev-list --left-right --count origin/main...HEAD
+git worktree list
 ```
+
+Any worktree other than the main one must be reported to the orchestrator
+and recorded on the live-session register before work begins (L-0030, L-0033).
 
 Expected at authoring: `main` synced with `origin/main`, `0 0`, and a clean
 tree. The current HEAD is `8e3fd58`. Any unexpected branch, ahead/behind

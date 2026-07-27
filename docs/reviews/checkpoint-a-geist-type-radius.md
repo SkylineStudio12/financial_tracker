@@ -17,7 +17,7 @@ Two published sources, both fetched 2026-07-27:
 | `vercel.com/design.md` | Machine-readable token file. `version: alpha`. Concrete `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, radii, elevation. |
 | `vercel.com/geist/typography` | Semantic usage guide. Role names, Tailwind class forms, Subtle/Strong mechanism. |
 
-The two were compared. They agree on all 28 typography token names and on the
+The two were compared. They agree on all 30 typography token names and on the
 set. No contradiction found. Every literal in this doc comes from one of them.
 Nothing is recalled.
 
@@ -39,7 +39,7 @@ a marker points at. Do not reuse the bare `D` series.
 | `T6` | `--radius-input` splits into a control token and a menu token. |
 | `T7` | G3 reversed. Headings move from weight 300 to Geist 600. |
 | `T8` | Subtle and Strong values are out of scope here. Post-swap unit. |
-| `T9` | The ten legacy role names survive as an **alias layer**. All 28 Geist tokens are defined alongside them. Call-site migration is a separate later unit. |
+| `T9` | The ten legacy role names survive as an **alias layer**. All 30 Geist tokens are defined alongside them. Call-site migration is a separate later unit. |
 
 `T7` supersedes the ratified G3 ruling. The `--text-*` comment block at
 `globals.css:142-148` asserts "export's 600 REJECTED (G3). Headings stay light."
@@ -105,11 +105,11 @@ are lost. Existing `text-transform: uppercase` on those 23 sites is retained.
 `T1` says adopt everything. It does not say whether the ten legacy role names
 survive. Two readings existed; the owner ruled the second.
 
-**Reading A, rejected — replace.** Define the 28 Geist tokens as the type layer,
+**Reading A, rejected — replace.** Define the 30 Geist tokens as the type layer,
 delete the ten role names, rewrite all 365 call sites to `text-copy-14`,
 `text-label-12` and so on.
 
-**Reading B, ratified as `T9` — alias.** Define all 28 Geist tokens. Keep the
+**Reading B, ratified as `T9` — alias.** Define all 30 Geist tokens. Keep the
 ten role names as a thin alias layer pointing at Geist values. Call sites
 unchanged. Migrate them in a separate later unit.
 
@@ -119,7 +119,7 @@ primitives changed, zero components touched, the whole change verifiable by
 reading one file. Reading A couples a token swap that can be reviewed in one
 file to a 365-site rename that cannot. Reading B preserves that property and
 reaches the same end state one unit later. It also satisfies `T1` more
-literally, since all 28 tokens exist and are consumable immediately, including
+literally, since all 30 tokens exist and are consumable immediately, including
 the ones nothing uses yet.
 
 **Consequence for the Sol brief.** The type portion of the swap touches
@@ -234,3 +234,42 @@ Not a brief. Constraints the brief must carry.
 5. **Stop conditions must be phrased as "stop if completing this task would
    require an edit outside your file list"**, never as "stop if the grep finds a
    hit" (`L-0053`).
+
+## 11. Published typography values (appendix)
+
+Transcribed from `vercel.com/design.md`, tracking converted to em per section 3. Family is Geist Sans unless marked Mono.
+
+| Token | px | weight | line-height | tracking |
+|---|---:|---:|---:|---|
+| heading-72 | 72 | 600 | 72 | -0.06em |
+| heading-64 | 64 | 600 | 64 | -0.06em |
+| heading-56 | 56 | 600 | 56 | -0.06em |
+| heading-48 | 48 | 600 | 56 | -0.06em |
+| heading-40 | 40 | 600 | 48 | -0.06em |
+| heading-32 | 32 | 600 | 40 | -0.04em |
+| heading-24 | 24 | 600 | 32 | -0.04em |
+| heading-20 | 20 | 600 | 26 | -0.02em |
+| heading-16 | 16 | 600 | 24 | -0.02em |
+| heading-14 | 14 | 600 | 20 | -0.02em |
+| button-16 | 16 | 500 | 20 | none |
+| button-14 | 14 | 500 | 20 | none |
+| button-12 | 12 | 500 | 16 | none |
+| label-20 | 20 | 400 | 32 | none |
+| label-18 | 18 | 400 | 20 | none |
+| label-16 | 16 | 400 | 20 | none |
+| label-14 | 14 | 400 | 20 | none |
+| label-14-mono | 14 | 400 | 20 | none (Mono) |
+| label-13 | 13 | 400 | 16 | none |
+| label-13-mono | 13 | 400 | 20 | none (Mono) |
+| label-12 | 12 | 400 | 16 | none |
+| label-12-mono | 12 | 400 | 16 | none (Mono) |
+| copy-24 | 24 | 400 | 36 | none |
+| copy-20 | 20 | 400 | 36 | none |
+| copy-18 | 18 | 400 | 28 | none |
+| copy-16 | 16 | 400 | 24 | none |
+| copy-14 | 14 | 400 | 20 | none |
+| copy-14-mono | 14 | 400 | 20 | none (Mono) |
+| copy-13 | 13 | 400 | 18 | none |
+| copy-13-mono | 13 | 400 | 18 | none (Mono) |
+
+`label-13-mono` line-height is 20 while `label-13` is 16. This is as published, not a transcription error. `heading-20` line-height is 26, off the 4px grid; also as published.

@@ -49,6 +49,14 @@ F are distinct agents anyway — a cross-vendor reviewer (Terra/Sol) stays
 available as an owner-invoked escalation for Tier-3 money paths, not the
 default (see Q1).
 
+**Harness split (owner-ratified 2026-07-27; supersedes Q1):**
+implementation moves to Codex (Sol); Claude Code becomes the reviewer,
+making cross-vendor review the default rather than the owner-invoked
+escalation Q1 reserved it as. A CC reviewer pass is required when a unit
+touches `src/lib/tax/`, `src/lib/ledger/`, migrations, or importer write
+paths (Tier 3 by path per L-0026); docs, tooling, scripts, test-only, and
+presentation-only units need none.
+
 ### 1.2 Inputs — evidence, never narration (L-0021)
 
 The reviewer receives exactly:

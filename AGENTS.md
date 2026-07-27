@@ -65,6 +65,10 @@ Every orchestrator prompt carries a key in its title:
 `[chat]-[seq][tier]`, e.g. `09-06L` = chat 09, sixth prompt, Luna.
 Tier letters: M = Sol medium, H = Sol high/max, T = Terra,
 L = Luna, C = CC, F = Fable.
+Prompt-key suffixes name the model or agent: S = Sol, T = Terra, L = Luna
+(Codex models); C = Claude Code; F = Fable. Codex reasoning effort is named
+in the brief header (Light / Medium / High / Extra High / Ultra), not in the
+key. Medium is the default.
 The prompt instructs the agent to open its report with
 `PROMPT-KEY: <key>`. Rules:
 

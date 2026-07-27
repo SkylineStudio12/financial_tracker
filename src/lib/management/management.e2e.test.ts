@@ -354,6 +354,30 @@ async function main(): Promise<void> {
     assert.ok(householdAccounts.some((account) => account.owner === "greg"));
     assert.ok(householdAccounts.some((account) => account.owner === "andra"));
     assert.ok(householdAccounts.every((account) => ["bank", "cash", "brokerage"].includes(account.type)));
+    const gregManagedAccounts = await listManagedAccounts(ENTITY_IDS.household, "live", "greg");
+    const andraManagedAccounts = await listManagedAccounts(ENTITY_IDS.household, "live", "andra");
+    assert.deepEqual(
+      [...new Set(gregManagedAccounts.map((account) => account.owner))],
+      ["greg"],
+      "Greg Manage account list must contain only Greg-owned accounts",
+    );
+    assert.deepEqual(
+      [...new Set(andraManagedAccounts.map((account) => account.owner))],
+      ["andra"],
+      "Andra Manage account list must contain only Andra-owned accounts",
+    );
+    const skylineManagedAccounts = await listManagedAccounts(COMPANY_ID);
+    const drmxManagedAccounts = await listManagedAccounts(ENTITY_IDS.drmx);
+    assert.ok(skylineManagedAccounts.length > 0);
+    assert.ok(drmxManagedAccounts.length > 0);
+    assert.ok(
+      [...skylineManagedAccounts, ...drmxManagedAccounts].every(
+        (account) => account.owner === null,
+      ),
+    );
+    console.log(
+      `PASS fixture 4a.0 account owner isolation: greg=${gregManagedAccounts.length}, andra=${andraManagedAccounts.length}; company NULL-owner accounts preserved`,
+    );
     const brokerage = householdAccounts.find((account) => account.type === "brokerage");
     assert.ok(brokerage?.readOnly);
     await expectCode(

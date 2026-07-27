@@ -25,6 +25,7 @@ import {
 import { LedgerValidationError } from "@/lib/app-error";
 import { isCategoryIconName } from "@/components/category-icons";
 import { getAccountBalances } from "@/lib/ledger/dashboard";
+import { profileAccountScopeCondition } from "@/lib/ledger/queries";
 import type { AccountOwner } from "@/lib/profiles";
 
 export interface SalaryProfileValues {
@@ -662,6 +663,7 @@ export async function deleteSalaryProfile(
 export async function listManagedAccounts(
   entityId: string,
   mode: "live" | "deleted" = "live",
+  owner?: AccountOwner,
 ): Promise<ManagedAccount[]> {
   await loadEntity(entityId);
   const [rows, balances] = await Promise.all([
@@ -681,14 +683,14 @@ export async function listManagedAccounts(
       .leftJoin(postings, eq(postings.accountId, accounts.id))
       .where(
         and(
-          eq(accounts.entityId, entityId),
+          profileAccountScopeCondition({ entityId, owner }),
           inArray(accounts.type, ["bank", "cash", "brokerage"]),
           mode === "live" ? isNull(accounts.deletedAt) : isNotNull(accounts.deletedAt),
         ),
       )
       .groupBy(accounts.id)
       .orderBy(desc(accounts.isActive), asc(accounts.name)),
-    getAccountBalances(entityId, undefined, { includeInactive: true }),
+    getAccountBalances(entityId, owner, { includeInactive: true }),
   ]);
   const balanceById = new Map(balances.map((balance) => [balance.accountId, balance.balanceRon]));
   return rows.map((row) => ({

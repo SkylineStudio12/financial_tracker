@@ -24,8 +24,8 @@ export default async function ManagePage({
   const referenceDate = new Date().toISOString().slice(0, 10);
   const [accounts, deletedAccounts, categories, deletedCategories, employees, deletedEmployees, taxConfigRows] =
     await Promise.all([
-      listManagedAccounts(profile.entityId),
-      listManagedAccounts(profile.entityId, "deleted"),
+      listManagedAccounts(profile.entityId, "live", profile.owner),
+      listManagedAccounts(profile.entityId, "deleted", profile.owner),
       listManagedCategories(profile.entityId),
       listManagedCategories(profile.entityId, "deleted"),
       profile.companyFlows

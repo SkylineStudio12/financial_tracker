@@ -1,18 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Urbanist } from "next/font/google";
+import { Geist } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import "./globals.css";
 
-// HYBRID font model (owner ruling 10-22C): Urbanist is the UI typeface
-// (--font-sans); Geist stays the numeric face (--font-numeric) because
-// Urbanist has NO tabular figures (tnum verified absent, 10-20C gate) while
-// Geist's tnum is verified. Every money/aligned-number surface must resolve
-// through font-numeric + tabular-nums — never the sans face.
-const urbanistSans = Urbanist({
-  variable: "--font-urbanist-sans",
-  subsets: ["latin", "latin-ext"], // latin-ext: Romanian diacritics (ă â î ș ț)
-});
 const geistNumeric = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -34,7 +25,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`${urbanistSans.variable} ${geistNumeric.variable} h-full antialiased`}
+      className={`${geistNumeric.variable} h-full antialiased`}
     >
       {/* suppressHydrationWarning: approved rider (10-22C item 5) for this
           presentation unit — attribute-level only; content mismatches still warn. */}

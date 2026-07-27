@@ -6,170 +6,130 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Central design tokens — implements docs/design-tokens.md (the spec).
- * Color values adopted 2026-07-17 from the Claude Design export under REPO
- * NAMES (10-14C Phase 1 option (a), owner-ruled 10-22C). Light-first:
- * off-white canvas, white cards, black accent; olive/red money status; lime
- * is a NEW fills-only highlight family no component consumes yet.
- * Typefaces: HYBRID — Urbanist for UI text, Geist for numerals (Urbanist
- * verified missing tnum at the 10-20C gate; Geist's tnum verified).
- * Three tiers: primitives feed semantic tokens; components use SEMANTIC
- * tokens only, never primitives or raw values.
+ * Central design tokens — Geist Light palette (vercel.com/design.md).
+ * Three tiers: primitives feed semantic tokens; components use semantic
+ * tokens only, never primitives or raw values. Radius, type, and shadow
+ * remain deliberately unchanged in this unit.
  */
 @theme {
   /* Wipe Tailwind's default palette so only system colors exist. */
   --color-*: initial;
 
-  /* ---- Tier 1: primitives ------------------------------------------- */
-  /* Neutral ramp (achromatic, no blue cast — export gray) */
-  --color-gray-0: #ffffff;
-  --color-gray-25: #fbfbfc;
-  --color-gray-50: #f5f5f8;
-  --color-gray-100: #ececf0;
-  --color-gray-200: #e0e0e5;
-  --color-gray-300: #cdcdd4;
-  --color-gray-400: #9a9aa3;
-  --color-gray-500: #6f6f78;
-  --color-gray-600: #55555d;
-  --color-gray-700: #3b3b42;
-  --color-gray-800: #232328;
-  --color-gray-900: #121215;
-  --color-gray-950: #000000;
+  /* ---- Tier 1: primitives — Geist Light (vercel.com/design.md) ------- */
+  /* Backgrounds are a scale DISTINCT from gray. Never interchange them. */
+  --color-background-100: #ffffff;
+  --color-background-200: #fafafa;
 
-  /* Electric lime — FILLS ONLY, never text on light surfaces */
-  --color-lime-50: #faffde;
-  --color-lime-100: #f3ffb0;
-  --color-lime-300: #e7fe6a;
-  --color-lime-500: #d7fe03;
-  --color-lime-600: #c2e603;
-  --color-lime-700: #a6c405;
+  /* Gray — consumed steps only */
+  --color-gray-100: #f2f2f2;
+  --color-gray-200: #ebebeb;
+  --color-gray-500: #c9c9c9;
+  --color-gray-600: #a8a8a8;
+  --color-gray-700: #8f8f8f;
+  --color-gray-800: #7d7d7d;
+  --color-gray-900: #4d4d4d;
+  --color-gray-1000: #171717;
 
-  /* Olive — money positive (distinct from the lime highlight) */
-  --color-olive-50: #f4f9ec;
-  --color-olive-100: #e6f1d2;
-  --color-olive-200: #cbe3a2;
-  --color-olive-500: #83af3b;
-  --color-olive-600: #4d7c0f; /* 4.99:1 white, 4.66:1 own bg */
-  --color-olive-700: #3f6212; /* 7.08:1 white */
-  --color-olive-800: #365314;
+  /* Blue — links and focus */
+  --color-blue-700: #006bff;
+  --color-blue-800: #0059ec;
+
+  /* Green — money positive */
+  --color-green-100: #ecfdec;
+  --color-green-400: #b9f5bc;
+  --color-green-600: #4ce15e;
+  --color-green-900: #107d32;
+  --color-green-1000: #003a00;
 
   /* Red — money negative */
-  --color-red-50: #fef3f2;
-  --color-red-100: #fee4e2;
-  --color-red-200: #fecdca;
-  --color-red-400: #f97066; /* on dark surfaces only */
-  --color-red-500: #d64b3f;
-  --color-red-600: #b42318; /* 6.57:1 white, 6.05:1 own bg */
-  --color-red-700: #912018;
+  --color-red-100: #ffeeef;
+  --color-red-400: #ffd7d6;
+  --color-red-600: #ff676d;
+  --color-red-900: #d8001b;
+  --color-red-1000: #47000c;
 
-  /* Amber — attention / estimates */
-  --color-amber-50: #fffaeb;
-  --color-amber-100: #fef0c7;
-  --color-amber-200: #fedf89;
-  --color-amber-600: #b54708;
-  --color-amber-700: #93370d; /* 7.52:1 white, 7.21:1 own bg */
-
-  /* Legacy status-fill primitives (owner-ruled KEPT, 10-22C item 2):
-   * the vivid dot/badge fills and the neutral indicator predate the export
-   * and have no successor in it. Fills only, never text. */
-  --color-green-neon: #86ff7b;
-  --color-red-neon: #ff6262;
-  --color-grey-fill: #b9bfc7; /* ex neutral-300; status-neutral-fill only */
+  /* Amber — warnings */
+  --color-amber-100: #fff6de;
+  --color-amber-900: #aa4d00;
 
   /* ---- Tier 2: semantic tokens -------------------------------------- */
   /* Surfaces */
-  --color-canvas: var(--color-gray-50);
-  --color-surface: var(--color-gray-0);
-  --color-surface-raised: var(--color-gray-0); /* + shadow-raised (kept) */
+  --color-canvas: var(--color-background-200);
+  --color-surface: var(--color-background-100);
+  --color-surface-raised: var(--color-background-100);
   --color-surface-inactive: var(--color-gray-100);
   --color-border-hairline: var(--color-gray-200);
-  --color-border-input: var(--color-gray-300);
+  --color-border-input: var(--color-gray-500); /* D1 */
 
   /* Text */
-  --color-text-primary: var(--color-gray-900);
-  --color-text-secondary: var(--color-gray-600);
-  --color-text-muted: var(--color-gray-500);
-  --color-text-disabled: var(--color-gray-400);
+  --color-text-primary: var(--color-gray-1000);
+  --color-text-secondary: var(--color-gray-900);
+  --color-text-muted: var(--color-gray-900); /* D3 */
+  --color-text-disabled: var(--color-gray-700);
 
-  /* Status (finance): -text passes AA on canvas and surface; -fill vivid */
-  --color-status-positive-text: var(--color-olive-600);
-  --color-status-positive-fill: var(--color-green-neon); /* kept */
-  --color-status-negative-text: var(--color-red-600);
-  --color-status-negative-fill: var(--color-red-neon); /* kept */
-  --color-status-neutral-text: var(--color-gray-600);
-  --color-status-neutral-fill: var(--color-grey-fill); /* kept */
-  --color-status-warning-text: var(--color-amber-700);
+  /* Status (finance) */
+  --color-status-positive-text: var(--color-green-900);
+  --color-status-positive-fill: var(--color-green-600);
+  --color-status-negative-text: var(--color-red-900);
+  --color-status-negative-fill: var(--color-red-600);
+  --color-status-neutral-text: var(--color-gray-900);
+  --color-status-neutral-fill: var(--color-gray-600);
+  --color-status-warning-text: var(--color-amber-900);
 
-  /* Accent: black stays the interactive/selected accent (export "brand") */
-  --color-accent: var(--color-gray-950);
-  --color-accent-foreground: var(--color-gray-0);
-  --color-accent-hover: var(--color-gray-800);
+  /* Accent */
+  --color-accent: var(--color-gray-1000);
+  --color-accent-foreground: var(--color-background-100);
+  --color-accent-hover: var(--color-gray-900); /* D4 */
 
-  /* Interaction/elevation. Scrim adopts the export overlay (40%).
-   * focus-ring KEPT at accent 30% (owner deviation — export's 16% shadow
-   * variant rejected); shadow-raised kept (elevation out of export scope). */
-  --color-scrim: color-mix(in srgb, var(--color-gray-900) 40%, transparent);
-  --color-focus-ring: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  /* Interaction and elevation: scrim, focus ring, and raised shadow */
+  --color-scrim: color-mix(in srgb, var(--color-gray-1000) 40%, transparent);
+  --color-focus-ring: color-mix(in srgb, var(--color-blue-700) 30%, transparent);
   --shadow-raised: 0 8px 24px rgb(0 0 0 / 0.08);
 
-  /* ---- Tier 2 additions (10-22C item 3) — NO component consumes these
-   * yet; each future adoption is its own reviewed unit. ---------------- */
-  /* Highlight — the export's lime "accent", renamed to avoid colliding
-   * with our black accent. Fills only; black text/icons on top; ration
-   * to 1–3 elements per screen. */
-  --color-highlight: var(--color-lime-500);
-  --color-highlight-hover: var(--color-lime-600);
-  --color-highlight-active: var(--color-lime-700);
-  --color-highlight-foreground: var(--color-gray-950);
-  --color-highlight-subtle: var(--color-lime-100);
-  --color-highlight-border: var(--color-lime-300);
+  /* Money */
+  --color-money-positive-strong: var(--color-green-1000);
+  --color-money-positive-bg: var(--color-green-100);
+  --color-money-positive-border: var(--color-green-400);
+  --color-money-negative-strong: var(--color-red-1000);
+  --color-money-negative-bg: var(--color-red-100);
+  --color-money-negative-border: var(--color-red-400);
+  --color-money-neutral-strong: var(--color-gray-1000);
+  --color-money-symbol: var(--color-gray-900); /* D2 */
+  --color-money-decimals: var(--color-gray-900); /* D2 */
 
-  /* Money extensions: pill/strong/border treatments + digit dressing.
-   * DEVIATION: money-symbol at gray-500 (AA 4.98:1), not the export's
-   * gray-400 (2.79:1) — a currency symbol is information (RON/EUR/USD). */
-  --color-money-positive-strong: var(--color-olive-700);
-  --color-money-positive-bg: var(--color-olive-50);
-  --color-money-positive-border: var(--color-olive-200);
-  --color-money-negative-strong: var(--color-red-700);
-  --color-money-negative-bg: var(--color-red-50);
-  --color-money-negative-border: var(--color-red-200);
-  --color-money-neutral-strong: var(--color-gray-800);
-  --color-money-symbol: var(--color-gray-500);
-  --color-money-decimals: var(--color-gray-500);
+  /* Links */
+  --color-text-link: var(--color-blue-700);
+  --color-text-link-hover: var(--color-blue-800);
 
-  /* Links (olive) — current links use accent; adoption is a future unit */
-  --color-text-link: var(--color-olive-700);
-  --color-text-link-hover: var(--color-olive-800);
-
-  /* Brand-subtle (quiet black-family emphasis) */
+  /* Brand-subtle */
   --color-brand-subtle: var(--color-gray-100);
-  --color-brand-subtle-text: var(--color-gray-900);
-  --color-brand-border: var(--color-gray-300);
+  --color-brand-subtle-text: var(--color-gray-1000);
+  --color-brand-border: var(--color-gray-500);
 
-  /* Inverse / hero-card family (max one inverse card per screen) */
-  --color-surface-inverse: var(--color-gray-900);
-  --color-surface-inverse-card: var(--color-gray-900);
-  --color-surface-inverse-raised: var(--color-gray-800);
-  --color-text-on-inverse: var(--color-gray-0);
-  --color-text-on-inverse-secondary: rgb(255 255 255 / 0.64);
-  --color-border-on-inverse: rgb(255 255 255 / 0.14);
-  --color-money-positive-on-inverse: var(--color-lime-500);
-  --color-money-negative-on-inverse: var(--color-red-400);
+  /* Inverse / hero-card family */
+  --color-surface-inverse: var(--color-gray-1000);
+  --color-surface-inverse-card: var(--color-gray-1000);
+  --color-surface-inverse-raised: var(--color-gray-900);
+  --color-text-on-inverse: var(--color-background-100);
+  --color-text-on-inverse-secondary: rgb(255 255 255 / 0.64); /* D5 */
+  --color-border-on-inverse: rgb(255 255 255 / 0.14); /* D5 */
+  --color-money-positive-on-inverse: var(--color-green-600);
+  --color-money-negative-on-inverse: var(--color-red-600);
 
-  /* Charts (emphasis palette — 10-07F Q8 remains open for categorical) */
-  --color-chart-accent: var(--color-lime-500);
-  --color-chart-strong: var(--color-gray-900);
-  --color-chart-strong-on-inverse: var(--color-gray-0);
-  --color-chart-hatch: var(--color-gray-400);
-  --color-chart-hatch-on-inverse: var(--color-gray-600);
+  /* Charts */
+  --color-chart-accent: var(--color-blue-700);
+  --color-chart-strong: var(--color-gray-1000);
+  --color-chart-strong-on-inverse: var(--color-background-100);
+  --color-chart-hatch: var(--color-gray-700);
+  --color-chart-hatch-on-inverse: var(--color-gray-800);
   --color-chart-muted: var(--color-gray-200);
-  --color-chart-muted-on-inverse: var(--color-gray-700);
+  --color-chart-muted-on-inverse: var(--color-gray-900);
 
   /* Status backgrounds + info pair */
-  --color-status-success-bg: var(--color-olive-50);
-  --color-status-error-bg: var(--color-red-50);
-  --color-status-warning-bg: var(--color-amber-50);
-  --color-status-info-text: var(--color-gray-700);
+  --color-status-success-bg: var(--color-green-100);
+  --color-status-error-bg: var(--color-red-100);
+  --color-status-warning-bg: var(--color-amber-100);
+  --color-status-info-text: var(--color-gray-900); /* D6 */
   --color-status-info-bg: var(--color-gray-100);
   --color-status-neutral-bg: var(--color-gray-100);
 
@@ -218,12 +178,10 @@
 
 }
 
-/* HYBRID font model (10-22C): Urbanist for UI text; Geist for numerals.
- * Urbanist has NO tnum (10-20C gate) — money/aligned digits MUST resolve
- * through --font-numeric (Geist, tnum verified) via the font-numeric class
- * + tabular-nums. An amount in --font-sans is a defect. */
+/* Geist Sans serves UI text and numerals. Money/aligned digits still resolve
+ * through --font-numeric plus tabular-nums; Geist Sans has verified tnum. */
 @theme inline {
-  --font-sans: var(--font-urbanist-sans);
+  --font-sans: var(--font-geist-sans);
   --font-numeric: var(--font-geist-sans);
 }
 

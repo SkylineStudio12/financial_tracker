@@ -38,6 +38,7 @@ import { bookImportRow, createImportBatch } from "@/lib/import/service";
 import { setupImportTestEntity, teardownImportTestEntity } from "@/lib/import/test-support";
 import { executeTrade } from "@/lib/investments/service";
 import { setupTradeTestEntity, teardownTradeTestEntity } from "@/lib/investments/test-support";
+import { ENTITY_IDS } from "@/lib/profiles";
 
 const ingFixture = readFileSync(
   join(import.meta.dirname, "..", "import", "ing", "fixtures", "skyline-2026-06.txt"),
@@ -157,7 +158,9 @@ async function main(): Promise<void> {
   assert.match(databaseName, /_test$/);
   const env = await setupImportTestEntity();
   const fixtureTransactionIds = new Set<string>();
+  const mappedCompanyTransactionIds = new Set<string>();
   const track = (id: string) => (fixtureTransactionIds.add(id), id);
+  const trackMappedCompany = (id: string) => (mappedCompanyTransactionIds.add(id), id);
   const [secondBank, usdBank] = await db
     .insert(accounts)
     .values([
@@ -492,17 +495,56 @@ async function main(): Promise<void> {
       }
     });
 
+    const [personal] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.owner, "greg"), inArray(accounts.type, ["bank", "cash"]), isNull(accounts.deletedAt)))
+      .limit(1);
+    assert.ok(personal);
+
+    await fixture("unmapped company guided flows fail loud before writing", async () => {
+      const salaryResult = await saveSalary({
+        stay: true,
+        companyId: env.entityId,
+        employeeName: "Unmapped CRUD Employee",
+        payMonth: "2026-05",
+        paymentDate: "2026-06-11",
+        grossMinor: 450_000,
+        casMinor: 112_500,
+        cassMinor: 45_000,
+        incomeTaxMinor: 23_000,
+        camMinor: 10_100,
+        netMinor: 269_500,
+        personalDeductionMinor: 45_000,
+        personalAccountId: personal.id,
+      });
+      const dividendResult = await saveDividend({
+        stay: true,
+        companyId: env.entityId,
+        date: "2026-06-11",
+        grossMinor: 100_000,
+        personalAccountId: personal.id,
+      });
+      assert.deepEqual(salaryResult, { error: { code: "profile.unknownCompany" } });
+      assert.deepEqual(dividendResult, { error: { code: "profile.unknownCompany" } });
+      assert.equal(
+        await db.$count(
+          transactions,
+          inArray(transactions.description, [
+            "Salary Unmapped CRUD Employee 2026-05",
+            "Dividend distribution 2026-06-11",
+          ]),
+        ),
+        0,
+      );
+    });
+
     await fixture("guided and special-form adapters preserve shape and accrual links", async () => {
-      const [personal] = await db
-        .select({ id: accounts.id })
-        .from(accounts)
-        .where(and(eq(accounts.owner, "greg"), inArray(accounts.type, ["bank", "cash"]), isNull(accounts.deletedAt)))
-        .limit(1);
-      assert.ok(personal);
+      const flowCompanyId = ENTITY_IDS.skyline;
       assert.deepEqual(
         await saveSalary({
           stay: true,
-          companyId: env.entityId,
+          companyId: flowCompanyId,
           employeeName: "CRUD Employee",
           payMonth: "2026-05",
           paymentDate: "2026-06-10",
@@ -521,14 +563,14 @@ async function main(): Promise<void> {
         .select()
         .from(transactions)
         .where(eq(transactions.description, "Salary CRUD Employee 2026-05"));
-      track(salary.id);
+      trackMappedCompany(salary.id);
       const salaryBefore = await db.select().from(taxAccruals).where(eq(taxAccruals.transactionId, salary.id));
       assert.deepEqual(
         await saveSalary({
           transactionId: salary.id,
           expectedRevision: 1,
           stay: true,
-          companyId: env.entityId,
+          companyId: flowCompanyId,
           employeeName: "CRUD Employee",
           payMonth: "2026-05",
           paymentDate: "2026-06-10",
@@ -550,7 +592,7 @@ async function main(): Promise<void> {
       assert.deepEqual(
         await saveDividend({
           stay: true,
-          companyId: env.entityId,
+          companyId: flowCompanyId,
           date: "2026-06-15",
           grossMinor: 100_000,
           personalAccountId: personal.id,
@@ -561,20 +603,20 @@ async function main(): Promise<void> {
         .select()
         .from(transactions)
         .where(eq(transactions.description, "Dividend distribution 2026-06-15"));
-      track(dividend.id);
+      trackMappedCompany(dividend.id);
       assert.deepEqual(
         await saveDividend({
           transactionId: dividend.id,
           expectedRevision: 1,
           stay: true,
-          companyId: env.entityId,
+          companyId: flowCompanyId,
           date: "2026-06-15",
           grossMinor: 110_000,
           personalAccountId: personal.id,
         }),
         { ok: true },
       );
-      const salaryDraft = await getTransactionEditDraft(salary.id, env.entityId);
+      const salaryDraft = await getTransactionEditDraft(salary.id, flowCompanyId);
       assert.equal(salaryDraft.type, "salary");
       if (salaryDraft.type !== "salary") throw new Error("expected salary draft");
       assert.deepEqual(
@@ -599,7 +641,7 @@ async function main(): Promise<void> {
           net: "2750,00",
         },
       );
-      assert.equal((await getTransactionEditDraft(dividend.id, env.entityId)).type, "dividend");
+      assert.equal((await getTransactionEditDraft(dividend.id, flowCompanyId)).type, "dividend");
 
       const openingId = track(
         await createTransaction({
@@ -828,17 +870,20 @@ async function main(): Promise<void> {
       assert.equal(currentRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
     });
 
-    assert.equal(fixtures, 13);
+    assert.equal(fixtures, 14);
   } finally {
-    const ids = [...fixtureTransactionIds];
+    const ids = [...fixtureTransactionIds, ...mappedCompanyTransactionIds];
     if (ids.length > 0) {
       await db.delete(auditLog).where(and(eq(auditLog.tableName, "transactions"), inArray(auditLog.rowId, ids)));
+    }
+    if (mappedCompanyTransactionIds.size > 0) {
+      await db.delete(transactions).where(inArray(transactions.id, [...mappedCompanyTransactionIds]));
     }
     await teardownImportTestEntity(env.entityId);
     const residue = await db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(eq(transactions.entityId, env.entityId));
     assert.equal(residue[0].count, 0);
   }
-  console.log("PASS fixtures 1-13 and zero fixture residue");
+  console.log("PASS fixtures 1-14 and zero fixture residue");
 }
 
 main()

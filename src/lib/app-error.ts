@@ -60,6 +60,7 @@ export const ERROR_CODES = [
   "flows.salaryAmountInvalid",
   "flows.salaryNetMismatch",
   "flows.salaryShapeUnavailable",
+  "flows.recipientAccountOwnerMismatch",
   "flows.invalidDate",
   "manage.nameRequired",
   "manage.entityNotFound",

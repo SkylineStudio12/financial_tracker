@@ -44,6 +44,11 @@ export interface SalaryDetailInput {
 
 export interface TransactionInput {
   entityId: string;
+  /**
+   * Guided salary/dividend destination. Authorization metadata only: the
+   * account is still persisted through its matching posting.
+   */
+  recipientAccountId?: string;
   /** YYYY-MM-DD */
   date: string;
   description?: string | null;

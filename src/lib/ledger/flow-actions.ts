@@ -323,6 +323,7 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
 
     const input = {
       entityId: payload.companyId,
+      recipientAccountId: payload.personalAccountId,
       date: paymentDate,
       description: `Salary ${payload.employeeName.trim()} ${payload.payMonth}`,
       kind: "salary",
@@ -433,6 +434,7 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
 
     const input = {
       entityId: payload.companyId,
+      recipientAccountId: payload.personalAccountId,
       date: payload.date,
       description: `Dividend distribution ${payload.date}`,
       kind: "dividend",

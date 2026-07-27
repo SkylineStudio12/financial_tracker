@@ -8,7 +8,8 @@ import {
   softDeleteNonInvestmentTransaction,
   type TransactionKind,
 } from "@/lib/ledger";
-import { saveSalary } from "@/lib/ledger/flow-actions";
+import { saveDividend, saveSalary } from "@/lib/ledger/flow-actions";
+import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import {
   getTransactionDetail,
   listDeletedTransactions,
@@ -54,6 +55,7 @@ async function listed(profile: Profile) {
 
 async function createFixtureTransaction(input: {
   entityId: string;
+  recipientAccountId?: string;
   description: string;
   kind: TransactionKind;
   debitAccountId: string;
@@ -62,6 +64,7 @@ async function createFixtureTransaction(input: {
 }) {
   return createTransaction({
     entityId: input.entityId,
+    recipientAccountId: input.recipientAccountId,
     date: "2026-07-10",
     description: input.description,
     kind: input.kind,
@@ -132,10 +135,124 @@ async function main() {
   const skylineBank = await requiredAccount(skyline.entityId, "Company bank");
   const skylineEquity = await requiredAccount(skyline.entityId, "Owner equity");
   const gregBank = await requiredAccount(household.entityId, "Greg — bank");
+  const andraBank = await requiredAccount(household.entityId, "Andra — bank");
   const createdIds: string[] = [];
+  const createdAccountIds: string[] = [];
 
   try {
-    const salaryResult = await saveSalary({
+    const [gregOwnedDrmxBank] = await db
+      .insert(accounts)
+      .values({
+        entityId: drmx.entityId,
+        name: "__test__ Greg-owned non-Household bank",
+        type: "bank",
+        currency: "RON",
+        owner: "greg",
+      })
+      .returning();
+    createdAccountIds.push(gregOwnedDrmxBank.id);
+
+    const crossoverSalary = await saveSalary({
+      stay: true,
+      companyId: skyline.entityId,
+      employeeName: "__test__ Crossover Employee",
+      payMonth: "2026-06",
+      paymentDate: "2026-07-11",
+      grossMinor: 450_000,
+      casMinor: 112_500,
+      cassMinor: 45_000,
+      incomeTaxMinor: 23_000,
+      camMinor: 10_100,
+      netMinor: 269_500,
+      personalDeductionMinor: 45_000,
+      personalAccountId: andraBank.id,
+    });
+    const crossoverDividend = await saveDividend({
+      stay: true,
+      companyId: drmx.entityId,
+      date: "2026-07-11",
+      grossMinor: 100_000,
+      personalAccountId: gregBank.id,
+    });
+    const sameEntitySalary = await saveSalary({
+      stay: true,
+      companyId: skyline.entityId,
+      employeeName: "__test__ Same-entity Recipient",
+      payMonth: "2026-06",
+      paymentDate: "2026-07-12",
+      grossMinor: 450_000,
+      casMinor: 112_500,
+      cassMinor: 45_000,
+      incomeTaxMinor: 23_000,
+      camMinor: 10_100,
+      netMinor: 269_500,
+      personalDeductionMinor: 45_000,
+      personalAccountId: skylineBank.id,
+    });
+    const sameOwnerWrongEntityDividend = await saveDividend({
+      stay: true,
+      companyId: skyline.entityId,
+      date: "2026-07-12",
+      grossMinor: 100_000,
+      personalAccountId: gregOwnedDrmxBank.id,
+    });
+    const crossoverWrites = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(
+        inArray(transactions.description, [
+          "Salary __test__ Crossover Employee 2026-06",
+          "Dividend distribution 2026-07-11",
+          "Salary __test__ Same-entity Recipient 2026-06",
+          "Dividend distribution 2026-07-12",
+        ]),
+      );
+    createdIds.push(...crossoverWrites.map((row) => row.id));
+
+    await fixture("salary and dividend writes reject a cross-owner recipient", async () => {
+      assert.deepEqual(crossoverSalary, {
+        error: { code: "flows.recipientAccountOwnerMismatch" },
+      });
+      assert.deepEqual(crossoverDividend, {
+        error: { code: "flows.recipientAccountOwnerMismatch" },
+      });
+      assert.equal(crossoverWrites.length, 0);
+      console.log("  Skyline→Andra salary + DRMX→Greg dividend code=flows.recipientAccountOwnerMismatch writes=0");
+    });
+
+    await fixture("writer rejects same-entity and same-owner non-Household recipients", async () => {
+      assert.deepEqual(
+        {
+          sameEntity: sameEntitySalary,
+          sameOwnerWrongEntity: sameOwnerWrongEntityDividend,
+        },
+        {
+          sameEntity: { error: { code: "flows.recipientAccountOwnerMismatch" } },
+          sameOwnerWrongEntity: {
+            error: { code: "flows.recipientAccountOwnerMismatch" },
+          },
+        },
+      );
+      console.log("  same-entity + same-owner/non-Household code=flows.recipientAccountOwnerMismatch");
+    });
+
+    await fixture("company flow recipient pickers expose only the mapped owner", async () => {
+      const [skylineFlow, drmxFlow] = await Promise.all([
+        getFlowPageData(skyline.entityId),
+        getFlowPageData(drmx.entityId),
+      ]);
+      assert.deepEqual(
+        skylineFlow.personalAccounts.map((account) => account.name),
+        ["Greg — bank", "Greg — cash"],
+      );
+      assert.deepEqual(
+        drmxFlow.personalAccounts.map((account) => account.name),
+        ["Andra — bank", "Andra — savings"],
+      );
+      console.log("  Skyline=[Greg — bank, Greg — cash]; DRMX=[Andra — bank, Andra — savings]");
+    });
+
+    const compliantSalaryPayload = {
       stay: true,
       companyId: skyline.entityId,
       employeeName: "__test__ Visibility Employee",
@@ -149,6 +266,9 @@ async function main() {
       netMinor: 269_500,
       personalDeductionMinor: 45_000,
       personalAccountId: gregBank.id,
+    } as const;
+    const salaryResult = await saveSalary({
+      ...compliantSalaryPayload,
     });
     assert.deepEqual(salaryResult, { ok: true });
     const [salary] = await db
@@ -158,6 +278,23 @@ async function main() {
     assert.ok(salary);
     const salaryId = salary.id;
     createdIds.push(salaryId);
+
+    await fixture("a compliant salary booking and edit both pass", async () => {
+      assert.deepEqual(
+        await saveSalary({
+          ...compliantSalaryPayload,
+          transactionId: salaryId,
+          expectedRevision: 1,
+        }),
+        { ok: true },
+      );
+      const [edited] = await db
+        .select({ revision: transactions.currentRevision })
+        .from(transactions)
+        .where(eq(transactions.id, salaryId));
+      assert.equal(edited.revision, 2);
+      console.log("  Skyline→Greg create=ok edit=ok revision=2");
+    });
 
     await fixture("June salary shows each profile's own signed side", async () => {
       const skylineRow = (await listed(skyline)).find((row) => row.id === salaryId);
@@ -229,6 +366,7 @@ async function main() {
 
     const trashedSalaryId = await createFixtureTransaction({
       entityId: skyline.entityId,
+      recipientAccountId: gregBank.id,
       description: "__test__ Trashed cross-profile salary",
       kind: "salary",
       debitAccountId: skylineBank.id,
@@ -308,6 +446,9 @@ async function main() {
         .delete(auditLog)
         .where(and(eq(auditLog.tableName, "transactions"), inArray(auditLog.rowId, createdIds)));
       await db.delete(transactions).where(inArray(transactions.id, createdIds));
+    }
+    if (createdAccountIds.length > 0) {
+      await db.delete(accounts).where(inArray(accounts.id, createdAccountIds));
     }
     assert.equal(
       await db.$count(

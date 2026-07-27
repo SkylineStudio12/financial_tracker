@@ -20,7 +20,6 @@ import {
   taxAccruals,
   transactions,
 } from "@/db/schema";
-import { createTransaction } from "@/lib/ledger";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   bookHighConfidenceRows,
@@ -48,16 +47,41 @@ async function main() {
   );
   const env = await setupImportTestEntity();
   try {
-    const salaryTransactionId = await createTransaction({
-      entityId: env.entityId,
-      date: "2026-07-10",
-      description: "Salary Grigore Filimon 2026-06",
-      kind: "salary",
-      postings: [
-        { accountId: env.bankAccountId, amount: -269_500, counterparty: "Grigore Filimon" },
-        { accountId: env.equityAccountId, amount: 269_500 },
-      ],
-      salaryDetail: { payMonth: "2026-06-01", personalDeductionMinor: 0 },
+    // Historical baseline only: this synthetic test company has no mapped
+    // owner, so seed its pre-existing salary movement directly. The bulk rows
+    // under test still book through the ordinary ledger service.
+    const [salaryTransaction] = await db
+      .insert(transactions)
+      .values({
+        entityId: env.entityId,
+        date: "2026-07-10",
+        description: "Salary Grigore Filimon 2026-06",
+        kind: "salary",
+      })
+      .returning({ id: transactions.id });
+    const salaryTransactionId = salaryTransaction.id;
+    await db.insert(postings).values([
+      {
+        transactionId: salaryTransactionId,
+        accountId: env.bankAccountId,
+        amount: -269_500,
+        amountRon: -269_500,
+        currency: "RON",
+        counterparty: "Grigore Filimon",
+      },
+      {
+        transactionId: salaryTransactionId,
+        accountId: env.equityAccountId,
+        amount: 269_500,
+        amountRon: 269_500,
+        currency: "RON",
+      },
+    ]);
+    await db.insert(salaryTransactionDetails).values({
+      transactionId: salaryTransactionId,
+      revision: 1,
+      payMonth: "2026-06-01",
+      personalDeductionMinor: 0,
     });
     const batch = await createImportBatch({
       entityId: env.entityId,

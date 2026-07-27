@@ -771,6 +771,7 @@
       "salaryAmountInvalid": "Sumele salariale trebuie introduse în bani; fiecare valoare care produce o înregistrare trebuie să fie pozitivă, iar deducerea personală poate fi zero.",
       "salaryNetMismatch": "Netul trebuie să fie exact brutul minus CAS, CASS și impozitul pe venit.",
       "salaryShapeUnavailable": "Acest salariu nu are structura completă de șapte înregistrări necesară pentru această acțiune.",
+      "recipientAccountOwnerMismatch": "Alege un cont destinatar deținut de proprietarul acestei companii.",
       "invalidDate": "Dată invalidă: {date}."
     },
     "manage": {

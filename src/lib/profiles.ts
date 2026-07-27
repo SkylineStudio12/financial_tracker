@@ -22,6 +22,20 @@ export const ENTITY_IDS = {
   drmx: "c831d56d-8fe8-4817-b225-6bb76879d6eb", // DRMX Digital SRL (Andra's)
 } as const;
 
+/** Paying-company recipient scope, keyed by the stable entity ids above. */
+export const COMPANY_OWNER_BY_ENTITY_ID: Readonly<Record<string, AccountOwner | undefined>> = {
+  [ENTITY_IDS.skyline]: "greg",
+  [ENTITY_IDS.drmx]: "andra",
+};
+
+/** The only valid destination scope for a paying company's guided flows. */
+export function companyRecipientAccountScope(
+  companyEntityId: string,
+): { entityId: typeof ENTITY_IDS.household; owner: AccountOwner } | undefined {
+  const owner = COMPANY_OWNER_BY_ENTITY_ID[companyEntityId];
+  return owner ? { entityId: ENTITY_IDS.household, owner } : undefined;
+}
+
 export interface Profile {
   slug: ProfileSlug;
   /** Display name in the switcher. */

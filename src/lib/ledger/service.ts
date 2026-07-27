@@ -40,7 +40,9 @@ import {
   markTransactionImportTrashed,
   releaseTransactionImportOwnership,
 } from "@/lib/import/ownership";
+import { companyRecipientAccountScope } from "@/lib/profiles";
 import { acquireImportOwnershipLock } from "./locks";
+import { profileAccountScopeCondition } from "./queries";
 import { salaryPeriod } from "./salary-dates";
 import { LedgerValidationError, type PostingInput, type TransactionInput } from "./types";
 
@@ -86,6 +88,33 @@ async function validateAndPrepare(
     if (!account) throw new LedgerValidationError("ledger.accountNotFound", { accountId });
     if (!account.isActive) {
       throw new LedgerValidationError("ledger.accountInactive", { accountName: account.name });
+    }
+  }
+
+  if (input.kind === "salary" || input.kind === "dividend") {
+    if (!input.recipientAccountId) {
+      throw new LedgerValidationError("flows.recipientAccountOwnerMismatch");
+    } else {
+      const recipientScope = companyRecipientAccountScope(input.entityId);
+      if (!recipientScope) throw new LedgerValidationError("profile.unknownCompany");
+      if (!accountById.has(input.recipientAccountId)) {
+        throw new LedgerValidationError("flows.recipientAccountOwnerMismatch");
+      }
+      const [scopedRecipient] = await reader
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(
+          and(
+            eq(accounts.id, input.recipientAccountId),
+            profileAccountScopeCondition(recipientScope),
+            eq(accounts.isActive, true),
+            isNull(accounts.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!scopedRecipient) {
+        throw new LedgerValidationError("flows.recipientAccountOwnerMismatch");
+      }
     }
   }
 

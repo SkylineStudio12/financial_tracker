@@ -443,6 +443,7 @@ async function main(): Promise<void> {
     await fixture("legacy salary without detail is excluded from repeat baseline", async () => {
       const input: TransactionInput = {
         entityId: ENTITY_IDS.skyline,
+        recipientAccountId: personalAccount.id,
         date: "2026-04-30",
         description: "Salary __test__ Legacy Employee 2026-04",
         kind: "salary",

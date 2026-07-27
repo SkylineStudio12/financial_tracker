@@ -665,6 +665,7 @@ async function main(): Promise<void> {
           eq(accounts.entityId, ENTITY_IDS.household),
           eq(accounts.type, "bank"),
           eq(accounts.currency, "RON"),
+          eq(accounts.owner, "greg"),
           isNull(accounts.deletedAt),
         ),
       );

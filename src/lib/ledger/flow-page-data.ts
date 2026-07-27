@@ -1,8 +1,10 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { accounts, entities } from "@/db/schema";
 import type { AccountOption } from "@/components/forms/option-types";
 import { listEmployeeOptions, type EmployeeOption } from "@/lib/management/service";
+import { companyRecipientAccountScope } from "@/lib/profiles";
+import { profileAccountScopeCondition } from "./queries";
 
 /** Guard + options for the guided flow pages. */
 export async function getFlowPageData(entityId: string): Promise<{
@@ -17,13 +19,8 @@ export async function getFlowPageData(entityId: string): Promise<{
   if (!entity || entity.type !== "company") {
     return { isCompany: false, personalAccounts: [], employees: [] };
   }
-
-  const [household] = await db
-    .select({ id: entities.id })
-    .from(entities)
-    .where(and(eq(entities.type, "household"), isNull(entities.deletedAt)))
-    .orderBy(asc(entities.createdAt));
-  const personalAccounts = household
+  const recipientScope = companyRecipientAccountScope(entityId);
+  const personalAccounts = recipientScope
     ? await db
         .select({
           id: accounts.id,
@@ -34,7 +31,7 @@ export async function getFlowPageData(entityId: string): Promise<{
         .from(accounts)
         .where(
           and(
-            eq(accounts.entityId, household.id),
+            profileAccountScopeCondition(recipientScope),
             inArray(accounts.type, ["bank", "cash"]),
             eq(accounts.isActive, true),
             isNull(accounts.deletedAt),

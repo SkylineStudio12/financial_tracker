@@ -771,6 +771,7 @@
       "salaryAmountInvalid": "Salary amounts must be entered in bani; every leg-bearing value must be positive and the personal deduction may be zero.",
       "salaryNetMismatch": "Net must equal gross minus CAS, CASS, and income tax exactly.",
       "salaryShapeUnavailable": "This salary does not have the complete seven-leg payslip structure required for this action.",
+      "recipientAccountOwnerMismatch": "Choose a recipient account owned by this company's owner.",
       "invalidDate": "Invalid date: {date}."
     },
     "manage": {

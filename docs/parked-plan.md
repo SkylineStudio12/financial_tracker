@@ -32,8 +32,8 @@ Revisit an item only when its phase arrives.
 - Backups are the point: Vercel does not back up your database. This closes that gap.
 
 ### Lufga font license
-- Personal-use license is fine on localhost. Before a public Vercel URL, confirm
-  the license covers web embedding / self-hosted webfont, or move to the webfont tier.
+- CLOSED — the three `.otf` files were deleted in commit `39e763f`; the repo no
+  longer carries them.
 
 ### Vercel cron
 - Free tier has limited cron invocations. Design FX sync and price snapshots as
@@ -87,7 +87,9 @@ single-user tool and buries the entity structure + tax that make this app worth 
 
 ## Bank-statement PDF import (Phase 3)
 
-Confirmed as a real import path from a sample ING statement for Skyline Studio SRL.
+The ING path that shipped and was exercised is the CSV export path, not the PDF
+clean-text parser. The PDF parser remains UNBUILT and its fixture is still owed.
+The existing PDF design notes below remain in force.
 
 - CLEAN-TEXT path, not OCR: the ING PDF has a real text layer, so a parser reads
   it directly. Much easier/more reliable than the Lidl receipt (PNG/OCR) path.
@@ -122,6 +124,29 @@ Schema/behaviour requirements for the importer (verify before building):
   (parsed sequence must reproduce the printed closing balance).
 - Everything lands in the review inbox first (same as other imports); confirm
   before it enters the ledger.
+- TWO BATCH TABLES, DIVERGENT SCHEMAS: `import_batches` has no
+  `source_file_name` and no `parsed_row_count`; `revolut_import_batches` has
+  both. A unified import inbox must reconcile these schemas.
+- IMPORT INBOX ACCEPTANCE CRITERIA:
+  1. Skip reasons are MANDATORY for rows classified `owner_transfer`, and
+     optional otherwise. `skip_reason_code` and `skip_reason_note` already
+     exist and are nullable.
+  2. A code-level duplicate guard against manually-booked transactions is
+     required before the inbox ships. Every ING dedup check compares
+     `external_ref`, `raw_text_hash` or `row_identity`; a manual salary booking
+     has a NULL `external_ref`, so the existing-ledger check cannot match it by
+     construction.
+  3. Revolut owner and account selection folds into this unit. The brokerage
+     importer hardcodes owner `"greg"` as a literal TYPE, and selects accounts
+     one-per-(owner, currency), which cannot express multiple accounts per
+     person.
+- OPEN QUESTION — the June ING statement carries a CAM row (`-101.00` RON)
+  that exactly matches the CAM accrual leg (`-10100` minor) of the
+  corresponding salary booking, and a Trezorerie row (`-3,927.00`) that does
+  not reconcile to any single month's salary tax total (`1,805.00`). Whether
+  tax-payment rows double-count against accruals depends on whether accruals
+  are settled by a payment posting. Unresolved. This must be answered before
+  the inbox ships.
 - IMPORTED-TRANSACTION EDIT GUARD (surfaced in Stage 1, decide in the importer
   unit): `updateTransaction` hard-replaces postings from form input, and the
   manual forms don't carry `external_ref`. So editing an imported transaction

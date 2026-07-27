@@ -98,6 +98,7 @@ existing salary description convention because that details table has no
 employee foreign key. Tax legs are linked through `tax_accruals.posting_id`.
 
 ```sql
+-- Deliberately covers soft-deleted employees so an unexpected soft-delete surfaces as a finding.
 SELECT
   e.id AS employee_id,
   e.name AS employee_name,
@@ -134,8 +135,7 @@ LEFT JOIN public.tax_accruals ta
  AND ta.revision = t.current_revision
  AND ta.deleted_at IS NULL
 LEFT JOIN public.tax_rules tr ON tr.id = ta.tax_rule_id
-WHERE e.id = '677a0517-8153-4066-8636-e9ca9d358a31'
-  AND t.deleted_at IS NULL
+WHERE t.deleted_at IS NULL
 ORDER BY t.date, t.id, p.id;
 ```
 
@@ -231,10 +231,13 @@ FROM public.employee_salary_profiles;
 
 Current informational reading: `4` total profiles.
 
-The chat-16 handover recorded `322 / 301 / 21` transactions. The verified
-current value is `323 / 302 / 21`; the delta was the owner-entered July
-HolyCode revenue booking, not a database anomaly (L-0024). Do not hardcode
-these working-zone readings as expected values.
+The transaction triple, employee count, and salary-profile count must each
+appear in every handover, and each must be read fresh, never carried as an
+expected value. The chat-16 handover recorded `322 / 301 / 21` transactions.
+The verified current
+value is `323 / 302 / 21`; the delta was the owner-entered July HolyCode
+revenue booking, not a database anomaly (L-0024). Do not hardcode these
+working-zone readings as expected values.
 
 ## Report and stop
 

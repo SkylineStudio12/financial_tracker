@@ -437,8 +437,9 @@ export function Gallery() {
                 />
               </Demo>
 
-              {/* Q6 evidence (ruled at Checkpoint B, 11-11C: Urbanist).
-                  Same grid, both digit faces; the shipped default is sans —
+              {/* Q6 evidence (ruled at Checkpoint B, 11-11C: Urbanist;
+                  superseded by the Geist adoption). Same grid, both digit
+                  faces; the shipped default is now numeric —
                   DEFAULT_NUMERIC_DAY_GRID in calendar.tsx records the ruling. */}
               <div className="lg:col-span-2">
                 <Demo label="Q6 — day-grid digits: font-numeric (left) vs --font-sans (right)">

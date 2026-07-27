@@ -192,10 +192,10 @@ test("DateFilter wires the controlled month reset and initial focus", () => {
   assert.match(source, /initialFocus=\{focusCalendarDay\}/);
 });
 
-test("calendar defaults: weekStartsOn Monday, Q6 ruled sans (11-11C)", () => {
+test("calendar defaults: weekStartsOn Monday, numeric day grid under Geist adoption", () => {
   const source = readFileSync("src/components/ui/calendar.tsx", "utf8");
   assert.match(source, /weekStartsOn = 1/);
-  assert.match(source, /const DEFAULT_NUMERIC_DAY_GRID = false/);
+  assert.match(source, /const DEFAULT_NUMERIC_DAY_GRID = true/);
 });
 
 /* ------------------------------------ §12.5 filter GET contract (static) */

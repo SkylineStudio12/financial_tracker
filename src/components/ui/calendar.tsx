@@ -16,13 +16,12 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
 
 /**
- * Q6 (owner-ruled at Checkpoint B, 11-11C): the day grid's digits — day
- * numbers, week numbers, and the caption year — render in --font-sans
- * (Urbanist), uniform with the UI chrome. Flip this default to true for the
- * numeric face (Geist + tabular-nums, D4's columnar-alignment alternative);
- * the side-by-side evidence lives in the /dev/components gallery.
+ * Geist is now the single face for UI chrome and numerals, so keeping the day
+ * grid uniform costs nothing while day numbers, week numbers, and the caption
+ * year gain tabular figures through the numeric face. The side-by-side
+ * evidence remains in the /dev/components gallery.
  */
-const DEFAULT_NUMERIC_DAY_GRID = false
+const DEFAULT_NUMERIC_DAY_GRID = true
 
 function Calendar({
   className,

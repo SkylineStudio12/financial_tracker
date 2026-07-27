@@ -139,47 +139,139 @@
   --radius-badge: 8px;
   --radius-pill: 9999px;
 
-  /* ---- Type scale (10-22C item 4 — non-font typography) ---------------
-   * display grows 36→46 (export); card-title gains weight 500 (export h2);
-   * micro tracking 0.06em→0.04em (export label, JSON wins over tokens.css);
-   * body-sm (13) and subtitle (18/500) added from the export ramp.
-   * body(16)=export md, secondary(14)=export base — values unchanged,
-   * mapping documented in docs/design-tokens.md. Weight ceiling stays
-   * Medium 500; export's 600 REJECTED (G3). Headings stay light. */
-  --text-display: 46px; /* export display — hero number, light */
-  --text-display--line-height: 50px;
-  --text-display--letter-spacing: -0.01em;
-  --text-display--font-weight: 300;
-  --text-title: 30px; /* export h1 — page/section title, light */
-  --text-title--line-height: 36px;
-  --text-title--letter-spacing: -0.005em;
-  --text-title--font-weight: 300;
+  /* ---- Type scale -----------------------------------------------------
+   * Headings are Geist 600 per T7. Nine legacy roles resolve through the
+   * published tokens as aliases per T9; number-lg and the five mono tokens
+   * are deferred. Concrete values live in appendix 11 of
+   * docs/reviews/checkpoint-a-geist-type-radius.md. */
+  --text-heading-72: 72px;
+  --text-heading-72--line-height: 72px;
+  --text-heading-72--letter-spacing: -0.06em;
+  --text-heading-72--font-weight: 600;
+  --text-heading-64: 64px;
+  --text-heading-64--line-height: 64px;
+  --text-heading-64--letter-spacing: -0.06em;
+  --text-heading-64--font-weight: 600;
+  --text-heading-56: 56px;
+  --text-heading-56--line-height: 56px;
+  --text-heading-56--letter-spacing: -0.06em;
+  --text-heading-56--font-weight: 600;
+  --text-heading-48: 48px;
+  --text-heading-48--line-height: 56px;
+  --text-heading-48--letter-spacing: -0.06em;
+  --text-heading-48--font-weight: 600;
+  --text-heading-40: 40px;
+  --text-heading-40--line-height: 48px;
+  --text-heading-40--letter-spacing: -0.06em;
+  --text-heading-40--font-weight: 600;
+  --text-heading-32: 32px;
+  --text-heading-32--line-height: 40px;
+  --text-heading-32--letter-spacing: -0.04em;
+  --text-heading-32--font-weight: 600;
+  --text-heading-24: 24px;
+  --text-heading-24--line-height: 32px;
+  --text-heading-24--letter-spacing: -0.04em;
+  --text-heading-24--font-weight: 600;
+  --text-heading-20: 20px;
+  --text-heading-20--line-height: 26px;
+  --text-heading-20--letter-spacing: -0.02em;
+  --text-heading-20--font-weight: 600;
+  --text-heading-16: 16px;
+  --text-heading-16--line-height: 24px;
+  --text-heading-16--letter-spacing: -0.02em;
+  --text-heading-16--font-weight: 600;
+  --text-heading-14: 14px;
+  --text-heading-14--line-height: 20px;
+  --text-heading-14--letter-spacing: -0.02em;
+  --text-heading-14--font-weight: 600;
+
+  --text-button-16: 16px;
+  --text-button-16--line-height: 20px;
+  --text-button-16--font-weight: 500;
+  --text-button-14: 14px;
+  --text-button-14--line-height: 20px;
+  --text-button-14--font-weight: 500;
+  --text-button-12: 12px;
+  --text-button-12--line-height: 16px;
+  --text-button-12--font-weight: 500;
+
+  --text-label-20: 20px;
+  --text-label-20--line-height: 32px;
+  --text-label-20--font-weight: 400;
+  --text-label-18: 18px;
+  --text-label-18--line-height: 20px;
+  --text-label-18--font-weight: 400;
+  --text-label-16: 16px;
+  --text-label-16--line-height: 20px;
+  --text-label-16--font-weight: 400;
+  --text-label-14: 14px;
+  --text-label-14--line-height: 20px;
+  --text-label-14--font-weight: 400;
+  --text-label-13: 13px;
+  --text-label-13--line-height: 16px;
+  --text-label-13--font-weight: 400;
+  --text-label-12: 12px;
+  --text-label-12--line-height: 16px;
+  --text-label-12--font-weight: 400;
+
+  --text-copy-24: 24px;
+  --text-copy-24--line-height: 36px;
+  --text-copy-24--font-weight: 400;
+  --text-copy-20: 20px;
+  --text-copy-20--line-height: 36px;
+  --text-copy-20--font-weight: 400;
+  --text-copy-18: 18px;
+  --text-copy-18--line-height: 28px;
+  --text-copy-18--font-weight: 400;
+  --text-copy-16: 16px;
+  --text-copy-16--line-height: 24px;
+  --text-copy-16--font-weight: 400;
+  --text-copy-14: 14px;
+  --text-copy-14--line-height: 20px;
+  --text-copy-14--font-weight: 400;
+  --text-copy-13: 13px;
+  --text-copy-13--line-height: 18px;
+  --text-copy-13--font-weight: 400;
+
+  --text-display: var(--text-heading-48);
+  --text-display--line-height: var(--text-heading-48--line-height);
+  --text-display--letter-spacing: var(--text-heading-48--letter-spacing);
+  --text-display--font-weight: var(--text-heading-48--font-weight);
+  --text-title: var(--text-heading-32);
+  --text-title--line-height: var(--text-heading-32--line-height);
+  --text-title--letter-spacing: var(--text-heading-32--letter-spacing);
+  --text-title--font-weight: var(--text-heading-32--font-weight);
   --text-number-lg: 24px; /* large number in cards */
   --text-number-lg--line-height: 32px;
   --text-number-lg--letter-spacing: -0.005em;
-  --text-card-title: 20px; /* export h2 — now Medium */
-  --text-card-title--line-height: 28px;
-  --text-card-title--font-weight: 500;
-  --text-subtitle: 18px; /* export h3 — subsection heading, Medium */
-  --text-subtitle--line-height: 24px;
-  --text-subtitle--font-weight: 500;
-  --text-body: 16px; /* export md */
-  --text-body--line-height: 24px;
-  --text-secondary: 14px; /* export base */
-  --text-secondary--line-height: 20px;
-  --text-body-sm: 13px; /* export sm — dense table body */
-  --text-body-sm--line-height: 18px;
-  --text-caption: 12px;
-  --text-caption--line-height: 16px;
-  --text-caption--letter-spacing: 0.005em;
-  --text-micro: 11px; /* uppercase metadata idiom STANDS (owner overrule) */
-  --text-micro--line-height: 14px;
-  --text-micro--letter-spacing: 0.04em;
+  --text-card-title: var(--text-heading-20);
+  --text-card-title--line-height: var(--text-heading-20--line-height);
+  --text-card-title--letter-spacing: var(--text-heading-20--letter-spacing);
+  --text-card-title--font-weight: var(--text-heading-20--font-weight);
+  --text-subtitle: var(--text-label-18);
+  --text-subtitle--line-height: var(--text-label-18--line-height);
+  --text-subtitle--font-weight: var(--text-label-18--font-weight);
+  --text-body: var(--text-copy-16);
+  --text-body--line-height: var(--text-copy-16--line-height);
+  --text-body--font-weight: var(--text-copy-16--font-weight);
+  --text-secondary: var(--text-copy-14);
+  --text-secondary--line-height: var(--text-copy-14--line-height);
+  --text-secondary--font-weight: var(--text-copy-14--font-weight);
+  --text-body-sm: var(--text-copy-13);
+  --text-body-sm--line-height: var(--text-copy-13--line-height);
+  --text-body-sm--font-weight: var(--text-copy-13--font-weight);
+  --text-caption: var(--text-label-12);
+  --text-caption--line-height: var(--text-label-12--line-height);
+  --text-caption--font-weight: var(--text-label-12--font-weight);
+  --text-micro: var(--text-label-12);
+  --text-micro--line-height: var(--text-label-12--line-height);
+  --text-micro--font-weight: var(--text-label-12--font-weight);
 
 }
 
 /* Geist Sans serves UI text and numerals. Money/aligned digits still resolve
- * through --font-numeric plus tabular-nums; Geist Sans has verified tnum. */
+ * through --font-numeric plus tabular-nums. tnum confirmed present in the
+ * served core-Latin WOFF2 subset by fontTools GSUB inspection (23-12S). */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-numeric: var(--font-geist-sans);

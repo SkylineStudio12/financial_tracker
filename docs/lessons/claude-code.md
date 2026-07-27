@@ -21,6 +21,19 @@ Read this file in full at session start (see
 
 ---
 
-_No ratified entries yet. Existing harness-specific lessons (e.g. L-0030
-worktrees, L-0031 session environment) remain in `../lessons.md`; re-homing
-them is an owner-batched consolidation decision, not automatic._
+L-0057 is the first ratified entry in this scoped file. Existing
+harness-specific lessons (e.g. L-0030 worktrees, L-0031 session environment)
+remain in `../lessons.md`; re-homing them is an owner-batched consolidation
+decision, not automatic.
+
+### L-0057 · 2026-07-25 · tooling · ratified · scope: claude-code
+**Lesson:** A newly created `.claude/agents/*.md` is not immediately invocable
+by name, committing it does not trigger pickup, and it can become resolvable
+later in the same session without a restart.
+**Apply:** Probe the subagent by name first. Fall back to a general-purpose
+agent instructed to read the definition file. Re-probe on later passes rather
+than assuming the earlier failure still holds. The refresh trigger is not
+understood.
+**Origin:** 20-14-LOOP Part D failed on create; 20-12.1-U3 gate f failed
+post-commit; 20-12.2-U3 resolved mid-session with no restart. Supersedes
+P-20260725-04, whose "needs a fresh session" claim was falsified.

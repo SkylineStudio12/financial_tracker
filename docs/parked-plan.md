@@ -140,13 +140,46 @@ Schema/behaviour requirements for the importer (verify before building):
      importer hardcodes owner `"greg"` as a literal TYPE, and selects accounts
      one-per-(owner, currency), which cannot express multiple accounts per
      person.
-- OPEN QUESTION — the June ING statement carries a CAM row (`-101.00` RON)
-  that exactly matches the CAM accrual leg (`-10100` minor) of the
-  corresponding salary booking, and a Trezorerie row (`-3,927.00`) that does
-  not reconcile to any single month's salary tax total (`1,805.00`). Whether
-  tax-payment rows double-count against accruals depends on whether accruals
-  are settled by a payment posting. Unresolved. This must be answered before
-  the inbox ships.
+  4. Every parsed row is checked at review against all live transactions by
+     absolute amount within a seven-day date window, regardless of
+     `external_ref`, and any match is surfaced as an advisory possible-duplicate
+     flag on that row. This is in addition to the five existing dedup checks,
+     not a replacement. The reviewer decides.
+- LIVE-IMPORT EXISTENCE WARNING: Before any live import, every row in a batch
+  requires an existence check against live transactions. No automated dedup
+  check can match a manually booked counterpart, because those rows carry a
+  NULL `external_ref`. A warning naming one instance of this hazard is an
+  incomplete control.
+  Evidence, verified `24-02T`: of the 17 rows in the June 2026 Skyline ING
+  statement, 14 have an amount-equal active live transaction within seven days.
+  Three do not: 457.10 Rompetrol, 225.00 SC Coman Aktiv Serv, 247.09 ORCT
+  Bucuresti. All three previously named hazards are confirmed present in live:
+  salary transfer 2,695.00, CAM 101.00, Trezorerie 3,927.00.
+  The June 2026 statement is already booked in live by hand and is therefore
+  not a candidate for the inbox's first live import. It remains a test fixture.
+- CAM AND TREZORERIE, CLOSED: both June 2026 tax-payment rows are already
+  booked in live. CAM 101.00 is transaction `0087dde1`,
+  2026-06-19, bank leg -10100 minor, tax-liability leg +10100. Trezorerie
+  3,927.00 is `8bc2029f`, same date, -392700 and +392700. Verified `24-02T`.
+
+  Ruling, ratified chat 24: a tax or state payment settles an accrued liability
+  and is never booked as an expense. Observed sign convention on the
+  tax-liability account: accruals negative, settlements positive.
+
+  Remaining open, narrowed: the payment exceeds the only accrual it can settle.
+  The May accrual totals 1,906.00, of which 101.00 is CAM settled separately,
+  leaving 1,805.00. Residual 2,122.00. No accrual exists on the tax-liability
+  account before 2026-06-10, so the residual has no origin in the ledger. The
+  accountant's May 2026 declaration is the authority. Do not derive it.
+
+  Two `Tax liability` accounts exist, one per entity, differing only in
+  `entity_id`: `3fa95bf4-f5c7-482c-8cdd-612095c895ca` and
+  `f7a6e0ae-b0e1-42b7-a75b-e54c5a010019`. Verified `24-04T`. Any liability
+  balance or quarterly tax figure must be scoped to one account, never summed
+  across both. A balance query must also exclude soft-deleted transactions and
+  filter to the transaction's current revision, and must state whether
+  future-dated transactions are in scope: a live salary accrual dated
+  2026-08-10 exists on the second account.
 - IMPORTED-TRANSACTION EDIT GUARD (surfaced in Stage 1, decide in the importer
   unit): `updateTransaction` hard-replaces postings from form input, and the
   manual forms don't carry `external_ref`. So editing an imported transaction
@@ -195,6 +228,54 @@ Known properties surfaced by the FIRST REAL IMPORT (batch f9929a4a, Skyline,
   The stale row in batch f9929a4a (row 5, Grigore Filimon owner transfer,
   2,695.00 RON) was a deliberate delete-path test on 2026-07-07 — not an error
   or a lost transfer. It will return on the planned end-of-testing re-import.
+- TEST RESIDUE, owner-confirmed 2026-07-27: transaction
+  `552c06f3-3d51-4f41-a04a-fc4a638e150c`, soft-deleted, described
+  `Salary Maria Grigore 2026-06`, is TEST DATA. There is no employee named
+  Maria Grigore. Skyline has one real employee, Filimon Grigore, gross
+  4,500.00 RON and net 2,695.00 RON.
+
+  Its four tax-liability accrual postings decode to a 10,000.00 RON gross with
+  zero personal deduction: CAS -250000, CASS -100000, impozit -65000, CAM
+  -22500. They are internally consistent, which is why they invite an
+  explanation. Do not attempt one.
+
+  It must NOT be restored. `restoreTransaction` bypasses `validateAndPrepare`.
+  Any liability balance excluding soft-deleted rows already excludes it.
+- CONFIRMED THEN RESOLVED, 2026-07-27: the `employees` table carried LIVE
+  test residue. `24-10T` reported row
+  `de789ed9-dd08-4432-b6df-92e30e883884`, name `Test`, entity Skyline Studio
+  SRL, `is_active` true, `deleted_at` NULL. The July 2026 reset cleared test
+  transactions and did not touch `employees`.
+
+  The owner located and deleted that row directly in the live database on
+  2026-07-27. Nothing referenced it: it had no salary profile, and
+  `transactions` carries no employee column, so no transaction or posting
+  could point at it.
+
+  The resulting count is NOT recorded here. Whether the row was soft-deleted
+  or removed outright is unrecorded, so the carried-state metric of employees
+  2 / 2 / 0 is stale either way. Read employees fresh at the next
+  session-start pass and carry that value forward.
+
+  Still unread: whether the app's employee surfaces list a profile-less
+  employee at all. Not blocking, since no such row now exists.
+
+  Salary profiles are NOT residue. All four belong to Filimon Grigore and form
+  a versioned history keyed on `effective_from`: gross 300000 at 2023-01-01,
+  330000 at 2023-10-01, 370000 at 2024-07-01, 450000 at 2025-01-01. The last
+  matches the payslip exactly, personal deduction 62800 and net 269500.
+
+- SCHEMA NOTES, verified `24-10T`. `employee_salary_profiles` has no `id` and
+  no `deleted_at`, so a profile cannot be soft deleted and rows are identified
+  by (`employee_id`, `effective_from`). The three pre-2025 rows carry
+  `income_tax_minor` 0 and CAS ratios that are not 25% of gross; each is
+  internally consistent to its own net. Under the transcription rule this is
+  expected historical data, not a defect. Do not correct it and do not derive
+  Romanian rate history to explain it.
+
+  `transactions` carries no employee column. Per-employee attribution is by
+  `description` text match only. Phase 5 per-entity P&L and any per-employee
+  report need a structured link first.
 
 ---
 

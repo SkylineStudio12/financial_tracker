@@ -97,6 +97,10 @@ one wins until the owner rules.
 | L-0055 | shared | process | Withdrawn prompt keys remain visibly dead artifacts |
 | L-0056 | shared | process | Confirm owner-side preconditions before relying on them |
 | L-0057 | claude-code | tooling | Newly created subagents may resolve later without restart |
+| L-0058 | shared | process | A standing warning naming one hazard is an incomplete control |
+| L-0059 | shared | verification | An eye-pass can prove a path without proving its guard |
+| L-0060 | shared | import | Nullable dedup keys cannot match manually created NULL rows |
+| L-0061 | shared | process | Habitual warnings must become numbered checklist steps |
 
 Every entry above and every entry below is `shared` except L-0057, which is
 scoped to the Claude Code harness.
@@ -698,3 +702,32 @@ the orchestrator generated is not in the repo until someone puts it there.
 **Origin:** 22-02S.3 gated on `docs/reviews/checkpoint-a-geist-palette.md`
 existing. The instruction to save it was mentioned twice in passing and never
 confirmed; the P1 check stopped the unit on the third attempt.
+
+### L-0058 · 2026-07-27 · process · ratified
+**Lesson:** A standing warning that names one instance of a hazard class is an
+incomplete control, and it reads as a complete one.
+**Apply:** Name the hazard class, then list known instances as evidence beneath it.
+**Origin:** The ING import warning named only the owner_transfer salary row.
+`24-02T` found 14 of the 17 June statement rows already present in live.
+
+### L-0059 · 2026-07-27 · verification · ratified
+**Lesson:** An eye-pass that exercises a code path without exercising its hazard
+proves the path, not the guard.
+**Apply:** State which of the two a test exercised, path or guard.
+**Origin:** The ING import eye-pass ran on the test database, which holds no
+salary transactions, so no duplicate counterpart could exist to be caught.
+
+### L-0060 · 2026-07-27 · import · ratified
+**Lesson:** A dedup check keyed on a nullable column cannot match rows where
+that column is NULL. Manually created entries are the NULL case.
+**Apply:** For any dedup design, state what a manually created counterpart looks
+like and whether the key can see it.
+**Origin:** All five ING checks compare `external_ref`, `raw_text_hash` or
+`row_identity`. A manual salary booking carries a NULL `external_ref`.
+
+### L-0061 · 2026-07-27 · process · ratified
+**Lesson:** A known hazard held as habit rather than as a checklist step
+surfaces only by accident.
+**Apply:** Convert every standing warning into a numbered step in a repo checklist.
+**Origin:** The owner_transfer skip warning lived only in handover prose. The
+import eye-pass proceeded without it and booked 17 of 17 rows.

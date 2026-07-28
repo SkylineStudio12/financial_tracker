@@ -39,7 +39,7 @@ interface InboxRow {
   currency: "USD" | "EUR";
   totalMinor: number;
   quantityText: string | null;
-  status: "pending" | "booked" | "skipped" | "duplicate" | "trashed" | "purged";
+  status: "pending" | "confirmed" | "booked" | "skipped" | "duplicate" | "trashed" | "purged";
   suspectedDuplicate: boolean;
 }
 
@@ -208,7 +208,11 @@ export function RevolutInbox({
             <div className="mt-2 flex flex-col">
               {group.rows.map((row) => {
                 const excluded = row.status === "skipped";
-                const locked = booked || row.status === "booked" || row.status === "duplicate";
+                const locked =
+                  booked ||
+                  row.status === "confirmed" ||
+                  row.status === "booked" ||
+                  row.status === "duplicate";
                 return (
                   <div key={row.id} className="flex items-center gap-3 border-t border-border-hairline py-2 first:border-t-0">
                     <Checkbox

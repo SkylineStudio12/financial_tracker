@@ -8,6 +8,7 @@ const SUITES = [
   "src/lib/import/bulk-confirm.e2e.test.ts",
   "src/lib/import/delete-reimport.regression.test.ts",
   "src/lib/import/edit-guard.test.ts",
+  "src/lib/import/staged-confirm.e2e.test.ts",
   "src/lib/import/revolut/booking.e2e.test.ts",
   "src/lib/import/text-import.e2e.test.ts",
   "src/lib/investments/asof-valuation.e2e.test.ts",

@@ -30,9 +30,10 @@ export async function listImportBatches(entityId: string) {
       periodEnd: importBatches.periodEnd,
       accountName: accounts.name,
       createdAt: importBatches.createdAt,
-      pendingCount: sql<number>`(
+      openCount: sql<number>`(
         SELECT count(*)::int FROM import_rows r
-        WHERE r.batch_id = ${importBatches.id} AND r.status = 'pending'
+        WHERE r.batch_id = ${importBatches.id}
+          AND r.status IN ('pending', 'confirmed')
       )`,
       rowCount: sql<number>`(
         SELECT count(*)::int FROM import_rows r WHERE r.batch_id = ${importBatches.id}

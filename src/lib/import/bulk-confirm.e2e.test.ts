@@ -1,7 +1,6 @@
 /**
  * §11.5 regression: the June 2026 ING salary transfer is left pending by
- * bulk confirm, while eligible non-transfer rows still book through the
- * ordinary single-row service path.
+ * bulk confirm, while eligible non-transfer rows are staged without booking.
  *
  * Run with DATABASE_URL pointed at TEST_DATABASE_URL:
  *   npx tsx src/lib/import/bulk-confirm.e2e.test.ts
@@ -17,12 +16,11 @@ import {
   importRows,
   postings,
   salaryTransactionDetails,
-  taxAccruals,
   transactions,
 } from "@/db/schema";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
-  bookHighConfidenceRows,
+  confirmHighConfidenceRows,
   createImportBatch,
 } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
@@ -89,7 +87,7 @@ async function main() {
       ownerNames: ["Grigore Filimon"],
     });
 
-    const result = await bookHighConfidenceRows(batch.batchId);
+    const result = await confirmHighConfidenceRows(batch.batchId);
     const rows = await db.select().from(importRows).where(eq(importRows.batchId, batch.batchId));
     const byLine = new Map(rows.map((row) => [row.lineNo, row]));
     const ownerTransfer = byLine.get("1465");
@@ -130,42 +128,33 @@ async function main() {
       assert.deepEqual(details.map((row) => row.payMonth), ["2026-06-01"]);
     });
 
-    await ok("§11.5: eligible high-confidence non-transfer line 1462 still books", () => {
+    await ok("§11.5: eligible high-confidence non-transfer line 1462 stages only", () => {
       assert.ok(eligibleNonTransfer);
       assert.equal(eligibleNonTransfer.kind, "professional_services");
       assert.equal(eligibleNonTransfer.confidence, "high");
-      assert.equal(eligibleNonTransfer.status, "booked");
-      assert.ok(eligibleNonTransfer.transactionId);
-      assert.equal(result.booked, 13);
-      assert.equal(result.duplicates, 0);
+      assert.equal(eligibleNonTransfer.status, "confirmed");
+      assert.equal(eligibleNonTransfer.confirmedCategoryId, eligibleNonTransfer.suggestedCategoryId);
+      assert.equal(eligibleNonTransfer.transactionId, null);
+      assert.equal(result.confirmed, 13);
       assert.equal(result.left, 4);
     });
 
-    await ok("bulk-booked transactions are balanced through the ledger service", async () => {
-      const bookedTransactionIds = rows.flatMap((row) =>
-        row.status === "booked" && row.transactionId ? [row.transactionId] : [],
+    await ok("bulk staging writes no import transaction or posting", async () => {
+      const importedTransactions = rows.flatMap((row) =>
+        row.transactionId ? [row.transactionId] : [],
       );
-      const bookedPostings = await db
-        .select({ transactionId: postings.transactionId, amountRon: postings.amountRon })
-        .from(postings)
-        .where(inArray(postings.transactionId, bookedTransactionIds));
-      const sums = new Map<string, number>();
-      for (const posting of bookedPostings) {
-        sums.set(posting.transactionId, (sums.get(posting.transactionId) ?? 0) + posting.amountRon);
-      }
-      assert.equal(sums.size, 13);
-      assert.ok([...sums.values()].every((sum) => sum === 0));
+      assert.deepEqual(importedTransactions, []);
+      const entityTransactions = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(and(eq(transactions.entityId, env.entityId), isNull(transactions.deletedAt)));
+      assert.deepEqual(entityTransactions, [{ id: salaryTransactionId }]);
     });
 
-    await ok("bulk revenue line 1482 retains the ordinary micro-tax accrual", async () => {
+    await ok("bulk revenue line 1482 remains confirmed and unbooked", () => {
       const revenue = byLine.get("1482");
-      assert.equal(revenue?.status, "booked");
-      assert.ok(revenue.transactionId);
-      const accruals = await db
-        .select({ id: taxAccruals.id })
-        .from(taxAccruals)
-        .where(eq(taxAccruals.transactionId, revenue.transactionId));
-      assert.equal(accruals.length, 1);
+      assert.equal(revenue?.status, "confirmed");
+      assert.equal(revenue.transactionId, null);
     });
 
     console.log(`\nAll ${checks} import-inbox bulk-confirm checks passed.`);

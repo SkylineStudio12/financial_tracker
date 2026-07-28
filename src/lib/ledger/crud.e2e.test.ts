@@ -34,7 +34,7 @@ import {
 import { saveDividend, saveSalary } from "@/lib/ledger/flow-actions";
 import { getTransactionEditDraft } from "@/lib/ledger/edit-drafts";
 import { getTransactionDetail, hasLikelyRestoreCollision } from "@/lib/ledger/queries";
-import { bookImportRow, createImportBatch } from "@/lib/import/service";
+import { bookImportRow, confirmImportRow, createImportBatch } from "@/lib/import/service";
 import { setupImportTestEntity, teardownImportTestEntity } from "@/lib/import/test-support";
 import { executeTrade } from "@/lib/investments/service";
 import { setupTradeTestEntity, teardownTradeTestEntity } from "@/lib/investments/test-support";
@@ -411,6 +411,10 @@ async function main(): Promise<void> {
 
     let importedRestoreId = "";
     await fixture("batch-owned ING row retains source ownership and blocks duplicate imports", async () => {
+      await confirmImportRow({
+        rowId: byLine("1462").id,
+        categoryId: byLine("1462").suggestedCategoryId,
+      });
       const booked = await bookImportRow({ rowId: byLine("1462").id });
       assert.equal(booked.status, "booked");
       importedRestoreId = track(booked.transactionId!);
@@ -682,6 +686,10 @@ async function main(): Promise<void> {
 
     let importedEditedId = "";
     await fixture("imported edit keeps ownership and marks provenance modified", async () => {
+      await confirmImportRow({
+        rowId: byLine("1464").id,
+        categoryId: byLine("1464").suggestedCategoryId,
+      });
       const booked = await bookImportRow({ rowId: byLine("1464").id });
       importedEditedId = track(booked.transactionId!);
       const before = await db
@@ -764,8 +772,13 @@ async function main(): Promise<void> {
     });
 
     await fixture("permanent delete releases ownership and permits deliberate re-import", async () => {
+      await confirmImportRow({
+        rowId: byLine("1466").id,
+        categoryId: byLine("1466").suggestedCategoryId,
+      });
+      await confirmImportRow({ rowId: byLine("1461").id, categoryId: servicesCategory });
       const first = await bookImportRow({ rowId: byLine("1466").id });
-      const survivor = await bookImportRow({ rowId: byLine("1461").id, categoryId: servicesCategory });
+      const survivor = await bookImportRow({ rowId: byLine("1461").id });
       const purgedId = track(first.transactionId!);
       track(survivor.transactionId!);
       await expectCode(purgeTransaction(purgedId), "ledger.transactionPurgeRequiresTrash");
@@ -788,7 +801,12 @@ async function main(): Promise<void> {
       const rows = await db.select().from(importRows).where(eq(importRows.batchId, reimport.batchId));
       assert.equal(rows.find((row) => row.lineNo === "1461")?.status, "duplicate");
       assert.equal(rows.find((row) => row.lineNo === "1466")?.status, "pending");
-      const rebooked = await bookImportRow({ rowId: rows.find((row) => row.lineNo === "1466")!.id });
+      const rebookRow = rows.find((row) => row.lineNo === "1466")!;
+      await confirmImportRow({
+        rowId: rebookRow.id,
+        categoryId: rebookRow.suggestedCategoryId,
+      });
+      const rebooked = await bookImportRow({ rowId: rebookRow.id });
       assert.equal(rebooked.status, "booked");
       track(rebooked.transactionId!);
     });

@@ -103,6 +103,7 @@ export const importLinkLifecycle = pgEnum("import_link_lifecycle", [
  */
 export const importRowStatus = pgEnum("import_row_status", [
   "pending",
+  "confirmed",
   "booked",
   "skipped",
   "duplicate",

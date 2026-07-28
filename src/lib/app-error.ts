@@ -139,6 +139,7 @@ export const ERROR_CODES = [
   "imports.categoryRequiredForLine",
   "imports.statementTextRequired",
   "imports.highConfidenceBookingFailed",
+  "imports.rowBookingFailed",
   "revolut.requiredAccountsMissing",
   "revolut.csvRequired",
   "revolut.unpairedCorrections",

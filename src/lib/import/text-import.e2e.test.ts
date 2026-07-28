@@ -21,8 +21,9 @@ import { auditLog, importRows, postings, taxAccruals, transactions } from "@/db/
 import { LedgerValidationError } from "@/lib/ledger";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
-  bookHighConfidenceRows,
   bookImportRow,
+  confirmHighConfidenceRows,
+  confirmImportRow,
   createImportBatch,
   reopenSkippedImportRow,
   skipImportRow,
@@ -127,8 +128,11 @@ async function run(env: ImportTestEntity) {
   let booked = 0;
   for (const row of staged) {
     const categoryId =
-      row.kind === "card_purchase" ? env.categoryId("Services|expense") : undefined;
-    const result = await bookImportRow({ rowId: row.id, categoryId });
+      row.kind === "card_purchase"
+        ? env.categoryId("Services|expense")
+        : row.suggestedCategoryId;
+    await confirmImportRow({ rowId: row.id, categoryId });
+    const result = await bookImportRow({ rowId: row.id });
     assert.equal(result.status, "booked", `line ${row.lineNo} did not book: ${result.status}`);
     booked += 1;
   }
@@ -289,9 +293,9 @@ async function run(env: ImportTestEntity) {
   await ok("…and all 11 refless rows are overlap-flagged for per-row confirmation", () =>
     assert.equal(csvImport.overlapSuspects, 11),
   );
-  const bulk = await bookHighConfidenceRows(csvImport.batchId);
-  await ok("confirm-all books NONE of them — overlap suspects demand a human", () => {
-    assert.equal(bulk.booked, 0);
+  const bulk = await confirmHighConfidenceRows(csvImport.batchId);
+  await ok("confirm-all stages NONE of them — overlap suspects demand a human", () => {
+    assert.equal(bulk.confirmed, 0);
     assert.equal(bulk.left, 11);
   });
   const afterCsv = await db

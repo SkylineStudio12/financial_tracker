@@ -6,7 +6,7 @@
  * dedup. Nothing here auto-books.
  */
 import { createHash } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -264,6 +264,27 @@ export type BookRowResult =
   | { status: "booked"; transactionId: string }
   | { status: "duplicate"; transactionId: string | null };
 
+export interface ConfirmHighConfidenceResult {
+  confirmed: number;
+  ownerTransfersExcluded: number;
+  /** Rows still pending after staging: low confidence, overlap-suspect, or no category. */
+  left: number;
+}
+
+export type BookConfirmedRowOutcome =
+  | {
+      rowId: string;
+      lineNo: string;
+      status: "booked" | "duplicate";
+      transactionId: string | null;
+    }
+  | {
+      rowId: string;
+      lineNo: string;
+      status: "error";
+      error: AppError;
+    };
+
 /** Server-action ownership check: client-supplied row and batch ids must
  * resolve inside the profile's entity before any single-row mutation runs. */
 export async function assertImportRowScope(params: {
@@ -303,6 +324,75 @@ export async function assertImportBatchScope(params: {
   if (!scoped) throw new LedgerValidationError("imports.batchNotFound");
 }
 
+/** Capture the owner's review decision without writing to the ledger. */
+export async function confirmImportRow(params: {
+  rowId: string;
+  categoryId?: string | null;
+}): Promise<void> {
+  const [row] = await db
+    .select({
+      status: importRows.status,
+      kind: importRows.kind,
+      lineNo: importRows.lineNo,
+      entityId: importBatches.entityId,
+    })
+    .from(importRows)
+    .innerJoin(importBatches, eq(importBatches.id, importRows.batchId))
+    .where(eq(importRows.id, params.rowId));
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
+  if (row.status !== "pending") {
+    throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+  }
+  const categoryId = bookingNeedsCategory(row.kind) ? params.categoryId ?? null : null;
+  if (bookingNeedsCategory(row.kind) && !categoryId) {
+    throw new LedgerValidationError("imports.categoryRequiredForLine", {
+      lineNo: row.lineNo,
+      kind: row.kind,
+    });
+  }
+  if (categoryId) {
+    const [category] = await db
+      .select({
+        entityId: categories.entityId,
+        name: categories.name,
+      })
+      .from(categories)
+      .where(and(eq(categories.id, categoryId), isNull(categories.deletedAt)));
+    if (!category) {
+      throw new LedgerValidationError("ledger.categoryNotFound", { categoryId });
+    }
+    if (category.entityId !== null && category.entityId !== row.entityId) {
+      throw new LedgerValidationError("ledger.categoryWrongEntity", {
+        categoryName: category.name,
+      });
+    }
+  }
+  const [updated] = await db
+    .update(importRows)
+    .set({ status: "confirmed", confirmedCategoryId: categoryId })
+    .where(and(eq(importRows.id, params.rowId), eq(importRows.status, "pending")))
+    .returning({ id: importRows.id });
+  if (!updated) {
+    throw new LedgerValidationError("imports.rowAlreadyStatus", { status: "pending" });
+  }
+}
+
+/** Return a staged decision to review and discard only the owner's category decision. */
+export async function unconfirmImportRow(rowId: string): Promise<void> {
+  const [updated] = await db
+    .update(importRows)
+    .set({ status: "pending", confirmedCategoryId: null })
+    .where(and(eq(importRows.id, rowId), eq(importRows.status, "confirmed")))
+    .returning({ id: importRows.id });
+  if (updated) return;
+  const [row] = await db
+    .select({ status: importRows.status })
+    .from(importRows)
+    .where(eq(importRows.id, rowId));
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
+  throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+}
+
 /**
  * Book ONE confirmed inbox row into the ledger — through createTransaction,
  * the single write path. A unique-index hit is not an error: the movement is
@@ -310,13 +400,10 @@ export async function assertImportBatchScope(params: {
  */
 export async function bookImportRow(params: {
   rowId: string;
-  /** Overrides the suggestion; required where the kind needs a category
-   * and no suggestion exists (card_purchase, unknown). */
-  categoryId?: string | null;
 }): Promise<BookRowResult> {
   const [row] = await db.select().from(importRows).where(eq(importRows.id, params.rowId));
   if (!row) throw new LedgerValidationError("imports.rowNotFound");
-  if (row.status !== "pending") {
+  if (row.status !== "confirmed") {
     throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
   }
   const [batch] = await db
@@ -357,11 +444,10 @@ export async function bookImportRow(params: {
   const taxLiability = entityAccounts.find((a) => a.type === "tax_liability") ?? null;
 
   const classified = row.payload as ClassifiedRow;
-  const categoryId = params.categoryId ?? row.suggestedCategoryId;
   const input = await buildImportTransactionInput({
     classified,
     externalRef: row.resolvedExternalRef,
-    categoryId: bookingNeedsCategory(row.kind) ? categoryId : null,
+    categoryId: bookingNeedsCategory(row.kind) ? row.confirmedCategoryId : null,
     ctx: {
       entityId: batch.entityId,
       bankAccountId: batch.bankAccountId,
@@ -423,7 +509,7 @@ export async function bookImportRow(params: {
           .for("update");
         if (
           !lockedTransaction?.deletedAt ||
-          lockedRow?.status !== "pending" ||
+          lockedRow?.status !== "confirmed" ||
           lockedRow.transactionId !== rebookLink.transactionId ||
           lockedLink?.transactionId !== rebookLink.transactionId ||
           lockedLink.lifecycle !== "trashed" ||
@@ -475,7 +561,7 @@ export async function bookImportRow(params: {
         .where(
           and(
             eq(importRows.id, row.id),
-            eq(importRows.status, "pending"),
+            eq(importRows.status, "confirmed"),
             rebookLink
               ? eq(importRows.transactionId, rebookLink.transactionId)
               : isNull(importRows.transactionId),
@@ -483,7 +569,7 @@ export async function bookImportRow(params: {
         )
         .returning({ id: importRows.id });
       if (!bookedRow) {
-        throw new LedgerValidationError("imports.rowAlreadyStatus", { status: "pending" });
+        throw new LedgerValidationError("imports.rowAlreadyStatus", { status: "confirmed" });
       }
       return transactionId;
     });
@@ -524,22 +610,15 @@ export async function bookImportRow(params: {
   }
 }
 
-export interface BookHighConfidenceResult {
-  booked: number;
-  duplicates: number;
-  ownerTransfersExcluded: number;
-  /** Rows still pending after the run: low confidence, overlap-suspect, or no category. */
-  left: number;
-  errors: AppError[];
-}
-
 /**
- * Book every pending HIGH-confidence row that needs no human input: not an
+ * Stage every pending HIGH-confidence row that needs no human input: not an
  * owner transfer, not overlap-suspect (those demand per-row confirmation by
  * design), and either category-free by shape or carrying a suggestion.
  * Owner transfers remain pending for individual review.
  */
-export async function bookHighConfidenceRows(batchId: string): Promise<BookHighConfidenceResult> {
+export async function confirmHighConfidenceRows(
+  batchId: string,
+): Promise<ConfirmHighConfidenceResult> {
   const rows = await db
     .select({
       id: importRows.id,
@@ -552,12 +631,10 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
     .from(importRows)
     .where(and(eq(importRows.batchId, batchId), eq(importRows.status, "pending")));
 
-  const result: BookHighConfidenceResult = {
-    booked: 0,
-    duplicates: 0,
+  const result: ConfirmHighConfidenceResult = {
+    confirmed: 0,
     ownerTransfersExcluded: 0,
     left: 0,
-    errors: [],
   };
   for (const row of rows) {
     if (row.kind === "owner_transfer") {
@@ -569,21 +646,57 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
       !row.overlapSuspect &&
       (!bookingNeedsCategory(row.kind) || row.suggestedCategoryId !== null);
     if (!highConfidenceEligible) continue;
-    try {
-      const booked = await bookImportRow({ rowId: row.id });
-      if (booked.status === "booked") result.booked += 1;
-      else result.duplicates += 1;
-    } catch (error) {
-      const appError = toAppError(error);
-      if (appError) result.errors.push(appError);
-      else throw error;
-    }
+    const [updated] = await db
+      .update(importRows)
+      .set({
+        status: "confirmed",
+        confirmedCategoryId: bookingNeedsCategory(row.kind) ? row.suggestedCategoryId : null,
+      })
+      .where(and(eq(importRows.id, row.id), eq(importRows.status, "pending")))
+      .returning({ id: importRows.id });
+    if (updated) result.confirmed += 1;
   }
   result.left = await db.$count(
     importRows,
     and(eq(importRows.batchId, batchId), eq(importRows.status, "pending")),
   );
   return result;
+}
+
+/**
+ * Book only the rows already confirmed in this batch. Each row owns its own
+ * transaction, so one failure remains confirmed and does not roll back earlier
+ * successes.
+ */
+export async function bookConfirmedRows(batchId: string): Promise<BookConfirmedRowOutcome[]> {
+  const rows = await db
+    .select({ id: importRows.id, lineNo: importRows.lineNo })
+    .from(importRows)
+    .where(and(eq(importRows.batchId, batchId), eq(importRows.status, "confirmed")))
+    .orderBy(sql`${importRows.lineNo}::int`);
+  const outcomes: BookConfirmedRowOutcome[] = [];
+  for (const row of rows) {
+    try {
+      const result = await bookImportRow({ rowId: row.id });
+      outcomes.push({
+        rowId: row.id,
+        lineNo: row.lineNo,
+        status: result.status,
+        transactionId: result.transactionId,
+      });
+    } catch (error) {
+      outcomes.push({
+        rowId: row.id,
+        lineNo: row.lineNo,
+        status: "error",
+        error: toAppError(error) ?? {
+          code: "imports.rowBookingFailed",
+          params: { lineNo: row.lineNo },
+        },
+      });
+    }
+  }
+  return outcomes;
 }
 
 export async function skipImportRow(params: {

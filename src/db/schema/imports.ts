@@ -94,6 +94,9 @@ export const importRows = pgTable(
     /** Full ClassifiedRow (parsed row + identity inventory + FX), verbatim. */
     payload: jsonb("payload").notNull(),
     suggestedCategoryId: uuid("suggested_category_id").references(() => categories.id),
+    /** Owner decision captured at review; kept separate from the classifier's
+     * suggestion so later learning can compare proposal with decision. */
+    confirmedCategoryId: uuid("confirmed_category_id").references(() => categories.id),
     /**
      * Amendment-1(b) overlap control: TRUE when this row is REFLESS and the
      * batch period overlaps an earlier batch on the same account — the

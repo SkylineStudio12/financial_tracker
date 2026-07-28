@@ -23,11 +23,13 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  bookHighConfidenceAction,
-  bookImportRowAction,
+  bookConfirmedRowsAction,
+  confirmHighConfidenceAction,
+  confirmImportRowAction,
   reopenSkippedImportRowAction,
   reopenTrashedImportRowAction,
   skipImportRowAction,
+  unconfirmImportRowAction,
 } from "@/lib/import/actions";
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
 import { formatDate, formatMinor } from "@/lib/format";
@@ -49,6 +51,7 @@ export interface InboxRow {
   overlapSuspect: boolean;
   resolvedExternalRef: string;
   suggestedCategoryId: string | null;
+  confirmedCategoryId: string | null;
   transactionId: string | null;
   confirmedCategoryName: string | null;
   skipReasonCode: string | null;
@@ -181,14 +184,18 @@ function InboxRowItem({
   profileSlug,
   entityId,
   batchId,
+  externalError,
 }: {
   row: InboxRow;
   categories: CategoryOption[];
   profileSlug: string;
   entityId: string;
   batchId: string;
+  externalError?: AppError;
 }) {
-  const [categoryId, setCategoryId] = useState(row.suggestedCategoryId ?? "");
+  const [categoryId, setCategoryId] = useState(
+    row.confirmedCategoryId ?? row.suggestedCategoryId ?? "",
+  );
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [skipOpen, setSkipOpen] = useState(false);
   const [skipNote, setSkipNote] = useState("");
@@ -200,20 +207,34 @@ function InboxRowItem({
   const [pending, startTransition] = useTransition();
 
   const needsCategory = bookingNeedsCategory(row.kind);
-  const canBook = row.status === "pending" && (!needsCategory || categoryId !== "");
+  const canConfirm = row.status === "pending" && (!needsCategory || categoryId !== "");
   const isCredit = row.direction === "credit";
   const suggested = needsCategory && row.suggestedCategoryId !== null && !categoryTouched;
-  const resolved = row.status !== "pending";
+  const resolved = row.status !== "pending" && row.status !== "confirmed";
+  const displayError = error ?? externalError;
 
-  function book() {
+  function confirm() {
     setError(null);
     startTransition(async () => {
-      const result = await bookImportRowAction({
+      const result = await confirmImportRowAction({
         profileSlug,
         entityId,
         batchId,
         rowId: row.id,
         categoryId: needsCategory ? categoryId : null,
+      });
+      if ("error" in result) setError(result.error);
+    });
+  }
+
+  function unconfirm() {
+    setError(null);
+    startTransition(async () => {
+      const result = await unconfirmImportRowAction({
+        profileSlug,
+        entityId,
+        batchId,
+        rowId: row.id,
       });
       if ("error" in result) setError(result.error);
     });
@@ -333,7 +354,7 @@ function InboxRowItem({
               </Select>
             </div>
           )}
-          <Button size="sm" onClick={book} disabled={!canBook || pending}>{t("confirm")}</Button>
+          <Button size="sm" onClick={confirm} disabled={!canConfirm || pending}>{t("confirm")}</Button>
           <Popover open={skipOpen} onOpenChange={setSkipOpen}>
             <PopoverTrigger render={<Button size="sm" variant="ghost" disabled={pending} />}>
               {t("skipEllipsis")}
@@ -357,6 +378,17 @@ function InboxRowItem({
         </div>
       )}
 
+      {row.status === "confirmed" && (
+        <div className="flex flex-wrap items-center gap-2 text-caption text-text-primary">
+          <span>
+            {t("confirmedStatus")}
+            {row.confirmedCategoryName && ` · ${row.confirmedCategoryName}`}
+          </span>
+          <Button size="sm" variant="ghost" onClick={unconfirm} disabled={pending}>
+            {t("unconfirm")}
+          </Button>
+        </div>
+      )}
       {row.status === "booked" && (
         <p className="flex flex-wrap items-center gap-2 text-caption text-status-positive-text">
           {t("bookedStatus")}{row.confirmedCategoryName && ` · ${row.confirmedCategoryName}`} <TransactionLink profileSlug={profileSlug} transactionId={row.transactionId} />
@@ -386,7 +418,11 @@ function InboxRowItem({
       )}
 
       <RowEvidence row={row} />
-      {error && <p className={errorClass}>{typeof error === "string" ? error : translateError(error)}</p>}
+      {displayError && (
+        <p className={errorClass}>
+          {typeof displayError === "string" ? displayError : translateError(displayError)}
+        </p>
+      )}
     </article>
   );
 }
@@ -405,22 +441,23 @@ export function ImportInbox({
   categories: CategoryOption[];
 }) {
   const [message, setMessage] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, AppError>>({});
   const t = useTranslations("imports");
   const translateError = useTranslatedError();
   const [error, setError] = useState<AppError | string | null>(null);
   const [pending, startTransition] = useTransition();
   const pendingCount = rows.filter((row) => row.status === "pending").length;
+  const confirmedCount = rows.filter((row) => row.status === "confirmed").length;
   const reviewedCount = rows.length - pendingCount;
 
-  function bookAll() {
+  function confirmAll() {
     setError(null);
     setMessage(null);
     startTransition(async () => {
-      const result = await bookHighConfidenceAction({ profileSlug, entityId, batchId });
+      const result = await confirmHighConfidenceAction({ profileSlug, entityId, batchId });
       if ("error" in result) setError(result.error);
       else if (result.summary) {
-        const parts = [t("bookedCount", { count: result.summary.booked })];
-        if (result.summary.duplicates) parts.push(t("duplicateCount", { count: result.summary.duplicates }));
+        const parts = [t("confirmedCount", { count: result.summary.confirmed })];
         parts.push(t("ownerTransfersExcludedCount", { count: result.summary.ownerTransfersExcluded }));
         parts.push(t("leftForReviewCount", { count: result.summary.left }));
         setMessage(parts.join(", "));
@@ -428,19 +465,67 @@ export function ImportInbox({
     });
   }
 
+  function bookConfirmed() {
+    setError(null);
+    setMessage(null);
+    setRowErrors({});
+    startTransition(async () => {
+      const result = await bookConfirmedRowsAction({ profileSlug, entityId, batchId });
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      const failures: Record<string, AppError> = {};
+      let booked = 0;
+      let duplicates = 0;
+      for (const outcome of result.outcomes) {
+        if (outcome.status === "error") failures[outcome.rowId] = outcome.error;
+        else if (outcome.status === "booked") booked += 1;
+        else duplicates += 1;
+      }
+      setRowErrors(failures);
+      const parts = [t("bookedCount", { count: booked })];
+      if (duplicates) parts.push(t("duplicateCount", { count: duplicates }));
+      if (Object.keys(failures).length) {
+        parts.push(t("bookingFailureCount", { count: Object.keys(failures).length }));
+      }
+      setMessage(parts.join(", "));
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-y border-border-hairline bg-surface py-2">
-        <p className="text-caption text-text-muted">{t("progress", { done: reviewedCount, total: rows.length })}</p>
-        <Button size="sm" variant="secondary" onClick={bookAll} disabled={pending || pendingCount === 0}>
-          {t("confirmAllHighConfidence")}
-        </Button>
+        <p className="text-caption text-text-muted">
+          {t("progress", { done: reviewedCount, total: rows.length })}
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={confirmAll}
+            disabled={pending || pendingCount === 0}
+          >
+            {t("confirmAllHighConfidence")}
+          </Button>
+          <Button size="sm" onClick={bookConfirmed} disabled={pending || confirmedCount === 0}>
+            {t("bookTransactions", { count: confirmedCount })}
+          </Button>
+        </div>
       </div>
       {message && <p className="text-caption text-status-positive-text">{message}</p>}
       {error && <p className={errorClass}>{typeof error === "string" ? error : translateError(error)}</p>}
       <div className="flex flex-col" data-testid="import-inbox-rows">
         {rows.map((row) => (
-          <InboxRowItem key={row.id} row={row} categories={categories} profileSlug={profileSlug} entityId={entityId} batchId={batchId} />
+          <InboxRowItem
+            key={row.id}
+            row={row}
+            categories={categories}
+            profileSlug={profileSlug}
+            entityId={entityId}
+            batchId={batchId}
+            externalError={rowErrors[row.id]}
+          />
         ))}
       </div>
     </div>

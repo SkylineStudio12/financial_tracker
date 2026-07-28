@@ -82,6 +82,7 @@ export default async function ImportBatchPage({
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
   const { batch, rows, categories, bookedCategoryByTransactionId } = data;
+  const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
 
   const inboxRows = rows.map((r) => {
     const classified = r.payload as ClassifiedRow;
@@ -98,10 +99,14 @@ export default async function ImportBatchPage({
       overlapSuspect: r.overlapSuspect,
       resolvedExternalRef: r.resolvedExternalRef,
       suggestedCategoryId: r.suggestedCategoryId,
+      confirmedCategoryId: r.confirmedCategoryId,
       transactionId: r.transactionId,
-      confirmedCategoryName: r.transactionId
-        ? (bookedCategoryByTransactionId.get(r.transactionId) ?? null)
-        : null,
+      confirmedCategoryName:
+        (r.confirmedCategoryId
+          ? categoryNameById.get(r.confirmedCategoryId)
+          : r.transactionId
+            ? bookedCategoryByTransactionId.get(r.transactionId)
+            : null) ?? null,
       skipReasonCode: r.skipReasonCode,
       skipReasonNote: r.skipReasonNote,
       bookDate: classified.row.bookDate,
@@ -122,12 +127,14 @@ export default async function ImportBatchPage({
   const movement = batch.closingBalanceMinor - batch.openingBalanceMinor;
   const counts = {
     pending: rows.filter((row) => row.status === "pending").length,
+    confirmed: rows.filter((row) => row.status === "confirmed").length,
     booked: rows.filter((row) => row.status === "booked").length,
     skipped: rows.filter((row) => row.status === "skipped").length,
     duplicate: rows.filter((row) => row.status === "duplicate").length,
   };
   const countItems = [
     counts.pending > 0 && t("countPending", { count: counts.pending }),
+    counts.confirmed > 0 && t("countConfirmed", { count: counts.confirmed }),
     counts.booked > 0 && t("countBooked", { count: counts.booked }),
     counts.skipped > 0 && t("countSkipped", { count: counts.skipped }),
     counts.duplicate > 0 && t("countDuplicates", { count: counts.duplicate }),

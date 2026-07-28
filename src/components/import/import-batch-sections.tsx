@@ -12,17 +12,17 @@ export interface ImportBatchSummary {
   periodStart: string;
   periodEnd: string;
   createdAt: Date;
-  pendingCount: number;
+  openCount: number;
   rowCount: number;
 }
 
 export function partitionImportBatches(batches: ImportBatchSummary[]) {
   return {
     pending: batches
-      .filter((batch) => batch.pendingCount > 0)
+      .filter((batch) => batch.openCount > 0)
       .toSorted((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
     closed: batches
-      .filter((batch) => batch.pendingCount === 0)
+      .filter((batch) => batch.openCount === 0)
       .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
   };
 }
@@ -50,7 +50,7 @@ function BatchRows({
             </span>
             <span className="text-caption text-text-muted">
               {formatDate(batch.periodStart, locale)}–{formatDate(batch.periodEnd, locale)} ·{" "}
-              {t("pendingOfTotal", { pending: batch.pendingCount, total: batch.rowCount })}
+              {t("openOfTotal", { open: batch.openCount, total: batch.rowCount })}
             </span>
           </Link>
         </li>

@@ -28,6 +28,7 @@ import {
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   bookImportRow,
+  confirmImportRow,
   createImportBatch,
   reopenTrashedImportRow,
 } from "./service";
@@ -58,6 +59,7 @@ async function main() {
         .select()
         .from(importRows)
         .where(and(eq(importRows.batchId, batch.batchId), eq(importRows.lineNo, lineNo)));
+      await confirmImportRow({ rowId: row.id, categoryId: row.suggestedCategoryId });
       const { transactionId } = await bookImportRow({ rowId: row.id });
       const txId = transactionId!;
       const [transaction] = await db.select().from(transactions).where(eq(transactions.id, txId));
@@ -296,6 +298,10 @@ async function main() {
     assert.equal(restoredPendingLink.lifecycle, "active");
     await softDeleteNonInvestmentTransaction(rebookCase.txId);
     await reopenTrashedImportRow(rebookCase.row.id);
+    await confirmImportRow({
+      rowId: rebookCase.row.id,
+      categoryId: rebookCase.row.suggestedCategoryId,
+    });
     ok("restoring a reopened old transaction reconciles its inbox row back to booked");
 
     const rebookAttempts = await Promise.allSettled([

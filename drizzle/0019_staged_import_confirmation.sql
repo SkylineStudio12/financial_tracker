@@ -1,0 +1,3 @@
+ALTER TYPE "public"."import_row_status" ADD VALUE 'confirmed' BEFORE 'booked';--> statement-breakpoint
+ALTER TABLE "import_rows" ADD COLUMN "confirmed_category_id" uuid;--> statement-breakpoint
+ALTER TABLE "import_rows" ADD CONSTRAINT "import_rows_confirmed_category_id_categories_id_fk" FOREIGN KEY ("confirmed_category_id") REFERENCES "public"."categories"("id") ON DELETE no action ON UPDATE no action;

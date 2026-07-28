@@ -14,26 +14,31 @@ import { IngParseError } from "./ing/types";
 import {
   assertImportBatchScope,
   assertImportRowScope,
-  bookHighConfidenceRows,
-  bookImportRow,
+  bookConfirmedRows,
+  confirmHighConfidenceRows,
+  confirmImportRow,
   createImportBatch,
   reopenSkippedImportRow,
   reopenTrashedImportRow,
   skipImportRow,
+  unconfirmImportRow,
+  type BookConfirmedRowOutcome,
 } from "./service";
 
 type ActionResult =
   | { error: AppError | string }
   | {
       ok: true;
-      status?: "duplicate";
       summary?: {
-        booked: number;
-        duplicates: number;
+        confirmed: number;
         ownerTransfersExcluded: number;
         left: number;
       };
     };
+
+type BookConfirmedActionResult =
+  | { error: AppError }
+  | { ok: true; outcomes: BookConfirmedRowOutcome[] };
 
 /** Validated /p/{slug}/imports base for redirects and revalidation. */
 function importsPath(profileSlug: string, entityId: string): string {
@@ -72,7 +77,7 @@ export async function createImportBatchAction(payload: {
   redirect(`${importsPath(payload.profileSlug, payload.entityId)}/${batchId}`);
 }
 
-export async function bookImportRowAction(payload: {
+export async function confirmImportRowAction(payload: {
   profileSlug: string;
   entityId: string;
   batchId: string;
@@ -82,12 +87,55 @@ export async function bookImportRowAction(payload: {
   try {
     const basePath = importsPath(payload.profileSlug, payload.entityId);
     await assertImportRowScope(payload);
-    const result = await bookImportRow({ rowId: payload.rowId, categoryId: payload.categoryId });
+    await confirmImportRow({ rowId: payload.rowId, categoryId: payload.categoryId });
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function unconfirmImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await unconfirmImportRow(payload.rowId);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function confirmHighConfidenceAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportBatchScope(payload);
+    const result = await confirmHighConfidenceRows(payload.batchId);
     revalidatePath(basePath);
     revalidatePath(`${basePath}/${payload.batchId}`);
     return {
       ok: true,
-      status: result.status === "duplicate" ? "duplicate" : undefined,
+      summary: {
+        confirmed: result.confirmed,
+        ownerTransfersExcluded: result.ownerTransfersExcluded,
+        left: result.left,
+      },
     };
   } catch (error) {
     const appError = toAppError(error);
@@ -96,29 +144,18 @@ export async function bookImportRowAction(payload: {
   }
 }
 
-export async function bookHighConfidenceAction(payload: {
+export async function bookConfirmedRowsAction(payload: {
   profileSlug: string;
   entityId: string;
   batchId: string;
-}): Promise<ActionResult> {
+}): Promise<BookConfirmedActionResult> {
   try {
     const basePath = importsPath(payload.profileSlug, payload.entityId);
     await assertImportBatchScope(payload);
-    const result = await bookHighConfidenceRows(payload.batchId);
+    const outcomes = await bookConfirmedRows(payload.batchId);
     revalidatePath(basePath);
     revalidatePath(`${basePath}/${payload.batchId}`);
-    if (result.errors.length) {
-      return { error: { code: "imports.highConfidenceBookingFailed", params: { count: result.errors.length } } };
-    }
-    return {
-      ok: true,
-      summary: {
-        booked: result.booked,
-        duplicates: result.duplicates,
-        ownerTransfersExcluded: result.ownerTransfersExcluded,
-        left: result.left,
-      },
-    };
+    return { ok: true, outcomes };
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };

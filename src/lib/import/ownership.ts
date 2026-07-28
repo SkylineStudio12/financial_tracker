@@ -135,7 +135,7 @@ export async function markTransactionImportRestored(
     .where(
       and(
         eq(importRows.transactionId, transactionId),
-        inArray(importRows.status, ["trashed", "pending"]),
+        inArray(importRows.status, ["trashed", "pending", "confirmed"]),
       ),
     );
   await tx

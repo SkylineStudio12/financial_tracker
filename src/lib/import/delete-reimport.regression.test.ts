@@ -15,7 +15,7 @@ import { db, pool } from "@/db";
 import { auditLog, importRows, postings } from "@/db/schema";
 import { purgeTransaction, softDeleteNonInvestmentTransaction } from "@/lib/ledger";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
-import { bookImportRow, createImportBatch } from "./service";
+import { bookImportRow, confirmImportRow, createImportBatch } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
 
 const fixture = readFileSync(join(import.meta.dirname, "ing", "fixtures", "skyline-2026-06.txt"), "utf8");
@@ -47,6 +47,7 @@ async function main() {
       .select()
       .from(importRows)
       .where(and(eq(importRows.batchId, first.batchId), eq(importRows.lineNo, FEE_LINE)));
+    await confirmImportRow({ rowId: firstRow.id, categoryId: firstRow.suggestedCategoryId });
     const booked = await bookImportRow({ rowId: firstRow.id });
     assert.equal(booked.status, "booked");
     const firstTxId = booked.transactionId;
@@ -109,6 +110,10 @@ async function main() {
       .from(importRows)
       .where(and(eq(importRows.batchId, afterPurge.batchId), eq(importRows.lineNo, FEE_LINE)));
     assert.equal(releasedRow.status, "pending", "purge releases duplicate ownership");
+    await confirmImportRow({
+      rowId: releasedRow.id,
+      categoryId: releasedRow.suggestedCategoryId,
+    });
     const rebooked = await bookImportRow({ rowId: releasedRow.id });
     assert.equal(rebooked.status, "booked", "delete-then-reimport books cleanly");
     assert.notEqual(rebooked.transactionId, firstTxId, "a genuinely new transaction");

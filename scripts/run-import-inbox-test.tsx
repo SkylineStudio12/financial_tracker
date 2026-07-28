@@ -17,7 +17,7 @@ function test(name: string, fn: () => void) {
   console.log(`ok - ${name}`);
 }
 
-function batch(id: string, pendingCount: number, createdAt: string): ImportBatchSummary {
+function batch(id: string, openCount: number, createdAt: string): ImportBatchSummary {
   return {
     id,
     statementNumber: `Nr.${id}`,
@@ -25,7 +25,7 @@ function batch(id: string, pendingCount: number, createdAt: string): ImportBatch
     periodStart: "2026-06-01",
     periodEnd: "2026-06-30",
     createdAt: new Date(createdAt),
-    pendingCount,
+    openCount,
     rowCount: 17,
   };
 }
@@ -92,8 +92,11 @@ test("single-row UI keeps duplicates visible and links resolved rows", () => {
   assert.doesNotMatch(bookedBlock, /reopen/);
 });
 
-test("write service owns the transitions and confirmation delegates to createTransaction", () => {
+test("write service stages confirmation separately and booking delegates to createTransaction", () => {
   const source = readFileSync("src/lib/import/service.ts", "utf8");
+  assert.match(source, /export async function confirmImportRow/);
+  assert.match(source, /\.set\(\{ status: "confirmed", confirmedCategoryId: categoryId \}\)/);
+  assert.match(source, /export async function bookConfirmedRows/);
   assert.match(source, /buildImportTransactionInput\(/);
   assert.match(source, /createTransaction\(input, tx\)/);
   assert.match(source, /export async function assertImportRowScope/);
@@ -103,12 +106,16 @@ test("write service owns the transitions and confirmation delegates to createTra
   assert.doesNotMatch(source, /insert\(transactions\)/);
 });
 
-test("bulk UI discloses booked, individually-reviewed owner transfers, and pending counts", () => {
+test("bulk UI stages high confidence and books the confirmed count separately", () => {
   const source = readFileSync("src/components/import/import-inbox.tsx", "utf8");
-  assert.match(source, /result\.summary\.booked/);
+  assert.match(source, /result\.summary\.confirmed/);
   assert.match(source, /result\.summary\.ownerTransfersExcluded/);
   assert.match(source, /result\.summary\.left/);
   assert.match(source, /t\("ownerTransfersExcludedCount"/);
+  assert.match(source, /t\("bookTransactions", \{ count: confirmedCount \}\)/);
+  assert.match(source, /bookConfirmedRowsAction/);
+  assert.match(source, /row\.status === "confirmed"/);
+  assert.match(source, /unconfirmImportRowAction/);
 });
 
 test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () => {
@@ -119,18 +126,24 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "emptyBody",
     "needsReview",
     "closedBatches",
+    "openOfTotal",
     "batchIdentity",
     "countPending",
+    "countConfirmed",
     "countBooked",
     "countSkipped",
     "countDuplicates",
     "reconciliation",
     "progress",
+    "pendingReviewSummary",
     "confirm",
+    "unconfirm",
+    "bookTransactions",
     "skipEllipsis",
     "reopen",
     "reopenForRebooking",
     "suggested",
+    "confirmedStatus",
     "bookedStatus",
     "skippedStatus",
     "skippedWithNote",
@@ -151,6 +164,8 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "detailResolvedReference",
     "detailRawLines",
     "balanceAfter",
+    "confirmedCount",
+    "bookingFailureCount",
     "ownerTransfersExcludedCount",
   ];
   for (const key of keys) assert.equal(ro[key], en[key], key);

@@ -38,6 +38,7 @@ import {
 import { normalizeStatementNumber, parseStatementPeriod, resolveExternalRef } from "./ing/identity";
 import { parseIngStatement } from "./ing/parse";
 import { isIngCsv, parseIngCsvStatement } from "./ing/parse-csv";
+import { IMPORT_LINK_DATE_WINDOW_DAYS, shiftImportLinkDate } from "./linking";
 import {
   findActiveImportLink,
   findActiveSourceClaim,
@@ -343,6 +344,9 @@ export async function confirmImportRow(params: {
   if (row.status !== "pending") {
     throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
   }
+  if (row.kind === "owner_transfer") {
+    throw new LedgerValidationError("imports.ownerTransferDispositionRequired");
+  }
   const categoryId = bookingNeedsCategory(row.kind) ? params.categoryId ?? null : null;
   if (bookingNeedsCategory(row.kind) && !categoryId) {
     throw new LedgerValidationError("imports.categoryRequiredForLine", {
@@ -369,7 +373,11 @@ export async function confirmImportRow(params: {
   }
   const [updated] = await db
     .update(importRows)
-    .set({ status: "confirmed", confirmedCategoryId: categoryId })
+    .set({
+      status: "confirmed",
+      confirmedCategoryId: categoryId,
+      reviewDisposition: "standard",
+    })
     .where(and(eq(importRows.id, params.rowId), eq(importRows.status, "pending")))
     .returning({ id: importRows.id });
   if (!updated) {
@@ -377,11 +385,44 @@ export async function confirmImportRow(params: {
   }
 }
 
+/** Record the owner's explicit Drawing decision without booking yet. */
+export async function confirmDrawingImportRow(rowId: string): Promise<void> {
+  const [updated] = await db
+    .update(importRows)
+    .set({
+      status: "confirmed",
+      confirmedCategoryId: null,
+      reviewDisposition: "drawing",
+    })
+    .where(
+      and(
+        eq(importRows.id, rowId),
+        eq(importRows.status, "pending"),
+        eq(importRows.kind, "owner_transfer"),
+      ),
+    )
+    .returning({ id: importRows.id });
+  if (updated) return;
+  const [row] = await db
+    .select({ status: importRows.status, kind: importRows.kind })
+    .from(importRows)
+    .where(eq(importRows.id, rowId));
+  if (!row) throw new LedgerValidationError("imports.rowNotFound");
+  if (row.kind !== "owner_transfer") {
+    throw new LedgerValidationError("imports.ownerTransferDispositionOnly");
+  }
+  throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+}
+
 /** Return a staged decision to review and discard only the owner's category decision. */
 export async function unconfirmImportRow(rowId: string): Promise<void> {
   const [updated] = await db
     .update(importRows)
-    .set({ status: "pending", confirmedCategoryId: null })
+    .set({
+      status: "pending",
+      confirmedCategoryId: null,
+      reviewDisposition: null,
+    })
     .where(and(eq(importRows.id, rowId), eq(importRows.status, "confirmed")))
     .returning({ id: importRows.id });
   if (updated) return;
@@ -405,6 +446,14 @@ export async function bookImportRow(params: {
   if (!row) throw new LedgerValidationError("imports.rowNotFound");
   if (row.status !== "confirmed") {
     throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+  }
+  const requiredDisposition = row.kind === "owner_transfer" ? "drawing" : "standard";
+  if (row.reviewDisposition !== requiredDisposition) {
+    throw new LedgerValidationError(
+      row.kind === "owner_transfer"
+        ? "imports.ownerTransferDispositionRequired"
+        : "imports.reviewDispositionRequired",
+    );
   }
   const [batch] = await db
     .select()
@@ -651,6 +700,7 @@ export async function confirmHighConfidenceRows(
       .set({
         status: "confirmed",
         confirmedCategoryId: bookingNeedsCategory(row.kind) ? row.suggestedCategoryId : null,
+        reviewDisposition: "standard",
       })
       .where(and(eq(importRows.id, row.id), eq(importRows.status, "pending")))
       .returning({ id: importRows.id });
@@ -697,6 +747,197 @@ export async function bookConfirmedRows(batchId: string): Promise<BookConfirmedR
     }
   }
   return outcomes;
+}
+
+/**
+ * Satisfy one review row with an existing live transaction. The target ledger
+ * rows are locked for validation and otherwise left byte-for-byte untouched.
+ */
+export async function linkImportRowToExistingTransaction(params: {
+  rowId: string;
+  transactionId: string;
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    await acquireImportOwnershipLock(tx);
+    const [row] = await tx
+      .select({
+        id: importRows.id,
+        status: importRows.status,
+        kind: importRows.kind,
+        payload: importRows.payload,
+        batchId: importBatches.id,
+        entityId: importBatches.entityId,
+        bankAccountId: importBatches.bankAccountId,
+        statementNumber: importBatches.statementNumber,
+        rawTextHash: importBatches.rawTextHash,
+        resolvedExternalRef: importRows.resolvedExternalRef,
+      })
+      .from(importRows)
+      .innerJoin(importBatches, eq(importBatches.id, importRows.batchId))
+      .where(eq(importRows.id, params.rowId))
+      .for("update");
+    if (!row) throw new LedgerValidationError("imports.rowNotFound");
+    if (row.status !== "pending" && row.status !== "confirmed") {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+    }
+
+    const [target] = await tx
+      .select({
+        id: transactions.id,
+        entityId: transactions.entityId,
+        date: transactions.date,
+        currentRevision: transactions.currentRevision,
+        createdAt: transactions.createdAt,
+        deletedAt: transactions.deletedAt,
+      })
+      .from(transactions)
+      .where(eq(transactions.id, params.transactionId))
+      .for("update");
+    if (!target) throw new LedgerValidationError("imports.linkTransactionNotFound");
+    if (target.entityId !== row.entityId) {
+      throw new LedgerValidationError("imports.linkTransactionWrongEntity");
+    }
+    if (target.deletedAt) {
+      throw new LedgerValidationError("imports.linkTransactionDeleted");
+    }
+
+    const [existingTargetLink] = await tx
+      .select({ id: transactionImportLinks.id })
+      .from(transactionImportLinks)
+      .where(eq(transactionImportLinks.transactionId, target.id))
+      .limit(1);
+    if (existingTargetLink) {
+      throw new LedgerValidationError("imports.linkTransactionAlreadyLinked");
+    }
+
+    const classified = row.payload as ClassifiedRow;
+    const dateMatches =
+      target.date >=
+        shiftImportLinkDate(classified.row.bookDate, -IMPORT_LINK_DATE_WINDOW_DAYS) &&
+      target.date <=
+        shiftImportLinkDate(classified.row.bookDate, IMPORT_LINK_DATE_WINDOW_DAYS);
+    const [amountMatch] = await tx
+      .select({ id: postings.id })
+      .from(postings)
+      .where(
+        and(
+          eq(postings.transactionId, target.id),
+          eq(postings.revision, target.currentRevision),
+          isNull(postings.deletedAt),
+          sql`abs(${postings.amount}) = ${classified.row.amountMinor}`,
+        ),
+      )
+      .limit(1);
+    if (!dateMatches || !amountMatch) {
+      throw new LedgerValidationError("imports.linkTransactionMismatch", {
+        days: IMPORT_LINK_DATE_WINDOW_DAYS,
+      });
+    }
+
+    const rowIdentity = ingRowIdentity(row.bankAccountId, row.resolvedExternalRef);
+    const [identityClaim] = await tx
+      .select({ id: transactionImportLinks.id })
+      .from(transactionImportLinks)
+      .where(
+        and(
+          eq(transactionImportLinks.provider, "ing"),
+          eq(transactionImportLinks.rowIdentity, rowIdentity),
+          isNull(transactionImportLinks.releasedAt),
+        ),
+      )
+      .limit(1);
+    if (identityClaim) {
+      throw new LedgerValidationError("imports.linkIdentityAlreadyClaimed");
+    }
+
+    const linkedAt = new Date();
+    await insertTransactionImportLink(tx, {
+      transactionId: target.id,
+      provider: "ing",
+      sourceBatchId: row.batchId,
+      sourceRowId: row.id,
+      sourceLabel: row.statementNumber,
+      rowIdentity,
+      rawTextHash: row.rawTextHash,
+      originalBookedAt: target.createdAt,
+    });
+    const [satisfied] = await tx
+      .update(importRows)
+      .set({
+        status: "duplicate",
+        transactionId: target.id,
+        bookedAt: linkedAt,
+        confirmedCategoryId: null,
+        reviewDisposition: "linked_existing",
+      })
+      .where(
+        and(
+          eq(importRows.id, row.id),
+          inArray(importRows.status, ["pending", "confirmed"]),
+        ),
+      )
+      .returning({ id: importRows.id });
+    if (!satisfied) {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+    }
+  });
+}
+
+/** Release only a manual existing-transaction link; never touch its target. */
+export async function unlinkImportRow(rowId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await acquireImportOwnershipLock(tx);
+    const [row] = await tx
+      .select({
+        id: importRows.id,
+        status: importRows.status,
+        transactionId: importRows.transactionId,
+        reviewDisposition: importRows.reviewDisposition,
+      })
+      .from(importRows)
+      .where(eq(importRows.id, rowId))
+      .for("update");
+    if (!row) throw new LedgerValidationError("imports.rowNotFound");
+    if (
+      (row.status !== "duplicate" && row.status !== "trashed") ||
+      row.reviewDisposition !== "linked_existing" ||
+      !row.transactionId
+    ) {
+      throw new LedgerValidationError("imports.rowNotManuallyLinked");
+    }
+    const [link] = await tx
+      .select({ id: transactionImportLinks.id })
+      .from(transactionImportLinks)
+      .where(
+        and(
+          eq(transactionImportLinks.provider, "ing"),
+          eq(transactionImportLinks.sourceRowId, row.id),
+          eq(transactionImportLinks.transactionId, row.transactionId),
+          isNull(transactionImportLinks.releasedAt),
+        ),
+      )
+      .for("update");
+    if (!link) throw new LedgerValidationError("imports.rowNotManuallyLinked");
+    const releasedAt = new Date();
+    await tx
+      .update(transactionImportLinks)
+      .set({
+        lifecycle: "released",
+        releasedAt,
+        releaseReason: "manual_unlink",
+      })
+      .where(eq(transactionImportLinks.id, link.id));
+    await tx
+      .update(importRows)
+      .set({
+        status: "pending",
+        transactionId: null,
+        bookedAt: null,
+        confirmedCategoryId: null,
+        reviewDisposition: null,
+      })
+      .where(eq(importRows.id, row.id));
+  });
 }
 
 export async function skipImportRow(params: {
@@ -753,6 +994,9 @@ export async function reopenTrashedImportRow(rowId: string): Promise<void> {
       throw new LedgerValidationError("imports.rowAlreadyStatus", {
         status: rowSnapshot.status,
       });
+    }
+    if (rowSnapshot.reviewDisposition === "linked_existing") {
+      throw new LedgerValidationError("imports.linkedTransactionNeedsUnlink");
     }
     const [transaction] = await tx
       .select({ deletedAt: transactions.deletedAt })

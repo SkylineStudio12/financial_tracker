@@ -9,7 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { importRowStatus } from "./enums";
+import { importReviewDisposition, importRowStatus } from "./enums";
 import { id, moneyMinor, timestamps } from "./helpers";
 import { accounts, entities } from "./entities";
 import { categories } from "./categories";
@@ -97,6 +97,9 @@ export const importRows = pgTable(
     /** Owner decision captured at review; kept separate from the classifier's
      * suggestion so later learning can compare proposal with decision. */
     confirmedCategoryId: uuid("confirmed_category_id").references(() => categories.id),
+    /** Explicit review decision. Owner transfers must be Drawing or linked;
+     * never infer their disposition from kind or confidence. */
+    reviewDisposition: importReviewDisposition("review_disposition"),
     /**
      * Amendment-1(b) overlap control: TRUE when this row is REFLESS and the
      * batch period overlaps an earlier batch on the same account — the

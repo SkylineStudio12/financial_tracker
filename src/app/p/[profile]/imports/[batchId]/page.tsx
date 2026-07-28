@@ -81,7 +81,14 @@ export default async function ImportBatchPage({
   }
   const data = await getImportBatch(batchId, profile.entityId);
   if (!data) notFound();
-  const { batch, rows, categories, bookedCategoryByTransactionId } = data;
+  const {
+    batch,
+    rows,
+    categories,
+    bookedCategoryByTransactionId,
+    linkCandidatesByRowId,
+    manuallyLinkedRowIds,
+  } = data;
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
 
   const inboxRows = rows.map((r) => {
@@ -100,7 +107,10 @@ export default async function ImportBatchPage({
       resolvedExternalRef: r.resolvedExternalRef,
       suggestedCategoryId: r.suggestedCategoryId,
       confirmedCategoryId: r.confirmedCategoryId,
+      reviewDisposition: r.reviewDisposition,
       transactionId: r.transactionId,
+      manuallyLinked: manuallyLinkedRowIds.has(r.id),
+      linkCandidates: linkCandidatesByRowId.get(r.id) ?? [],
       confirmedCategoryName:
         (r.confirmedCategoryId
           ? categoryNameById.get(r.confirmedCategoryId)

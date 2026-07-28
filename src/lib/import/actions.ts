@@ -15,13 +15,16 @@ import {
   assertImportBatchScope,
   assertImportRowScope,
   bookConfirmedRows,
+  confirmDrawingImportRow,
   confirmHighConfidenceRows,
   confirmImportRow,
   createImportBatch,
+  linkImportRowToExistingTransaction,
   reopenSkippedImportRow,
   reopenTrashedImportRow,
   skipImportRow,
   unconfirmImportRow,
+  unlinkImportRow,
   type BookConfirmedRowOutcome,
 } from "./service";
 
@@ -98,6 +101,26 @@ export async function confirmImportRowAction(payload: {
   }
 }
 
+export async function confirmDrawingImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await confirmDrawingImportRow(payload.rowId);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
 export async function unconfirmImportRowAction(payload: {
   profileSlug: string;
   entityId: string;
@@ -156,6 +179,50 @@ export async function bookConfirmedRowsAction(payload: {
     revalidatePath(basePath);
     revalidatePath(`${basePath}/${payload.batchId}`);
     return { ok: true, outcomes };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function linkImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+  transactionId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await linkImportRowToExistingTransaction({
+      rowId: payload.rowId,
+      transactionId: payload.transactionId,
+    });
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function unlinkImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await unlinkImportRow(payload.rowId);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };

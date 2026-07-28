@@ -155,8 +155,41 @@ async function main(): Promise<void> {
     "0018 must recreate tax_config_bracket_parent_trigger with 0008's exact definition",
   );
 
+  // (4) 0020 creates a fresh enum, then safely uses it to backfill only
+  // already-confirmed non-owner rows. Owner transfer disposition is never
+  // inferred by migration.
+  const migration0020 = readFileSync(
+    join(import.meta.dirname, "0020_import_link_disposition.sql"),
+    "utf8",
+  );
+  assert.ok(
+    migration0020.includes(
+      `CREATE TYPE "public"."import_review_disposition" AS ENUM('standard', 'drawing', 'linked_existing')`,
+    ),
+    "0020 must create the explicit review-disposition enum",
+  );
+  assert.ok(
+    migration0020.includes(
+      `UPDATE "import_rows" SET "review_disposition" = 'standard' WHERE "status" = 'confirmed' AND "kind" <> 'owner_transfer'`,
+    ),
+    "0020 must backfill confirmed non-owner rows without inferring owner transfers",
+  );
+  assert.ok(
+    migration0020.includes(
+      `CREATE UNIQUE INDEX "transaction_import_links_active_transaction_uidx" ON "transaction_import_links" USING btree ("transaction_id") WHERE "transaction_import_links"."released_at" is null`,
+    ),
+    "0020 must prevent two active import links from claiming one transaction",
+  );
+  assert.ok(
+    migration0020.includes(
+      `CREATE UNIQUE INDEX "transaction_import_links_source_row_uidx" ON "transaction_import_links" USING btree ("provider","source_row_id") WHERE "transaction_import_links"."released_at" is null`,
+    ),
+    "0020 source-row uniqueness must release when the link is released",
+  );
+
   console.log("PASS migration enum safety: 0009 recreates import_row_status; ADD VALUE would 55P04");
   console.log("PASS migration enum safety: 0018 recreates tax_config_parameter for micro_revenue_tax");
+  console.log("PASS migration 0020: explicit dispositions, non-owner backfill, active-link uniqueness");
 }
 
 main()

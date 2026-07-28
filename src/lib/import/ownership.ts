@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   importRows,
@@ -109,6 +109,16 @@ export async function markTransactionImportTrashed(
     .set({ status: "trashed" })
     .where(and(eq(importRows.transactionId, transactionId), eq(importRows.status, "booked")));
   await tx
+    .update(importRows)
+    .set({ status: "trashed" })
+    .where(
+      and(
+        eq(importRows.transactionId, transactionId),
+        eq(importRows.status, "duplicate"),
+        eq(importRows.reviewDisposition, "linked_existing"),
+      ),
+    );
+  await tx
     .update(revolutImportRows)
     .set({ status: "trashed" })
     .where(
@@ -136,6 +146,20 @@ export async function markTransactionImportRestored(
       and(
         eq(importRows.transactionId, transactionId),
         inArray(importRows.status, ["trashed", "pending", "confirmed"]),
+        or(
+          isNull(importRows.reviewDisposition),
+          inArray(importRows.reviewDisposition, ["standard", "drawing"]),
+        ),
+      ),
+    );
+  await tx
+    .update(importRows)
+    .set({ status: "duplicate" })
+    .where(
+      and(
+        eq(importRows.transactionId, transactionId),
+        eq(importRows.status, "trashed"),
+        eq(importRows.reviewDisposition, "linked_existing"),
       ),
     );
   await tx

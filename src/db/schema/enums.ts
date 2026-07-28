@@ -110,3 +110,9 @@ export const importRowStatus = pgEnum("import_row_status", [
   "trashed",
   "purged",
 ]);
+
+export const importReviewDisposition = pgEnum("import_review_disposition", [
+  "standard",
+  "drawing",
+  "linked_existing",
+]);

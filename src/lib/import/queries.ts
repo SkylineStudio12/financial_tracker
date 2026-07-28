@@ -1,9 +1,27 @@
 /**
  * Read queries for the import inbox pages. Display only — no writes.
  */
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, categories, importBatches, importRows, postings } from "@/db/schema";
+import {
+  accounts,
+  categories,
+  importBatches,
+  importRows,
+  postings,
+  transactionImportLinks,
+  transactions,
+} from "@/db/schema";
+import { IMPORT_LINK_DATE_WINDOW_DAYS, shiftImportLinkDate } from "./linking";
+
+export interface ImportLinkCandidate {
+  transactionId: string;
+  date: string;
+  description: string | null;
+  kind: string;
+  amountMinor: number;
+  alreadyLinked: boolean;
+}
 
 export async function getImportFormOptions(entityId: string) {
   const bankAccounts = await db
@@ -87,5 +105,104 @@ export async function getImportBatch(batchId: string, entityId: string) {
     bookedCategories.map((row) => [row.transactionId, row.categoryName]),
   );
 
-  return { batch, rows, categories: entityCategories, bookedCategoryByTransactionId };
+  const evidence = rows.map((row) => {
+    const payload = row.payload as { row: { bookDate: string; amountMinor: number } };
+    return {
+      rowId: row.id,
+      date: payload.row.bookDate,
+      amountMinor: payload.row.amountMinor,
+    };
+  });
+  const uniqueAmounts = [...new Set(evidence.map((row) => row.amountMinor))];
+  const earliestDate = evidence.map((row) => row.date).toSorted()[0];
+  const latestDate = evidence.map((row) => row.date).toSorted().at(-1);
+  const candidateRows =
+    earliestDate && latestDate && uniqueAmounts.length
+      ? await db
+          .selectDistinct({
+            transactionId: transactions.id,
+            date: transactions.date,
+            description: transactions.description,
+            kind: transactions.kind,
+            amountMinor: sql<number>`abs(${postings.amount})`,
+          })
+          .from(transactions)
+          .innerJoin(
+            postings,
+            and(
+              eq(postings.transactionId, transactions.id),
+              eq(postings.revision, transactions.currentRevision),
+              isNull(postings.deletedAt),
+            ),
+          )
+          .where(
+            and(
+              eq(transactions.entityId, entityId),
+              isNull(transactions.deletedAt),
+              gte(
+                transactions.date,
+                shiftImportLinkDate(earliestDate, -IMPORT_LINK_DATE_WINDOW_DAYS),
+              ),
+              lte(
+                transactions.date,
+                shiftImportLinkDate(latestDate, IMPORT_LINK_DATE_WINDOW_DAYS),
+              ),
+              inArray(sql<number>`abs(${postings.amount})`, uniqueAmounts),
+            ),
+          )
+          .orderBy(desc(transactions.date), desc(transactions.id))
+      : [];
+  const candidateTransactionIds = candidateRows.map((candidate) => candidate.transactionId);
+  const existingTransactionLinks = candidateTransactionIds.length
+    ? await db
+        .select({ transactionId: transactionImportLinks.transactionId })
+        .from(transactionImportLinks)
+        .where(inArray(transactionImportLinks.transactionId, candidateTransactionIds))
+    : [];
+  const linkedTransactionIds = new Set(
+    existingTransactionLinks.map((link) => link.transactionId),
+  );
+  const linkCandidatesByRowId = new Map<string, ImportLinkCandidate[]>();
+  for (const row of evidence) {
+    const from = shiftImportLinkDate(row.date, -IMPORT_LINK_DATE_WINDOW_DAYS);
+    const to = shiftImportLinkDate(row.date, IMPORT_LINK_DATE_WINDOW_DAYS);
+    linkCandidatesByRowId.set(
+      row.rowId,
+      candidateRows
+        .filter(
+          (candidate) =>
+            Number(candidate.amountMinor) === row.amountMinor &&
+            candidate.date >= from &&
+            candidate.date <= to,
+        )
+        .map((candidate) => ({
+          ...candidate,
+          amountMinor: Number(candidate.amountMinor),
+          alreadyLinked: linkedTransactionIds.has(candidate.transactionId),
+        })),
+    );
+  }
+  const rowIds = rows.map((row) => row.id);
+  const manualLinks = rowIds.length
+    ? await db
+        .select({ sourceRowId: transactionImportLinks.sourceRowId })
+        .from(transactionImportLinks)
+        .where(
+          and(
+            eq(transactionImportLinks.provider, "ing"),
+            inArray(transactionImportLinks.sourceRowId, rowIds),
+            isNull(transactionImportLinks.releasedAt),
+          ),
+        )
+    : [];
+  const manuallyLinkedRowIds = new Set(manualLinks.map((link) => link.sourceRowId));
+
+  return {
+    batch,
+    rows,
+    categories: entityCategories,
+    bookedCategoryByTransactionId,
+    linkCandidatesByRowId,
+    manuallyLinkedRowIds,
+  };
 }

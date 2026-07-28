@@ -22,6 +22,7 @@ import { LedgerValidationError } from "@/lib/ledger";
 import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   bookImportRow,
+  confirmDrawingImportRow,
   confirmHighConfidenceRows,
   confirmImportRow,
   createImportBatch,
@@ -131,7 +132,11 @@ async function run(env: ImportTestEntity) {
       row.kind === "card_purchase"
         ? env.categoryId("Services|expense")
         : row.suggestedCategoryId;
-    await confirmImportRow({ rowId: row.id, categoryId });
+    if (row.kind === "owner_transfer") {
+      await confirmDrawingImportRow(row.id);
+    } else {
+      await confirmImportRow({ rowId: row.id, categoryId });
+    }
     const result = await bookImportRow({ rowId: row.id });
     assert.equal(result.status, "booked", `line ${row.lineNo} did not book: ${result.status}`);
     booked += 1;

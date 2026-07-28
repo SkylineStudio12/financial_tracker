@@ -95,7 +95,13 @@ test("single-row UI keeps duplicates visible and links resolved rows", () => {
 test("write service stages confirmation separately and booking delegates to createTransaction", () => {
   const source = readFileSync("src/lib/import/service.ts", "utf8");
   assert.match(source, /export async function confirmImportRow/);
-  assert.match(source, /\.set\(\{ status: "confirmed", confirmedCategoryId: categoryId \}\)/);
+  const confirmBlock = source.slice(
+    source.indexOf("export async function confirmImportRow"),
+    source.indexOf("export async function confirmDrawingImportRow"),
+  );
+  assert.match(confirmBlock, /status: "confirmed"/);
+  assert.match(confirmBlock, /confirmedCategoryId: categoryId/);
+  assert.match(confirmBlock, /reviewDisposition: "standard"/);
   assert.match(source, /export async function bookConfirmedRows/);
   assert.match(source, /buildImportTransactionInput\(/);
   assert.match(source, /createTransaction\(input, tx\)/);
@@ -118,6 +124,22 @@ test("bulk UI stages high confidence and books the confirmed count separately", 
   assert.match(source, /unconfirmImportRowAction/);
 });
 
+test("owner transfers expose Drawing or existing-transaction linking instead of bare confirm", () => {
+  const source = readFileSync("src/components/import/import-inbox.tsx", "utf8");
+  assert.match(source, /row\.kind === "owner_transfer"/);
+  assert.match(source, /confirmDrawingImportRowAction/);
+  assert.match(source, /t\("drawing"\)/);
+  assert.match(source, /<ExistingTransactionLinker/);
+  assert.match(source, /linkImportRowAction/);
+  assert.match(source, /unlinkImportRowAction/);
+  assert.match(source, /row\.manuallyLinked/);
+  assert.match(
+    source,
+    /function handleOpenChange\(nextOpen: boolean\)[\s\S]*if \(nextOpen\)[\s\S]*setSearch\(""\)[\s\S]*setSelectedId\(""\)[\s\S]*setError\(null\)/,
+  );
+  assert.match(source, /onOpenChange=\{handleOpenChange\}/);
+});
+
 test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () => {
   const en = JSON.parse(readFileSync("messages/en.json", "utf8")).imports;
   const ro = JSON.parse(readFileSync("messages/ro.json", "utf8")).imports;
@@ -137,6 +159,17 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "progress",
     "pendingReviewSummary",
     "confirm",
+    "drawing",
+    "linkExisting",
+    "linkTitle",
+    "linkDescription",
+    "linkSearchPlaceholder",
+    "linkNoMatches",
+    "linkSelected",
+    "transactionDescriptionUnavailable",
+    "transactionAlreadyLinked",
+    "linkedExistingStatus",
+    "unlink",
     "unconfirm",
     "bookTransactions",
     "skipEllipsis",

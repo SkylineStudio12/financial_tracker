@@ -22,14 +22,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   bookConfirmedRowsAction,
+  confirmDrawingImportRowAction,
   confirmHighConfidenceAction,
   confirmImportRowAction,
+  linkImportRowAction,
   reopenSkippedImportRowAction,
   reopenTrashedImportRowAction,
   skipImportRowAction,
   unconfirmImportRowAction,
+  unlinkImportRowAction,
 } from "@/lib/import/actions";
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
 import { formatDate, formatMinor } from "@/lib/format";
@@ -38,6 +42,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import type { AppError } from "@/lib/app-error";
 import type { IngFxDetails } from "@/lib/import/ing/types";
 import type { ClassifyReason, Confidence, ImportKind } from "@/lib/import/ing/classify";
+import { IMPORT_LINK_DATE_WINDOW_DAYS } from "@/lib/import/linking";
 
 const ICON_PROPS = { absoluteStrokeWidth: true, strokeWidth: 1.5 } as const;
 
@@ -52,7 +57,10 @@ export interface InboxRow {
   resolvedExternalRef: string;
   suggestedCategoryId: string | null;
   confirmedCategoryId: string | null;
+  reviewDisposition: "standard" | "drawing" | "linked_existing" | null;
   transactionId: string | null;
+  manuallyLinked: boolean;
+  linkCandidates: ImportLinkCandidate[];
   confirmedCategoryName: string | null;
   skipReasonCode: string | null;
   skipReasonNote: string | null;
@@ -68,6 +76,15 @@ export interface InboxRow {
   internalReference: string | null;
   instantReference: string | null;
   fx: IngFxDetails | null;
+}
+
+interface ImportLinkCandidate {
+  transactionId: string;
+  date: string;
+  description: string | null;
+  kind: string;
+  amountMinor: number;
+  alreadyLinked: boolean;
 }
 
 interface CategoryOption {
@@ -178,6 +195,125 @@ function RowEvidence({ row }: { row: InboxRow }) {
   );
 }
 
+function ExistingTransactionLinker({
+  row,
+  profileSlug,
+  entityId,
+  batchId,
+}: {
+  row: InboxRow;
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+}) {
+  const t = useTranslations("imports");
+  const locale = useLocale();
+  const translateError = useTranslatedError();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [error, setError] = useState<AppError | null>(null);
+  const [pending, startTransition] = useTransition();
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const visibleCandidates = row.linkCandidates.filter((candidate) => {
+    if (!normalizedSearch) return true;
+    return [
+      candidate.date,
+      candidate.description ?? "",
+      candidate.kind,
+      candidate.transactionId,
+    ]
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(normalizedSearch);
+  });
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      setSearch("");
+      setSelectedId("");
+      setError(null);
+    }
+    setOpen(nextOpen);
+  }
+
+  function linkSelected() {
+    if (!selectedId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await linkImportRowAction({
+        profileSlug,
+        entityId,
+        batchId,
+        rowId: row.id,
+        transactionId: selectedId,
+      });
+      if ("error" in result) setError(result.error as AppError);
+      else {
+        setOpen(false);
+        setSearch("");
+        setSelectedId("");
+      }
+    });
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger render={<Button size="sm" variant="secondary" />}>
+        {t("linkExisting")}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(30rem,calc(100vw-2rem))]">
+        <PopoverHeader>
+          <PopoverTitle>{t("linkTitle")}</PopoverTitle>
+          <PopoverDescription>
+            {t("linkDescription", { days: IMPORT_LINK_DATE_WINDOW_DAYS })}
+          </PopoverDescription>
+        </PopoverHeader>
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t("linkSearchPlaceholder")}
+        />
+        <div className="mt-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
+          {visibleCandidates.length === 0 && (
+            <p className="p-2 text-caption text-text-muted">{t("linkNoMatches")}</p>
+          )}
+          {visibleCandidates.map((candidate) => (
+            <Button
+              key={candidate.transactionId}
+              type="button"
+              variant={selectedId === candidate.transactionId ? "secondary" : "ghost"}
+              className="h-auto justify-start px-2 py-2 text-left"
+              disabled={candidate.alreadyLinked || pending}
+              onClick={() => setSelectedId(candidate.transactionId)}
+            >
+              <span className="flex min-w-0 flex-col items-start gap-0.5">
+                <span className="w-full truncate text-secondary text-text-primary">
+                  {candidate.description ?? t("transactionDescriptionUnavailable")}
+                </span>
+                <span className="text-caption text-text-muted">
+                  {formatDate(candidate.date, locale)} ·{" "}
+                  {formatMinor(candidate.amountMinor, "RON", locale)} · {candidate.kind}
+                  {candidate.alreadyLinked ? ` · ${t("transactionAlreadyLinked")}` : ""}
+                </span>
+              </span>
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+            {t("cancel")}
+          </Button>
+          <Button size="sm" onClick={linkSelected} disabled={!selectedId || pending}>
+            {t("linkSelected")}
+          </Button>
+        </div>
+        {error && <p className={errorClass}>{translateError(error)}</p>}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function InboxRowItem({
   row,
   categories,
@@ -227,6 +363,19 @@ function InboxRowItem({
     });
   }
 
+  function confirmDrawing() {
+    setError(null);
+    startTransition(async () => {
+      const result = await confirmDrawingImportRowAction({
+        profileSlug,
+        entityId,
+        batchId,
+        rowId: row.id,
+      });
+      if ("error" in result) setError(result.error);
+    });
+  }
+
   function unconfirm() {
     setError(null);
     startTransition(async () => {
@@ -270,6 +419,19 @@ function InboxRowItem({
     setError(null);
     startTransition(async () => {
       const result = await reopenTrashedImportRowAction({
+        profileSlug,
+        entityId,
+        batchId,
+        rowId: row.id,
+      });
+      if ("error" in result) setError(result.error);
+    });
+  }
+
+  function unlink() {
+    setError(null);
+    startTransition(async () => {
+      const result = await unlinkImportRowAction({
         profileSlug,
         entityId,
         batchId,
@@ -354,7 +516,21 @@ function InboxRowItem({
               </Select>
             </div>
           )}
-          <Button size="sm" onClick={confirm} disabled={!canConfirm || pending}>{t("confirm")}</Button>
+          {row.kind === "owner_transfer" ? (
+            <Button size="sm" onClick={confirmDrawing} disabled={pending}>
+              {t("drawing")}
+            </Button>
+          ) : (
+            <Button size="sm" onClick={confirm} disabled={!canConfirm || pending}>
+              {t("confirm")}
+            </Button>
+          )}
+          <ExistingTransactionLinker
+            row={row}
+            profileSlug={profileSlug}
+            entityId={entityId}
+            batchId={batchId}
+          />
           <Popover open={skipOpen} onOpenChange={setSkipOpen}>
             <PopoverTrigger render={<Button size="sm" variant="ghost" disabled={pending} />}>
               {t("skipEllipsis")}
@@ -383,10 +559,17 @@ function InboxRowItem({
           <span>
             {t("confirmedStatus")}
             {row.confirmedCategoryName && ` · ${row.confirmedCategoryName}`}
+            {row.reviewDisposition === "drawing" && ` · ${t("drawing")}`}
           </span>
           <Button size="sm" variant="ghost" onClick={unconfirm} disabled={pending}>
             {t("unconfirm")}
           </Button>
+          <ExistingTransactionLinker
+            row={row}
+            profileSlug={profileSlug}
+            entityId={entityId}
+            batchId={batchId}
+          />
         </div>
       )}
       {row.status === "booked" && (
@@ -396,7 +579,13 @@ function InboxRowItem({
       )}
       {row.status === "duplicate" && (
         <p className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
-          {t("alreadyImported")} <TransactionLink profileSlug={profileSlug} transactionId={row.transactionId} />
+          {row.manuallyLinked ? t("linkedExistingStatus") : t("alreadyImported")}{" "}
+          <TransactionLink profileSlug={profileSlug} transactionId={row.transactionId} />
+          {row.manuallyLinked && (
+            <Button size="sm" variant="ghost" onClick={unlink} disabled={pending}>
+              {t("unlink")}
+            </Button>
+          )}
         </p>
       )}
       {row.status === "skipped" && (
@@ -408,9 +597,15 @@ function InboxRowItem({
       {row.status === "trashed" && (
         <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
           <span>{t("status.trashed")}</span>
-          <Button size="sm" variant="ghost" onClick={reopenForRebooking} disabled={pending}>
-            {t("reopenForRebooking")}
-          </Button>
+          {row.reviewDisposition === "linked_existing" ? (
+            <Button size="sm" variant="ghost" onClick={unlink} disabled={pending}>
+              {t("unlink")}
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={reopenForRebooking} disabled={pending}>
+              {t("reopenForRebooking")}
+            </Button>
+          )}
         </div>
       )}
       {row.status === "purged" && (

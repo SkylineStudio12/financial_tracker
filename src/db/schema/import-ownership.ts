@@ -51,9 +51,12 @@ export const transactionImportLinks = pgTable(
     uniqueIndex("transaction_import_links_source_row_uidx").on(
       table.provider,
       table.sourceRowId,
-    ),
+    ).where(sql`${table.releasedAt} is null`),
     uniqueIndex("transaction_import_links_active_identity_uidx")
       .on(table.provider, table.rowIdentity)
+      .where(sql`${table.releasedAt} is null`),
+    uniqueIndex("transaction_import_links_active_transaction_uidx")
+      .on(table.transactionId)
       .where(sql`${table.releasedAt} is null`),
     index("transaction_import_links_transaction_idx").on(table.transactionId),
     index("transaction_import_links_batch_idx").on(table.provider, table.sourceBatchId),

@@ -16,6 +16,15 @@ export const OWNER_BANK_NAMES: Record<string, string[]> = {
   [ENTITY_IDS.drmx]: [],
 };
 
+/** Display counterparty for rows charged by the statement's own bank. */
+export const BANK_COUNTERPARTY_BY_SOURCE: Record<
+  "ing_csv" | "ing_pdf_text",
+  string
+> = {
+  ing_csv: "ING",
+  ing_pdf_text: "ING",
+};
+
 /**
  * Default category SUGGESTION per classifier kind (by category name+kind in
  * the entity's own category set). Suggestions only — the inbox shows them

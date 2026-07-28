@@ -22,7 +22,13 @@ export interface TransferFormInitial {
   transactionId: string;
   expectedRevision: number;
   fromAccountId: string;
+  fromAccountName: string;
+  fromAccountCurrency: string;
+  fromAccountType: string;
   toAccountId: string;
+  toAccountName: string;
+  toAccountCurrency: string;
+  toAccountType: string;
   date: string;
   amount: string;
   received: string;
@@ -53,8 +59,32 @@ export function TransferForm({
   /** Reports whether any field differs from its initial value (close guard). */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const transferable = options.accounts.filter((a) => a.type !== "equity");
-  const accountItems = transferable.map((a) => ({
+  const transferable = options.accounts.filter((account) => account.type !== "equity");
+  const initialFrom = initial
+    ? {
+        id: initial.fromAccountId,
+        name: initial.fromAccountName,
+        currency: initial.fromAccountCurrency,
+        type: initial.fromAccountType,
+      }
+    : null;
+  const initialTo = initial
+    ? {
+        id: initial.toAccountId,
+        name: initial.toAccountName,
+        currency: initial.toAccountCurrency,
+        type: initial.toAccountType,
+      }
+    : null;
+  const withCurrent = (
+    current: NonNullable<typeof initialFrom>,
+  ) =>
+    transferable.some((account) => account.id === current.id)
+      ? transferable
+      : [...transferable, current];
+  const fromAccounts = initialFrom ? withCurrent(initialFrom) : transferable;
+  const toAccounts = initialTo ? withCurrent(initialTo) : transferable;
+  const accountItems = (accounts: typeof transferable) => accounts.map((a) => ({
     value: a.id,
     label: `${a.name} (${a.currency})`,
   }));
@@ -62,10 +92,10 @@ export function TransferForm({
   const t = useTranslations("forms");
   const translateError = useTranslatedError();
   const [fromAccountId, setFromAccountId] = useState(
-    initial?.fromAccountId ?? transferable[0]?.id ?? "",
+    initial?.fromAccountId ?? fromAccounts[0]?.id ?? "",
   );
   const [toAccountId, setToAccountId] = useState(
-    initial?.toAccountId ?? transferable[1]?.id ?? "",
+    initial?.toAccountId ?? toAccounts[1]?.id ?? "",
   );
   const [date, setDate] = useState(initial?.date ?? today());
   const [amount, setAmount] = useState(initial?.amount ?? "");
@@ -87,8 +117,8 @@ export function TransferForm({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  const fromCurrency = options.accounts.find((a) => a.id === fromAccountId)?.currency ?? "RON";
-  const toCurrency = options.accounts.find((a) => a.id === toAccountId)?.currency ?? "RON";
+  const fromCurrency = fromAccounts.find((a) => a.id === fromAccountId)?.currency ?? "RON";
+  const toCurrency = toAccounts.find((a) => a.id === toAccountId)?.currency ?? "RON";
   const crossCurrency = fromCurrency !== toCurrency;
   const amountMinor = parseAmountToMinor(amount);
   const receivedMinor = parseAmountToMinor(received);
@@ -138,9 +168,10 @@ export function TransferForm({
   const accountSelect = (
     value: string,
     onChange: (value: string) => void,
+    accounts: typeof transferable,
   ) => (
     <Select
-      items={accountItems}
+      items={accountItems(accounts)}
       value={value === "" ? null : value}
       onValueChange={(next) => onChange((next as string) ?? "")}
     >
@@ -148,7 +179,7 @@ export function TransferForm({
         <SelectValue placeholder={t("pickPlaceholder")} />
       </SelectTrigger>
       <SelectContent>
-        {accountItems.map((item) => (
+        {accountItems(accounts).map((item) => (
           <SelectItem key={item.value} value={item.value}>
             {item.label}
           </SelectItem>
@@ -168,11 +199,11 @@ export function TransferForm({
       <div className="grid grid-cols-2 gap-3">
         <div className={labelClass}>
           {t("fromAccount")}
-          {accountSelect(fromAccountId, setFromAccountId)}
+          {accountSelect(fromAccountId, setFromAccountId, fromAccounts)}
         </div>
         <div className={labelClass}>
           {t("toAccount")}
-          {accountSelect(toAccountId, setToAccountId)}
+          {accountSelect(toAccountId, setToAccountId, toAccounts)}
         </div>
       </div>
 

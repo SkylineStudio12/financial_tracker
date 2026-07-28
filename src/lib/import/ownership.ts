@@ -132,7 +132,12 @@ export async function markTransactionImportRestored(
   await tx
     .update(importRows)
     .set({ status: "booked" })
-    .where(and(eq(importRows.transactionId, transactionId), eq(importRows.status, "trashed")));
+    .where(
+      and(
+        eq(importRows.transactionId, transactionId),
+        inArray(importRows.status, ["trashed", "pending"]),
+      ),
+    );
   await tx
     .update(revolutImportRows)
     .set({ status: "booked" })

@@ -83,6 +83,8 @@ test("single-row UI keeps duplicates visible and links resolved rows", () => {
   assert.match(source, /data-row-status=\{row\.status\}/);
   assert.match(source, /row\.status === "skipped"/);
   assert.match(source, /reopenSkippedImportRowAction/);
+  assert.match(source, /row\.status === "trashed"/);
+  assert.match(source, /reopenTrashedImportRowAction/);
   const bookedBlock = source.slice(
     source.indexOf('row.status === "booked"'),
     source.indexOf('row.status === "duplicate"'),
@@ -101,12 +103,12 @@ test("write service owns the transitions and confirmation delegates to createTra
   assert.doesNotMatch(source, /insert\(transactions\)/);
 });
 
-test("bulk UI discloses booked, auto-skipped owner transfers, and pending counts", () => {
+test("bulk UI discloses booked, individually-reviewed owner transfers, and pending counts", () => {
   const source = readFileSync("src/components/import/import-inbox.tsx", "utf8");
   assert.match(source, /result\.summary\.booked/);
-  assert.match(source, /result\.summary\.ownerTransfersSkipped/);
+  assert.match(source, /result\.summary\.ownerTransfersExcluded/);
   assert.match(source, /result\.summary\.left/);
-  assert.match(source, /t\("ownerTransfersSkippedCount"/);
+  assert.match(source, /t\("ownerTransfersExcludedCount"/);
 });
 
 test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () => {
@@ -127,6 +129,7 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "confirm",
     "skipEllipsis",
     "reopen",
+    "reopenForRebooking",
     "suggested",
     "bookedStatus",
     "skippedStatus",
@@ -148,7 +151,7 @@ test("new import-inbox catalog values are mirrored EN-for-EN into ro.json", () =
     "detailResolvedReference",
     "detailRawLines",
     "balanceAfter",
-    "ownerTransfersSkippedCount",
+    "ownerTransfersExcludedCount",
   ];
   for (const key of keys) assert.equal(ro[key], en[key], key);
   assert.equal(ro.status.trashed, en.status.trashed);

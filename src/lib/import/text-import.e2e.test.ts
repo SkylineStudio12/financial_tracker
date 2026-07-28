@@ -85,6 +85,15 @@ async function run(env: ImportTestEntity) {
     assert.match(b, /^ING:RO\d{2}[A-Z0-9]+:Nr\.6\/30\.06\.2026:1479$/);
   });
 
+  await ok("bank-fee rows stage ING as their stored counterparty", () => {
+    for (const lineNo of ["1476", "1479"]) {
+      const classified = byLine.get(lineNo)!.payload as {
+        row: { counterpartyName: string | null };
+      };
+      assert.equal(classified.row.counterpartyName, "ING");
+    }
+  });
+
   await ok("ref-bearing rows keep the long bank ref; refless rows use synthetic keys", () => {
     // Transfers/professional services carry the long ref; POS/fees/revenue don't.
     assert.ok(!byLine.get("1462")!.resolvedExternalRef.startsWith("ING:")); // has bank ref
@@ -183,6 +192,16 @@ async function run(env: ImportTestEntity) {
       assert.ok(settle, `line ${lineNo} has no tax_liability leg`);
       assert.equal(settle!.amount > 0, true, "debit statement row pays DOWN the liability");
       assert.ok(ps.every((p) => p.categoryId === null), "state payment legs are uncategorized");
+    }
+  });
+
+  await ok("bank-fee ledger postings retain ING as counterparty", () => {
+    for (const lineNo of ["1476", "1479"]) {
+      const txId = bookedByLine.get(lineNo)!.transactionId!;
+      const bankLeg = postingsByTx
+        .get(txId)!
+        .find((posting) => posting.accountId === env.bankAccountId);
+      assert.equal(bankLeg?.counterparty, "ING");
     }
   });
 

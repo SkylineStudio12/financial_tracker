@@ -1,5 +1,5 @@
 /**
- * §11.5 regression: the June 2026 ING salary transfer is system-skipped by
+ * §11.5 regression: the June 2026 ING salary transfer is left pending by
  * bulk confirm, while eligible non-transfer rows still book through the
  * ordinary single-row service path.
  *
@@ -24,7 +24,6 @@ import { requireTestDatabase } from "@/lib/test-database-sentinel";
 import {
   bookHighConfidenceRows,
   createImportBatch,
-  OWNER_TRANSFER_BULK_SKIP_REASON,
 } from "./service";
 import { setupImportTestEntity, teardownImportTestEntity } from "./test-support";
 
@@ -96,18 +95,18 @@ async function main() {
     const ownerTransfer = byLine.get("1465");
     const eligibleNonTransfer = byLine.get("1462");
 
-    await ok("§11.5: line 1465 (2,695.00 owner_transfer) is system-skipped, never booked", () => {
+    await ok("§11.5: line 1465 owner_transfer stays low-confidence and pending", () => {
       assert.ok(ownerTransfer);
       const classified = ownerTransfer.payload as { row: { amountMinor: number } };
       assert.equal(classified.row.amountMinor, 269_500);
       assert.equal(ownerTransfer.kind, "owner_transfer");
-      assert.equal(ownerTransfer.confidence, "high");
+      assert.equal(ownerTransfer.confidence, "low");
       assert.match(ownerTransfer.reason, /ownerNameMatch/);
-      assert.equal(ownerTransfer.status, "skipped");
-      assert.equal(ownerTransfer.skipReasonCode, OWNER_TRANSFER_BULK_SKIP_REASON);
+      assert.equal(ownerTransfer.status, "pending");
+      assert.equal(ownerTransfer.skipReasonCode, null);
       assert.equal(ownerTransfer.skipReasonNote, null);
       assert.equal(ownerTransfer.transactionId, null);
-      assert.equal(result.ownerTransfersSkipped, 1);
+      assert.equal(result.ownerTransfersExcluded, 1);
     });
 
     await ok("§11.5: salary-owned 2,695.00 bank movement exists once, not twice", async () => {
@@ -139,7 +138,7 @@ async function main() {
       assert.ok(eligibleNonTransfer.transactionId);
       assert.equal(result.booked, 13);
       assert.equal(result.duplicates, 0);
-      assert.equal(result.left, 3);
+      assert.equal(result.left, 4);
     });
 
     await ok("bulk-booked transactions are balanced through the ledger service", async () => {

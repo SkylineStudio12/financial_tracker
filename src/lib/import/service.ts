@@ -15,15 +15,21 @@ import {
   importRows,
   postings,
   transactionImportLinks,
+  transactions,
 } from "@/db/schema";
 import {
+  acquireImportOwnershipLock,
   assertBatchExternalRefsUnique,
   createTransaction,
   LedgerValidationError,
 } from "@/lib/ledger";
 import { toAppError, type AppError } from "@/lib/app-error";
 import { buildImportTransactionInput, bookingNeedsCategory } from "./booking";
-import { OWNER_BANK_NAMES, SUGGESTED_CATEGORY_BY_KIND } from "./config";
+import {
+  BANK_COUNTERPARTY_BY_SOURCE,
+  OWNER_BANK_NAMES,
+  SUGGESTED_CATEGORY_BY_KIND,
+} from "./config";
 import {
   classifyStatementRows,
   serializeClassifyReason,
@@ -85,7 +91,17 @@ export async function createImportBatch(params: {
     source === "ing_csv" ? parseIngCsvStatement(params.text) : parseIngStatement(params.text);
   const classified = classifyStatementRows(stmt.rows, {
     ownerNames: params.ownerNames ?? OWNER_BANK_NAMES[params.entityId] ?? [],
-  });
+  }).map((classifiedRow) =>
+    classifiedRow.kind === "bank_fee"
+      ? {
+          ...classifiedRow,
+          row: {
+            ...classifiedRow.row,
+            counterpartyName: BANK_COUNTERPARTY_BY_SOURCE[source],
+          },
+        }
+      : classifiedRow,
+  );
   const refByLineNo = new Map(
     classified.map((c) => [c.row.lineNo, resolveExternalRef(c.row, stmt)]),
   );
@@ -357,7 +373,21 @@ export async function bookImportRow(params: {
 
   const rowIdentity = ingRowIdentity(batch.bankAccountId, row.resolvedExternalRef);
   const alreadyClaimed = await findActiveImportLink("ing", rowIdentity);
-  if (alreadyClaimed) {
+  let rebookLink: typeof transactionImportLinks.$inferSelect | null = null;
+  if (
+    alreadyClaimed &&
+    row.transactionId &&
+    alreadyClaimed.sourceRowId === row.id &&
+    alreadyClaimed.transactionId === row.transactionId &&
+    alreadyClaimed.lifecycle === "trashed"
+  ) {
+    const [trashedTransaction] = await db
+      .select({ deletedAt: transactions.deletedAt })
+      .from(transactions)
+      .where(eq(transactions.id, row.transactionId));
+    if (trashedTransaction?.deletedAt) rebookLink = alreadyClaimed;
+  }
+  if (alreadyClaimed && !rebookLink) {
     await db
       .update(importRows)
       .set({ status: "duplicate", transactionId: alreadyClaimed.transactionId })
@@ -367,22 +397,94 @@ export async function bookImportRow(params: {
 
   try {
     const transactionId = await db.transaction(async (tx) => {
+      if (rebookLink) {
+        await acquireImportOwnershipLock(tx);
+        const [lockedTransaction] = await tx
+          .select({ deletedAt: transactions.deletedAt })
+          .from(transactions)
+          .where(eq(transactions.id, rebookLink.transactionId))
+          .for("update");
+        const [lockedRow] = await tx
+          .select({
+            status: importRows.status,
+            transactionId: importRows.transactionId,
+          })
+          .from(importRows)
+          .where(eq(importRows.id, row.id))
+          .for("update");
+        const [lockedLink] = await tx
+          .select({
+            transactionId: transactionImportLinks.transactionId,
+            lifecycle: transactionImportLinks.lifecycle,
+            releasedAt: transactionImportLinks.releasedAt,
+          })
+          .from(transactionImportLinks)
+          .where(eq(transactionImportLinks.id, rebookLink.id))
+          .for("update");
+        if (
+          !lockedTransaction?.deletedAt ||
+          lockedRow?.status !== "pending" ||
+          lockedRow.transactionId !== rebookLink.transactionId ||
+          lockedLink?.transactionId !== rebookLink.transactionId ||
+          lockedLink.lifecycle !== "trashed" ||
+          lockedLink.releasedAt !== null
+        ) {
+          throw new LedgerValidationError("imports.rowAlreadyStatus", {
+            status: lockedRow?.status ?? "trashed",
+          });
+        }
+      }
       const transactionId = await createTransaction(input, tx);
       const bookedAt = new Date();
-      await insertTransactionImportLink(tx, {
-        transactionId,
-        provider: "ing",
-        sourceBatchId: batch.id,
-        sourceRowId: row.id,
-        sourceLabel: batch.statementNumber,
-        rowIdentity,
-        rawTextHash: batch.rawTextHash,
-        originalBookedAt: bookedAt,
-      });
-      await tx
+      if (rebookLink) {
+        const [reassigned] = await tx
+          .update(transactionImportLinks)
+          .set({
+            transactionId,
+            lifecycle: "active",
+            releasedAt: null,
+            releaseReason: null,
+          })
+          .where(
+            and(
+              eq(transactionImportLinks.id, rebookLink.id),
+              eq(transactionImportLinks.transactionId, rebookLink.transactionId),
+              eq(transactionImportLinks.lifecycle, "trashed"),
+              isNull(transactionImportLinks.releasedAt),
+            ),
+          )
+          .returning({ id: transactionImportLinks.id });
+        if (!reassigned) {
+          throw new LedgerValidationError("imports.rowAlreadyStatus", { status: "trashed" });
+        }
+      } else {
+        await insertTransactionImportLink(tx, {
+          transactionId,
+          provider: "ing",
+          sourceBatchId: batch.id,
+          sourceRowId: row.id,
+          sourceLabel: batch.statementNumber,
+          rowIdentity,
+          rawTextHash: batch.rawTextHash,
+          originalBookedAt: bookedAt,
+        });
+      }
+      const [bookedRow] = await tx
         .update(importRows)
         .set({ status: "booked", transactionId, bookedAt })
-        .where(eq(importRows.id, row.id));
+        .where(
+          and(
+            eq(importRows.id, row.id),
+            eq(importRows.status, "pending"),
+            rebookLink
+              ? eq(importRows.transactionId, rebookLink.transactionId)
+              : isNull(importRows.transactionId),
+          ),
+        )
+        .returning({ id: importRows.id });
+      if (!bookedRow) {
+        throw new LedgerValidationError("imports.rowAlreadyStatus", { status: "pending" });
+      }
       return transactionId;
     });
     return { status: "booked", transactionId };
@@ -391,6 +493,16 @@ export async function bookImportRow(params: {
     // Already in the ledger (booked between staging and now, or via an
     // overlapping batch): link the existing transaction, never book twice.
     const claimed = await findActiveImportLink("ing", rowIdentity);
+    if (
+      claimed?.sourceRowId === row.id &&
+      claimed.lifecycle === "active"
+    ) {
+      await db
+        .update(importRows)
+        .set({ status: "booked", transactionId: claimed.transactionId })
+        .where(eq(importRows.id, row.id));
+      return { status: "booked", transactionId: claimed.transactionId };
+    }
     const [existing] = claimed
       ? [{ transactionId: claimed.transactionId }]
       : await db
@@ -415,20 +527,17 @@ export async function bookImportRow(params: {
 export interface BookHighConfidenceResult {
   booked: number;
   duplicates: number;
-  ownerTransfersSkipped: number;
+  ownerTransfersExcluded: number;
   /** Rows still pending after the run: low confidence, overlap-suspect, or no category. */
   left: number;
   errors: AppError[];
 }
 
-export const OWNER_TRANSFER_BULK_SKIP_REASON = "system.ownerTransferExcluded";
-
 /**
  * Book every pending HIGH-confidence row that needs no human input: not an
  * owner transfer, not overlap-suspect (those demand per-row confirmation by
  * design), and either category-free by shape or carrying a suggestion.
- * Otherwise-eligible owner transfers are auto-skipped with a system reason
- * because the salary flow may already own the same physical bank movement.
+ * Owner transfers remain pending for individual review.
  */
 export async function bookHighConfidenceRows(batchId: string): Promise<BookHighConfidenceResult> {
   const rows = await db
@@ -446,36 +555,20 @@ export async function bookHighConfidenceRows(batchId: string): Promise<BookHighC
   const result: BookHighConfidenceResult = {
     booked: 0,
     duplicates: 0,
-    ownerTransfersSkipped: 0,
+    ownerTransfersExcluded: 0,
     left: 0,
     errors: [],
   };
   for (const row of rows) {
+    if (row.kind === "owner_transfer") {
+      result.ownerTransfersExcluded += 1;
+      continue;
+    }
     const highConfidenceEligible =
       row.confidence === "high" &&
       !row.overlapSuspect &&
       (!bookingNeedsCategory(row.kind) || row.suggestedCategoryId !== null);
-    if (highConfidenceEligible && row.kind === "owner_transfer") {
-      const [skipped] = await db
-        .update(importRows)
-        .set({
-          status: "skipped",
-          skipReasonCode: OWNER_TRANSFER_BULK_SKIP_REASON,
-          skipReasonNote: null,
-        })
-        .where(
-          and(
-            eq(importRows.id, row.id),
-            eq(importRows.status, "pending"),
-            eq(importRows.kind, "owner_transfer"),
-          ),
-        )
-        .returning({ id: importRows.id });
-      if (skipped) result.ownerTransfersSkipped += 1;
-      continue;
-    }
-    const bookable = highConfidenceEligible && row.kind !== "owner_transfer";
-    if (!bookable) continue;
+    if (!highConfidenceEligible) continue;
     try {
       const booked = await bookImportRow({ rowId: row.id });
       if (booked.status === "booked") result.booked += 1;
@@ -528,4 +621,70 @@ export async function reopenSkippedImportRow(rowId: string): Promise<void> {
     .where(eq(importRows.id, rowId));
   if (!row) throw new LedgerValidationError("imports.rowNotFound");
   throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+}
+
+/**
+ * Return a booked row whose transaction is still in trash to pending.
+ * The row keeps its transaction id and the unreleased trashed link keeps
+ * owning the dedup identity until a rebooking atomically reassigns that link.
+ */
+export async function reopenTrashedImportRow(rowId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await acquireImportOwnershipLock(tx);
+    const [rowSnapshot] = await tx
+      .select()
+      .from(importRows)
+      .where(eq(importRows.id, rowId));
+    if (!rowSnapshot) throw new LedgerValidationError("imports.rowNotFound");
+    if (rowSnapshot.status !== "trashed" || !rowSnapshot.transactionId) {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", {
+        status: rowSnapshot.status,
+      });
+    }
+    const [transaction] = await tx
+      .select({ deletedAt: transactions.deletedAt })
+      .from(transactions)
+      .where(eq(transactions.id, rowSnapshot.transactionId))
+      .for("update");
+    const [row] = await tx
+      .select()
+      .from(importRows)
+      .where(eq(importRows.id, rowId))
+      .for("update");
+    if (!row || row.status !== "trashed" || row.transactionId !== rowSnapshot.transactionId) {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", {
+        status: row?.status ?? rowSnapshot.status,
+      });
+    }
+    const [link] = await tx
+      .select()
+      .from(transactionImportLinks)
+      .where(
+        and(
+          eq(transactionImportLinks.provider, "ing"),
+          eq(transactionImportLinks.sourceRowId, row.id),
+          eq(transactionImportLinks.transactionId, row.transactionId),
+          eq(transactionImportLinks.lifecycle, "trashed"),
+          isNull(transactionImportLinks.releasedAt),
+        ),
+      )
+      .for("update");
+    if (!transaction?.deletedAt || !link) {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+    }
+    const [reopened] = await tx
+      .update(importRows)
+      .set({ status: "pending" })
+      .where(
+        and(
+          eq(importRows.id, row.id),
+          eq(importRows.status, "trashed"),
+          eq(importRows.transactionId, row.transactionId),
+        ),
+      )
+      .returning({ id: importRows.id });
+    if (!reopened) {
+      throw new LedgerValidationError("imports.rowAlreadyStatus", { status: row.status });
+    }
+  });
 }

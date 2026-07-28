@@ -52,7 +52,7 @@ ok("state payments: Trezorerie + CAM via treasury IBANs", () => {
   expectKind("1478", "state_payment", "high", "treasuryIban");
 });
 ok("owner transfer: Grigore Filimon (context-supplied owner name)", () =>
-  expectKind("1465", "owner_transfer", "high", "ownerNameMatch"));
+  expectKind("1465", "owner_transfer", "low", "ownerNameMatch"));
 ok("professional services, marked: Expert Contabil + AUDIT-EXPERT", () => {
   expectKind("1462", "professional_services", "high", "professionalMarker");
   expectKind("1466", "professional_services", "high", "professionalMarker");

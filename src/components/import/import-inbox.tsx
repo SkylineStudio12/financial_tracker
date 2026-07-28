@@ -26,6 +26,7 @@ import {
   bookHighConfidenceAction,
   bookImportRowAction,
   reopenSkippedImportRowAction,
+  reopenTrashedImportRowAction,
   skipImportRowAction,
 } from "@/lib/import/actions";
 import { bookingNeedsCategory } from "@/lib/import/booking-rules";
@@ -244,6 +245,19 @@ function InboxRowItem({
     });
   }
 
+  function reopenForRebooking() {
+    setError(null);
+    startTransition(async () => {
+      const result = await reopenTrashedImportRowAction({
+        profileSlug,
+        entityId,
+        batchId,
+        rowId: row.id,
+      });
+      if ("error" in result) setError(result.error);
+    });
+  }
+
   return (
     <article
       className={`flex flex-col gap-2 border-b border-border-hairline py-3 last:border-b-0 ${resolved ? "text-text-muted" : ""}`}
@@ -359,8 +373,16 @@ function InboxRowItem({
           <Button size="sm" variant="ghost" onClick={reopen} disabled={pending}>{t("reopen")}</Button>
         </div>
       )}
-      {(row.status === "trashed" || row.status === "purged") && (
-        <p className="text-caption text-text-muted">{t(`status.${row.status}`)}</p>
+      {row.status === "trashed" && (
+        <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted">
+          <span>{t("status.trashed")}</span>
+          <Button size="sm" variant="ghost" onClick={reopenForRebooking} disabled={pending}>
+            {t("reopenForRebooking")}
+          </Button>
+        </div>
+      )}
+      {row.status === "purged" && (
+        <p className="text-caption text-text-muted">{t("status.purged")}</p>
       )}
 
       <RowEvidence row={row} />
@@ -399,7 +421,7 @@ export function ImportInbox({
       else if (result.summary) {
         const parts = [t("bookedCount", { count: result.summary.booked })];
         if (result.summary.duplicates) parts.push(t("duplicateCount", { count: result.summary.duplicates }));
-        parts.push(t("ownerTransfersSkippedCount", { count: result.summary.ownerTransfersSkipped }));
+        parts.push(t("ownerTransfersExcludedCount", { count: result.summary.ownerTransfersExcluded }));
         parts.push(t("leftForReviewCount", { count: result.summary.left }));
         setMessage(parts.join(", "));
       } else setMessage(t("done"));

@@ -43,7 +43,13 @@ type TransferDraft = BookingContext & {
   transactionId: string;
   expectedRevision: number;
   fromAccountId: string;
+  fromAccountName: string;
+  fromAccountCurrency: string;
+  fromAccountType: string;
   toAccountId: string;
+  toAccountName: string;
+  toAccountCurrency: string;
+  toAccountType: string;
   date: string;
   amount: string;
   received: string;
@@ -215,6 +221,8 @@ export async function getTransactionEditDraft(
       id: postings.id,
       accountId: postings.accountId,
       accountEntityId: accounts.entityId,
+      accountName: accounts.name,
+      accountCurrency: accounts.currency,
       accountType: accounts.type,
       amount: postings.amount,
       amountRon: postings.amountRon,
@@ -248,7 +256,13 @@ export async function getTransactionEditDraft(
       transactionId,
       expectedRevision: transaction.currentRevision,
       fromAccountId: from.accountId,
+      fromAccountName: from.accountName,
+      fromAccountCurrency: from.accountCurrency,
+      fromAccountType: from.accountType,
       toAccountId: to.accountId,
+      toAccountName: to.accountName,
+      toAccountCurrency: to.accountCurrency,
+      toAccountType: to.accountType,
       date: transaction.date,
       amount: minorToInput(Math.abs(from.amount)),
       received: minorToInput(Math.abs(to.amount)),

@@ -231,7 +231,7 @@ function classifyRow(row: IngStatementRow, ctx: ClassifyContext): ClassifiedRow 
   if (isTransfer && row.counterpartyName) {
     const counterparty = normalizeName(row.counterpartyName);
     if (ctx.ownerNames.some((n) => normalizeName(n) === counterparty)) {
-      return done("owner_transfer", "high", {
+      return done("owner_transfer", "low", {
         code: "ownerNameMatch",
         counterparty: row.counterpartyName,
       });

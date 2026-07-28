@@ -8,6 +8,7 @@ import {
   softDeleteNonInvestmentTransaction,
   type TransactionKind,
 } from "@/lib/ledger";
+import { getTransactionEditDraft } from "@/lib/ledger/edit-drafts";
 import { saveDividend, saveSalary } from "@/lib/ledger/flow-actions";
 import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import {
@@ -327,6 +328,36 @@ async function main() {
       assert.equal(andraDetail, null);
       assert.equal(drmxDetail, null);
       console.log("  Skyline/Greg/Household=accessible; Andra/DRMX=not found");
+    });
+
+    const namedTransferId = await createFixtureTransaction({
+      entityId: skyline.entityId,
+      recipientAccountId: gregBank.id,
+      description: "__test__ Named cross-profile transfer",
+      kind: "transfer",
+      debitAccountId: skylineBank.id,
+      creditAccountId: gregBank.id,
+      amount: 12_345,
+    });
+    createdIds.push(namedTransferId);
+    await fixture("transfer edit draft and detail carry account display names", async () => {
+      const draft = await getTransactionEditDraft(
+        namedTransferId,
+        household.entityId,
+        household.owner,
+      );
+      assert.equal(draft.type, "transfer");
+      if (draft.type !== "transfer") throw new Error("expected transfer draft");
+      assert.equal(draft.fromAccountName, "Company bank");
+      assert.equal(draft.toAccountName, "Greg — bank");
+      assert.equal(draft.fromAccountCurrency, "RON");
+      assert.equal(draft.toAccountCurrency, "RON");
+      const detail = await getTransactionDetail(namedTransferId, household);
+      assert.deepEqual(
+        detail?.postings.map((posting) => posting.accountName).sort(),
+        ["Company bank", "Greg — bank"],
+      );
+      console.log("  edit=Company bank→Greg — bank; detail names resolved");
     });
 
     const companyOnlyId = await createFixtureTransaction({

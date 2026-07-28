@@ -18,6 +18,7 @@ import {
   bookImportRow,
   createImportBatch,
   reopenSkippedImportRow,
+  reopenTrashedImportRow,
   skipImportRow,
 } from "./service";
 
@@ -29,7 +30,7 @@ type ActionResult =
       summary?: {
         booked: number;
         duplicates: number;
-        ownerTransfersSkipped: number;
+        ownerTransfersExcluded: number;
         left: number;
       };
     };
@@ -114,7 +115,7 @@ export async function bookHighConfidenceAction(payload: {
       summary: {
         booked: result.booked,
         duplicates: result.duplicates,
-        ownerTransfersSkipped: result.ownerTransfersSkipped,
+        ownerTransfersExcluded: result.ownerTransfersExcluded,
         left: result.left,
       },
     };
@@ -156,6 +157,26 @@ export async function reopenSkippedImportRowAction(payload: {
     const basePath = importsPath(payload.profileSlug, payload.entityId);
     await assertImportRowScope(payload);
     await reopenSkippedImportRow(payload.rowId);
+    revalidatePath(basePath);
+    revalidatePath(`${basePath}/${payload.batchId}`);
+    return { ok: true };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function reopenTrashedImportRowAction(payload: {
+  profileSlug: string;
+  entityId: string;
+  batchId: string;
+  rowId: string;
+}): Promise<ActionResult> {
+  try {
+    const basePath = importsPath(payload.profileSlug, payload.entityId);
+    await assertImportRowScope(payload);
+    await reopenTrashedImportRow(payload.rowId);
     revalidatePath(basePath);
     revalidatePath(`${basePath}/${payload.batchId}`);
     return { ok: true };

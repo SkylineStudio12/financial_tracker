@@ -35,6 +35,14 @@ test("modal pins manual activation, static title, and guarded switching", () => 
   assert.doesNotMatch(source, /onClick=\{\(\) => setType/);
 });
 
+test("transfer edit labels keep current-only accounts scoped to their original side", () => {
+  const source = readFileSync("src/components/forms/transfer-form.tsx", "utf8");
+  assert.match(source, /const fromAccounts = initialFrom \? withCurrent\(initialFrom\)/);
+  assert.match(source, /const toAccounts = initialTo \? withCurrent\(initialTo\)/);
+  assert.match(source, /accountSelect\(fromAccountId, setFromAccountId, fromAccounts\)/);
+  assert.match(source, /accountSelect\(toAccountId, setToAccountId, toAccounts\)/);
+});
+
 test("live database badge is loud and never exposes credentials", () => {
   const url = "postgresql://secret-user:secret-pass@localhost:5432/financial_tracker";
   const info = getDevDatabaseBadgeInfo(url, "development");

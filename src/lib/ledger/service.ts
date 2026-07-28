@@ -450,6 +450,7 @@ export async function updateTransaction(
   id: string,
   input: TransactionInput,
   expectedRevision?: number,
+  expectedUpdatedAt?: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
     const [locked] = await tx
@@ -462,6 +463,12 @@ export async function updateTransaction(
     }
     await assertNotTradeTransaction(id, tx);
     if (expectedRevision !== undefined && locked.currentRevision !== expectedRevision) {
+      throw new LedgerValidationError("ledger.transactionRevisionConflict");
+    }
+    if (
+      expectedUpdatedAt !== undefined &&
+      locked.updatedAt.toISOString() !== expectedUpdatedAt
+    ) {
       throw new LedgerValidationError("ledger.transactionRevisionConflict");
     }
     const prior = await snapshotTransaction(id, tx);
@@ -491,6 +498,54 @@ export async function updateTransaction(
       existingTransactionId: id,
       revision: locked.currentRevision + 1,
     });
+    await markTransactionImportEdited(tx, id);
+    await tx.insert(auditLog).values({
+      tableName: "transactions",
+      rowId: id,
+      action: "update",
+      previousValues: prior,
+    });
+  });
+}
+
+/**
+ * Update header metadata without creating a posting revision. This is the
+ * shape-agnostic edit path for non-investment transactions: postings,
+ * accruals, tags, and currentRevision remain untouched byte-for-byte.
+ */
+export async function updateTransactionMetadata(
+  id: string,
+  input: { description?: string | null; notes?: string | null },
+  expectedRevision?: number,
+  expectedUpdatedAt?: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .for("update");
+    if (!locked || locked.deletedAt !== null) {
+      throw new LedgerValidationError("ledger.transactionNotFound", { transactionId: id });
+    }
+    await assertNotTradeTransaction(id, tx);
+    if (expectedRevision !== undefined && locked.currentRevision !== expectedRevision) {
+      throw new LedgerValidationError("ledger.transactionRevisionConflict");
+    }
+    if (
+      expectedUpdatedAt !== undefined &&
+      locked.updatedAt.toISOString() !== expectedUpdatedAt
+    ) {
+      throw new LedgerValidationError("ledger.transactionRevisionConflict");
+    }
+    const prior = await snapshotTransaction(id, tx);
+    await tx
+      .update(transactions)
+      .set({
+        description: input.description?.trim() || null,
+        notes: input.notes?.trim() || null,
+      })
+      .where(eq(transactions.id, id));
     await markTransactionImportEdited(tx, id);
     await tx.insert(auditLog).values({
       tableName: "transactions",

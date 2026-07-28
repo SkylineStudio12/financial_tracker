@@ -9,7 +9,14 @@
 import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, tags } from "@/db/schema";
+import {
+  accounts,
+  postings,
+  tags,
+  taxAccruals,
+  transactions,
+  transactionTags,
+} from "@/db/schema";
 import { convertMinorToRon, resolveRonRate } from "@/lib/fx";
 import {
   createTransaction,
@@ -17,6 +24,7 @@ import {
   restoreTransaction,
   softDeleteNonInvestmentTransaction,
   updateTransaction,
+  updateTransactionMetadata,
   LedgerValidationError,
   type AccrualInput,
   type PostingInput,
@@ -49,6 +57,7 @@ function transactionsPath(entityId: string, profileSlug?: string): string {
 export interface StandardPayload {
   transactionId?: string;
   expectedRevision?: number;
+  expectedUpdatedAt?: string;
   storedKind?: "standard" | "trade";
   /** When true, skip the redirect on success and return { ok } instead —
    * used by the modal so the list stays put and the form can repeat-enter. */
@@ -71,6 +80,8 @@ export interface StandardPayload {
 export interface TransferPayload {
   transactionId?: string;
   expectedRevision?: number;
+  expectedUpdatedAt?: string;
+  editMode?: "transfer" | "tax_settlement";
   /** See StandardPayload.stay. */
   stay?: boolean;
   /** See StandardPayload.profileSlug. */
@@ -87,9 +98,18 @@ export interface TransferPayload {
   note?: string;
 }
 
+export interface TransactionMetadataPayload {
+  transactionId: string;
+  expectedRevision: number;
+  expectedUpdatedAt: string;
+  description: string;
+  notes: string;
+}
+
 export interface OpeningBalancePayload {
   transactionId: string;
   expectedRevision: number;
+  expectedUpdatedAt: string;
   entityId: string;
   accountId: string;
   date: string;
@@ -127,6 +147,24 @@ export async function loadTransactionEditDraftAction(
       personalAccounts: flowData.personalAccounts,
       employees: flowData.employees,
     };
+  } catch (error) {
+    const appError = toAppError(error);
+    if (appError) return { error: appError };
+    throw error;
+  }
+}
+
+export async function saveTransactionMetadataAction(
+  payload: TransactionMetadataPayload,
+): Promise<ActionResult> {
+  try {
+    await updateTransactionMetadata(
+      payload.transactionId,
+      { description: payload.description, notes: payload.notes },
+      payload.expectedRevision,
+      payload.expectedUpdatedAt,
+    );
+    return { ok: true };
   } catch (error) {
     const appError = toAppError(error);
     if (appError) return { error: appError };
@@ -176,9 +214,14 @@ async function resolveTagIds(names: string[]): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-async function persist(input: TransactionInput, transactionId?: string, expectedRevision?: number) {
+async function persist(
+  input: TransactionInput,
+  transactionId?: string,
+  expectedRevision?: number,
+  expectedUpdatedAt?: string,
+) {
   if (transactionId) {
-    await updateTransaction(transactionId, input, expectedRevision);
+    await updateTransaction(transactionId, input, expectedRevision, expectedUpdatedAt);
   } else {
     await createTransaction(input);
   }
@@ -260,6 +303,7 @@ export async function saveStandardTransaction(
       },
       payload.transactionId,
       payload.expectedRevision,
+      payload.expectedUpdatedAt,
     );
   } catch (error) {
     const appError = toAppError(error);
@@ -285,6 +329,102 @@ export async function saveTransferTransaction(
 
     const fromLeg: PostingInput = { accountId: from.id, amount: -payload.amountMinor };
     const toLeg: PostingInput = { accountId: to.id, amount: payload.amountMinor };
+    let storedKind: TransactionInput["kind"] = "transfer";
+    let description = `Transfer: ${from.name} → ${to.name}`;
+    let tagIds: string[] = [];
+
+    if (payload.editMode === "tax_settlement") {
+      if (from.type !== "bank" || to.type !== "tax_liability") {
+        throw new LedgerValidationError("ledger.transactionShapeUnsupported", {
+          shape: `tax settlement requires bank(negative) + tax_liability(positive), received ${from.type} + ${to.type}`,
+        });
+      }
+      if (!payload.transactionId || payload.expectedRevision === undefined) {
+        throw new LedgerValidationError("ledger.transactionShapeUnsupported", {
+          shape: "tax settlement without an existing transaction revision",
+        });
+      }
+      const [current] = await db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.id, payload.transactionId),
+            eq(transactions.currentRevision, payload.expectedRevision),
+            isNull(transactions.deletedAt),
+          ),
+        );
+      if (!current) {
+        throw new LedgerValidationError("ledger.transactionRevisionConflict");
+      }
+      const currentLegs = await db
+        .select({
+          accountId: postings.accountId,
+          accountType: accounts.type,
+          amount: postings.amount,
+          categoryId: postings.categoryId,
+          counterparty: postings.counterparty,
+          counterpartyIban: postings.counterpartyIban,
+          externalRef: postings.externalRef,
+        })
+        .from(postings)
+        .innerJoin(accounts, eq(accounts.id, postings.accountId))
+        .where(
+          and(
+            eq(postings.transactionId, current.id),
+            eq(postings.revision, current.currentRevision),
+            isNull(postings.deletedAt),
+          ),
+        );
+      const currentFrom = currentLegs.find(
+        (leg) =>
+          leg.accountType === "bank" &&
+          leg.amount < 0 &&
+          leg.categoryId === null,
+      );
+      const currentTo = currentLegs.find(
+        (leg) =>
+          leg.accountType === "tax_liability" &&
+          leg.amount > 0 &&
+          leg.categoryId === null,
+      );
+      const [referencedAccrual] = await db
+        .select({ id: taxAccruals.id })
+        .from(taxAccruals)
+        .where(
+          and(
+            eq(taxAccruals.transactionId, current.id),
+            eq(taxAccruals.revision, current.currentRevision),
+            isNull(taxAccruals.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (
+        current.kind !== "standard" ||
+        currentLegs.length !== 2 ||
+        !currentFrom ||
+        !currentTo ||
+        referencedAccrual
+      ) {
+        throw new LedgerValidationError("ledger.transactionShapeUnsupported", {
+          shape: "tax settlement with linked accruals or changed postings",
+        });
+      }
+      fromLeg.counterparty = currentFrom.counterparty;
+      fromLeg.counterpartyIban = currentFrom.counterpartyIban;
+      fromLeg.externalRef = currentFrom.externalRef;
+      toLeg.counterparty = currentTo.counterparty;
+      toLeg.counterpartyIban = currentTo.counterpartyIban;
+      toLeg.externalRef = currentTo.externalRef;
+      storedKind = "standard";
+      description = current.description ?? "";
+      tagIds = (
+        await db
+          .select({ tagId: transactionTags.tagId })
+          .from(transactionTags)
+          .where(eq(transactionTags.transactionId, current.id))
+      ).map((row) => row.tagId);
+    }
 
     if (from.currency !== to.currency) {
       const received = payload.receivedMinor;
@@ -310,13 +450,15 @@ export async function saveTransferTransaction(
       {
         entityId: payload.entityId,
         date: payload.date,
-        description: `Transfer: ${from.name} → ${to.name}`,
-        kind: "transfer",
+        description,
+        kind: storedKind,
         notes: payload.note?.trim() || null,
+        tagIds,
         postings: [fromLeg, toLeg],
       },
       payload.transactionId,
       payload.expectedRevision,
+      payload.expectedUpdatedAt,
     );
   } catch (error) {
     const appError = toAppError(error);
@@ -356,6 +498,7 @@ export async function saveOpeningBalanceTransaction(
         ],
       },
       payload.expectedRevision,
+      payload.expectedUpdatedAt,
     );
     return { ok: true };
   } catch (error) {

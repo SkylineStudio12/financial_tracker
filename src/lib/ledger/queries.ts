@@ -151,6 +151,8 @@ export interface TransactionListRow {
   category: string | null;
   categoryIcon: string | null;
   categoryDeleted: boolean;
+  /** A current posting settles or accrues against a tax-liability account. */
+  hasTaxLiabilityLeg: boolean;
   /** Distinct leg-category count when legs differ (≥2); null otherwise —
    * the page renders the localized "Split (n)" label, not the query. */
   splitCount: number | null;
@@ -364,6 +366,7 @@ export async function listTransactions(
           (posting) =>
             posting.categoryName === categoryNames[0] && posting.categoryDeletedAt !== null,
         ),
+      hasTaxLiabilityLeg: legs.some((posting) => posting.accountType === "tax_liability"),
       splitCount: categoryNames.length > 1 ? categoryNames.length : null,
       tagNames: tagRows.filter((t) => t.transactionId === transaction.id).map((t) => t.name),
       amount: display.amount,

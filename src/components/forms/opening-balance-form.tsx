@@ -23,6 +23,7 @@ export function OpeningBalanceForm({
   initial: {
     transactionId: string;
     expectedRevision: number;
+    expectedUpdatedAt: string;
     accountId: string;
     date: string;
     description: string;
@@ -54,6 +55,7 @@ export function OpeningBalanceForm({
           const result = await saveOpeningBalanceTransaction({
             transactionId: initial.transactionId,
             expectedRevision: initial.expectedRevision,
+            expectedUpdatedAt: initial.expectedUpdatedAt,
             entityId,
             accountId,
             date,

@@ -28,6 +28,7 @@ export function DividendFlow({
   initial?: {
     transactionId: string;
     expectedRevision: number;
+    expectedUpdatedAt: string;
     date: string;
     gross: string;
     personalAccountId: string;
@@ -76,6 +77,7 @@ export function DividendFlow({
       const result = await saveDividend({
         transactionId: initial?.transactionId,
         expectedRevision: initial?.expectedRevision,
+        expectedUpdatedAt: initial?.expectedUpdatedAt,
         stay: Boolean(initial),
         companyId,
         date,

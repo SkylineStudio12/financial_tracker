@@ -5,7 +5,6 @@ import {
   SPLIT_ICON,
   isCategoryIconName,
 } from "@/components/category-icons";
-import type { TransactionKind } from "@/lib/ledger";
 
 const ICON_PROPS = {
   absoluteStrokeWidth: true,
@@ -56,9 +55,14 @@ export function AccountLabel(props: {
   return <HistoricalLabel {...props} />;
 }
 
-export function KindLabel({ kind, label }: { kind: TransactionKind; label: string }) {
-  const Icon = KIND_ICON_MAP[kind as keyof typeof KIND_ICON_MAP];
-  if (!Icon) return <span>{label}</span>;
+export function KindLabel({
+  kind,
+  label,
+}: {
+  kind: keyof typeof KIND_ICON_MAP;
+  label: string;
+}) {
+  const Icon = KIND_ICON_MAP[kind];
   return (
     <span className="inline-flex items-center gap-1">
       <Icon {...ICON_PROPS} aria-hidden="true" focusable="false" />

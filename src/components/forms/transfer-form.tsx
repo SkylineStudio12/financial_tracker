@@ -21,6 +21,8 @@ import { errorClass, fieldClass, labelClass, moneyFieldClass } from "./ui";
 export interface TransferFormInitial {
   transactionId: string;
   expectedRevision: number;
+  expectedUpdatedAt: string;
+  editMode: "transfer" | "tax_settlement";
   fromAccountId: string;
   fromAccountName: string;
   fromAccountCurrency: string;
@@ -60,6 +62,13 @@ export function TransferForm({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const transferable = options.accounts.filter((account) => account.type !== "equity");
+  const taxSettlementEdit = initial?.editMode === "tax_settlement";
+  const selectableFrom = taxSettlementEdit
+    ? transferable.filter((account) => account.type === "bank")
+    : transferable;
+  const selectableTo = taxSettlementEdit
+    ? transferable.filter((account) => account.type === "tax_liability")
+    : transferable;
   const initialFrom = initial
     ? {
         id: initial.fromAccountId,
@@ -77,13 +86,14 @@ export function TransferForm({
       }
     : null;
   const withCurrent = (
+    candidates: typeof transferable,
     current: NonNullable<typeof initialFrom>,
   ) =>
-    transferable.some((account) => account.id === current.id)
-      ? transferable
-      : [...transferable, current];
-  const fromAccounts = initialFrom ? withCurrent(initialFrom) : transferable;
-  const toAccounts = initialTo ? withCurrent(initialTo) : transferable;
+    candidates.some((account) => account.id === current.id)
+      ? candidates
+      : [...candidates, current];
+  const fromAccounts = initialFrom ? withCurrent(selectableFrom, initialFrom) : selectableFrom;
+  const toAccounts = initialTo ? withCurrent(selectableTo, initialTo) : selectableTo;
   const accountItems = (accounts: typeof transferable) => accounts.map((a) => ({
     value: a.id,
     label: `${a.name} (${a.currency})`,
@@ -144,6 +154,8 @@ export function TransferForm({
     const payload: TransferPayload = {
       transactionId: initial?.transactionId,
       expectedRevision: initial?.expectedRevision,
+      expectedUpdatedAt: initial?.expectedUpdatedAt,
+      editMode: initial?.editMode,
       stay,
       profileSlug,
       entityId,

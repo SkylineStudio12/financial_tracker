@@ -44,6 +44,7 @@ function companyTransactionsPath(companyId: string): string {
 export interface SalaryFlowPayload {
   transactionId?: string;
   expectedRevision?: number;
+  expectedUpdatedAt?: string;
   stay?: boolean;
   companyId: string;
   employeeName: string;
@@ -65,6 +66,7 @@ export interface SalaryFlowPayload {
 export interface DividendFlowPayload {
   transactionId?: string;
   expectedRevision?: number;
+  expectedUpdatedAt?: string;
   stay?: boolean;
   companyId: string;
   date: string;
@@ -335,7 +337,12 @@ export async function saveSalary(payload: SalaryFlowPayload): Promise<ActionResu
       },
     } as const;
     if (payload.transactionId) {
-      await updateTransaction(payload.transactionId, input, payload.expectedRevision);
+      await updateTransaction(
+        payload.transactionId,
+        input,
+        payload.expectedRevision,
+        payload.expectedUpdatedAt,
+      );
     } else {
       await createTransaction(input);
     }
@@ -442,7 +449,12 @@ export async function saveDividend(payload: DividendFlowPayload): Promise<Action
       accruals,
     } as const;
     if (payload.transactionId) {
-      await updateTransaction(payload.transactionId, input, payload.expectedRevision);
+      await updateTransaction(
+        payload.transactionId,
+        input,
+        payload.expectedRevision,
+        payload.expectedUpdatedAt,
+      );
     } else {
       await createTransaction(input);
     }

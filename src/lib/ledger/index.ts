@@ -2,6 +2,7 @@ export {
   assertBatchExternalRefsUnique,
   createTransaction,
   updateTransaction,
+  updateTransactionMetadata,
   softDeleteTransaction,
   softDeleteNonInvestmentTransaction,
   restoreTransaction,

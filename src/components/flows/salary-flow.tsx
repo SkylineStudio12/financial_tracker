@@ -49,6 +49,7 @@ export function SalaryFlow({
   initial?: {
     transactionId: string;
     expectedRevision: number;
+    expectedUpdatedAt: string;
     employeeName: string;
     payMonth: string;
     paymentDate: string;
@@ -232,6 +233,7 @@ export function SalaryFlow({
       const result = await saveSalary({
         transactionId: initial?.transactionId,
         expectedRevision: initial?.expectedRevision,
+        expectedUpdatedAt: initial?.expectedUpdatedAt,
         stay: true,
         companyId,
         employeeName,

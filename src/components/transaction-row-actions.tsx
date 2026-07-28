@@ -14,6 +14,7 @@ import { useTranslatedError } from "@/components/use-translated-error";
 import { StandardForm } from "@/components/forms/standard-form";
 import { TransferForm } from "@/components/forms/transfer-form";
 import { OpeningBalanceForm } from "@/components/forms/opening-balance-form";
+import { TransactionMetadataForm } from "@/components/forms/transaction-metadata-form";
 import { SalaryFlow } from "@/components/flows/salary-flow";
 import { DividendFlow } from "@/components/flows/dividend-flow";
 import type { AccountOption, FormOptions } from "@/components/forms/option-types";
@@ -72,6 +73,10 @@ export function TransactionRowActions({
 
   const loadEdit = () => {
     if (!crudAvailable) return;
+    // Base UI keeps dialog content mounted after close (L-0032). Unmount the
+    // per-open form state before loading a fresh draft so cancelled text never
+    // reappears on the next open.
+    setDraft(null);
     setEditOpen(true);
     setError(null);
     startTransition(async () => {
@@ -162,6 +167,34 @@ export function TransactionRowActions({
           </DialogHeader>
           {pending && !draft && <p className="text-secondary text-text-muted">{t("loading")}</p>}
           {error && <p className="text-secondary text-status-negative-text">{translateError(error)}</p>}
+          {draft && (
+            <div className="flex flex-col gap-3 border-b border-border-hairline pb-4">
+              <h3 className="text-secondary font-medium text-text-primary">
+                {t("metadataDetails")}
+              </h3>
+              <TransactionMetadataForm
+                transactionId={draft.transactionId}
+                expectedRevision={draft.expectedRevision}
+                expectedUpdatedAt={draft.expectedUpdatedAt}
+                initialDescription={draft.metadataDescription}
+                initialNotes={draft.metadataNotes}
+                onSaved={saved}
+              />
+            </div>
+          )}
+          {draft && draft.type !== "metadata_only" && (
+            <h3 className="pt-1 text-secondary font-medium text-text-primary">
+              {t("postingDetails")}
+            </h3>
+          )}
+          {draft?.type === "metadata_only" && (
+            <p className="text-secondary text-status-negative-text">
+              {translateError({
+                code: "ledger.transactionShapeUnsupported",
+                params: { shape: draft.postingShape },
+              })}
+            </p>
+          )}
           {draft?.type === "standard" && (
             <StandardForm
               entityId={draft.bookingEntityId}
@@ -174,15 +207,20 @@ export function TransactionRowActions({
             />
           )}
           {draft?.type === "transfer" && (
-            <TransferForm
-              entityId={draft.bookingEntityId}
-              profileSlug={profileSlug}
-              options={options}
-              initial={draft}
-              stay
-              onSaved={saved}
-              cancelSlot={cancelSlot}
-            />
+            <>
+              {draft.editMode === "tax_settlement" && (
+                <p className="text-secondary text-text-muted">{t("taxSettlementEditNotice")}</p>
+              )}
+              <TransferForm
+                entityId={draft.bookingEntityId}
+                profileSlug={profileSlug}
+                options={options}
+                initial={draft}
+                stay
+                onSaved={saved}
+                cancelSlot={cancelSlot}
+              />
+            </>
           )}
           {draft?.type === "opening_balance" && (
             <OpeningBalanceForm

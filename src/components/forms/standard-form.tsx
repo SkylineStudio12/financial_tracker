@@ -26,6 +26,7 @@ interface SplitDraft {
 export interface StandardFormInitial {
   transactionId: string;
   expectedRevision: number;
+  expectedUpdatedAt: string;
   storedKind: "standard" | "trade";
   accountId: string;
   date: string;
@@ -139,6 +140,7 @@ export function StandardForm({
     const payload: StandardPayload = {
       transactionId: initial?.transactionId,
       expectedRevision: initial?.expectedRevision,
+      expectedUpdatedAt: initial?.expectedUpdatedAt,
       storedKind: initial?.storedKind,
       stay,
       profileSlug,

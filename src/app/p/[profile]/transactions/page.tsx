@@ -14,6 +14,7 @@ import {
 import { getFormOptions } from "@/lib/ledger/form-options";
 import { getFlowPageData } from "@/lib/ledger/flow-page-data";
 import type { TransactionKind } from "@/lib/ledger";
+import { transactionCategoryDisplay } from "@/lib/ledger/category-display";
 import { NewTransactionDialog } from "@/components/new-transaction-dialog";
 import { DateFilter } from "@/components/ui/date-filter";
 import { DevDatabaseBadge } from "@/components/dev-database-badge";
@@ -244,7 +245,9 @@ export default async function TransactionsPage({
                 </td>
               </tr>
             )}
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const categoryDisplay = transactionCategoryDisplay(row);
+              return (
               <RowLink
                 key={row.id}
                 href={`/p/${profile.slug}/transactions/${row.id}`}
@@ -257,17 +260,24 @@ export default async function TransactionsPage({
                 </td>
                 <td className={`${cellClass} text-text-primary`}>{row.description}</td>
                 <td className={`${cellClass} text-text-muted`}>
-                  {row.splitCount ? (
-                    <SplitLabel label={t("split", { count: row.splitCount })} />
-                  ) : row.category ? (
+                  {categoryDisplay.type === "split" ? (
+                    <SplitLabel label={t("split", { count: categoryDisplay.count })} />
+                  ) : categoryDisplay.type === "category" ? (
                     <CategoryLabel
-                      name={row.category}
+                      name={row.category!}
                       icon={row.categoryIcon}
                       deleted={row.categoryDeleted}
                       deletedTooltip={tManage("deletedCategoryTooltip")}
                     />
+                  ) : categoryDisplay.type === "tax_settlement" ? (
+                    <KindLabel kind="tax_settlement" label={t("taxSettlement")} />
+                  ) : categoryDisplay.type === "kind" ? (
+                    <KindLabel
+                      kind={categoryDisplay.kind}
+                      label={tEnums(`transactionKind.${categoryDisplay.kind}`)}
+                    />
                   ) : (
-                    <KindLabel kind={row.kind} label={tEnums(`transactionKind.${row.kind}`)} />
+                    "—"
                   )}
                 </td>
                 <td className={`${cellClass} text-text-muted`}>
@@ -303,7 +313,8 @@ export default async function TransactionsPage({
                   />
                 </td>
               </RowLink>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

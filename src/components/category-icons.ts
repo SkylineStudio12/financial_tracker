@@ -218,6 +218,7 @@ export const KIND_ICON_MAP = {
   opening_balance: Flag,
   dividend: Coins,
   trade: ChartCandlestick,
+  tax_settlement: Landmark,
 } as const satisfies Partial<Record<string, LucideIcon>>;
 
 export const SPLIT_ICON = Split;

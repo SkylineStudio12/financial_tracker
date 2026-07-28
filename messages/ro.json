@@ -96,6 +96,7 @@
     "colActions": "Acțiuni",
     "noMatch": "Nicio tranzacție nu corespunde.",
     "split": "Împărțit ({count})",
+    "taxSettlement": "Tax settlement",
     "pagination": "{total, plural, one {# tranzacție} few {# tranzacții} other {# de tranzacții}} · pagina {page} din {pageCount}",
     "newer": "← Mai noi",
     "older": "Mai vechi →",
@@ -142,6 +143,9 @@
     "backToDetail": "← Înapoi la detalii",
     "editTransaction": "Editează tranzacția",
     "bookingEntity": "Entitate contabilă: {entity}",
+    "metadataDetails": "Description and notes",
+    "postingDetails": "Posting details",
+    "taxSettlementEditNotice": "This is a tax settlement. Settlements clear a recorded liability and are never categorised as an expense. You can edit its description and notes, or its transfer accounts, date, and amount.",
     "editTransfer": "Editează transferul",
     "cannotEdit": "Forma înregistrărilor acestei tranzacții (flux ghidat sau acumulare fiscală automată) nu poate fi editată cu formularul standard. Șterge-o și creeaz-o din nou."
   },
@@ -169,8 +173,10 @@
     "toAccount": "În contul",
     "receivedAmount": "Suma primită ({currency}) — conturile folosesc valute diferite",
     "noteOptional": "Notă (opțional)",
+    "notesOptional": "Notes (optional)",
     "pickTwoDifferent": "Alege două conturi diferite.",
     "saveTransfer": "Salvează transferul",
+    "saveMetadata": "Save description and notes",
     "newTransaction": "Tranzacție nouă",
     "typeStandard": "Cheltuială / Venit",
     "typeTransfer": "Transfer",
@@ -766,7 +772,7 @@
       "transactionRestoreTopologyChanged": "Tranzacția nu mai are structura completă și echilibrată necesară restaurării. Nu s-a modificat nimic.",
       "transactionImportOwnershipChanged": "Proveniența de import a tranzacției s-a schimbat. Reîncarcă înainte de a continua.",
       "transactionPurgeRequiresTrash": "Mută tranzacția în Coș înainte de ștergerea definitivă.",
-      "transactionShapeUnsupported": "Această tranzacție fără investiții are o structură de înregistrări nesuportată. Nu s-a modificat nimic."
+      "transactionShapeUnsupported": "Posting shape \"{shape}\" cannot be edited structurally here. You can still edit its description and notes. To change its postings, move it to Trash and recreate it with a supported form."
     },
     "forms": {
       "accountNotFound": "Cont negăsit.",

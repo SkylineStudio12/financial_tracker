@@ -37,10 +37,17 @@ test("modal pins manual activation, static title, and guarded switching", () => 
 
 test("transfer edit labels keep current-only accounts scoped to their original side", () => {
   const source = readFileSync("src/components/forms/transfer-form.tsx", "utf8");
-  assert.match(source, /const fromAccounts = initialFrom \? withCurrent\(initialFrom\)/);
-  assert.match(source, /const toAccounts = initialTo \? withCurrent\(initialTo\)/);
+  assert.match(source, /const fromAccounts = initialFrom \? withCurrent\(selectableFrom, initialFrom\)/);
+  assert.match(source, /const toAccounts = initialTo \? withCurrent\(selectableTo, initialTo\)/);
   assert.match(source, /accountSelect\(fromAccountId, setFromAccountId, fromAccounts\)/);
   assert.match(source, /accountSelect\(toAccountId, setToAccountId, toAccounts\)/);
+});
+
+test("tax settlement transfer editing constrains bank to tax-liability accounts", () => {
+  const source = readFileSync("src/components/forms/transfer-form.tsx", "utf8");
+  assert.match(source, /initial\?\.editMode === "tax_settlement"/);
+  assert.match(source, /selectableFrom[\s\S]*account\.type === "bank"/);
+  assert.match(source, /selectableTo[\s\S]*account\.type === "tax_liability"/);
 });
 
 test("live database badge is loud and never exposes credentials", () => {

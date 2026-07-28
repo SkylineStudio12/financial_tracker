@@ -21,6 +21,9 @@ import { LedgerValidationError } from "./types";
 type BookingContext = {
   bookingEntityId: string;
   bookingEntityName: string;
+  metadataDescription: string;
+  metadataNotes: string;
+  expectedUpdatedAt: string;
 };
 
 type StandardDraft = BookingContext & {
@@ -40,6 +43,7 @@ type StandardDraft = BookingContext & {
 
 type TransferDraft = BookingContext & {
   type: "transfer";
+  editMode: "transfer" | "tax_settlement";
   transactionId: string;
   expectedRevision: number;
   fromAccountId: string;
@@ -92,12 +96,20 @@ type OpeningBalanceDraft = BookingContext & {
   amount: string;
 };
 
+type MetadataOnlyDraft = BookingContext & {
+  type: "metadata_only";
+  transactionId: string;
+  expectedRevision: number;
+  postingShape: string;
+};
+
 export type TransactionEditDraft =
   | StandardDraft
   | TransferDraft
   | SalaryDraft
   | DividendDraft
-  | OpeningBalanceDraft;
+  | OpeningBalanceDraft
+  | MetadataOnlyDraft;
 
 const SALARY_RULE_TYPES = [
   "salary_cas",
@@ -208,6 +220,9 @@ export async function getTransactionEditDraft(
   const bookingContext = {
     bookingEntityId: transaction.entityId,
     bookingEntityName: bookingEntity.name,
+    metadataDescription: transaction.description ?? "",
+    metadataNotes: transaction.notes ?? "",
+    expectedUpdatedAt: transaction.updatedAt.toISOString(),
   };
   const [trade] = await db
     .select({ id: trades.id })
@@ -246,13 +261,71 @@ export async function getTransactionEditDraft(
     .innerJoin(tags, eq(tags.id, transactionTags.tagId))
     .where(eq(transactionTags.transactionId, transactionId));
 
-  if (transaction.kind === "transfer" && legs.length === 2) {
+  const postingShape = `${transaction.kind}: ${[...legs]
+    .sort(
+      (left, right) =>
+        left.accountType.localeCompare(right.accountType) ||
+        left.amount - right.amount ||
+        left.id.localeCompare(right.id),
+    )
+    .map(
+      (leg) =>
+        `${leg.accountType}(${leg.amount < 0 ? "negative" : "positive"}, ${
+          leg.categoryId ? "categorized" : "uncategorized"
+        })`,
+    )
+    .join(" + ")}`;
+  const metadataOnly = (): MetadataOnlyDraft => ({
+    ...bookingContext,
+    type: "metadata_only",
+    transactionId,
+    expectedRevision: transaction.currentRevision,
+    postingShape,
+  });
+
+  const negativeTaxSettlementLeg =
+    transaction.kind === "standard" && legs.length === 2
+      ? legs.find(
+          (leg) =>
+            leg.accountType === "bank" &&
+            leg.amount < 0 &&
+            leg.categoryId === null,
+        )
+      : undefined;
+  const positiveTaxSettlementLeg =
+    transaction.kind === "standard" && legs.length === 2
+      ? legs.find(
+          (leg) =>
+            leg.accountType === "tax_liability" &&
+            leg.amount > 0 &&
+            leg.categoryId === null,
+        )
+      : undefined;
+  const taxSettlement =
+    negativeTaxSettlementLeg !== undefined && positiveTaxSettlementLeg !== undefined;
+
+  if ((transaction.kind === "transfer" || taxSettlement) && legs.length === 2) {
     const from = legs.find((leg) => leg.amount < 0);
     const to = legs.find((leg) => leg.amount > 0);
-    if (!from || !to) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+    if (!from || !to) return metadataOnly();
+    if (taxSettlement) {
+      const [referencedAccrual] = await db
+        .select({ id: taxAccruals.id })
+        .from(taxAccruals)
+        .where(
+          and(
+            eq(taxAccruals.transactionId, transactionId),
+            eq(taxAccruals.revision, transaction.currentRevision),
+            isNull(taxAccruals.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (referencedAccrual) return metadataOnly();
+    }
     return {
       ...bookingContext,
       type: "transfer",
+      editMode: taxSettlement ? "tax_settlement" : "transfer",
       transactionId,
       expectedRevision: transaction.currentRevision,
       fromAccountId: from.accountId,
@@ -273,7 +346,7 @@ export async function getTransactionEditDraft(
   if (transaction.kind === "opening_balance") {
     const accountLeg = legs.find((leg) => leg.accountType !== "equity");
     if (!accountLeg || legs.length !== 2) {
-      throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+      return metadataOnly();
     }
     return {
       ...bookingContext,
@@ -303,11 +376,15 @@ export async function getTransactionEditDraft(
     const personal = legs.find(
       (leg) => leg.accountEntityId !== transaction.entityId && leg.amount > 0,
     );
-    if (!personal) throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+    if (!personal) return metadataOnly();
     if (transaction.kind === "salary") {
       if (
         legs.length !== 7 ||
         accrualRows.length !== 4 ||
+        SALARY_RULE_TYPES.some(
+          (ruleType) =>
+            accrualRows.filter((row) => row.ruleType === ruleType && row.amount < 0).length !== 1,
+        ) ||
         accrualRows.some(
           (row) =>
             !SALARY_RULE_TYPES.includes(
@@ -315,7 +392,7 @@ export async function getTransactionEditDraft(
             ),
         )
       ) {
-        throw new LedgerValidationError("flows.salaryShapeUnavailable");
+        return metadataOnly();
       }
       const cas = salaryRuleAmount(accrualRows, "salary_cas");
       const cass = salaryRuleAmount(accrualRows, "salary_cass");
@@ -347,7 +424,7 @@ export async function getTransactionEditDraft(
         companyBank.amount !== -net ||
         equity.amount !== cas + cass + incomeTax + cam
       ) {
-        throw new LedgerValidationError("flows.salaryShapeUnavailable");
+        return metadataOnly();
       }
       const [detail] = await db
         .select({
@@ -403,7 +480,7 @@ export async function getTransactionEditDraft(
     assetLegs.length !== 1 ||
     equityLegs.length === 0
   ) {
-    throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+    return metadataOnly();
   }
   const bankLeg = assetLegs[0];
   let editableEquityLegs = equityLegs;
@@ -441,7 +518,7 @@ export async function getTransactionEditDraft(
         (row) => row.ruleType !== "micro_revenue_tax" || !taxPostingIds.has(row.postingId),
       )
     ) {
-      throw new LedgerValidationError("ledger.transactionShapeUnsupported");
+      return metadataOnly();
     }
   }
   const total = Math.abs(bankLeg.amount);

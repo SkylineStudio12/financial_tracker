@@ -24,12 +24,14 @@ import {
   softDeleteNonInvestmentTransaction,
   softDeleteTransaction,
   updateTransaction,
+  updateTransactionMetadata,
   type TransactionInput,
 } from "@/lib/ledger";
 import {
   deleteTransactionAction,
   saveOpeningBalanceTransaction,
   saveStandardTransaction,
+  saveTransferTransaction,
 } from "@/lib/ledger/actions";
 import { saveDividend, saveSalary } from "@/lib/ledger/flow-actions";
 import { getTransactionEditDraft } from "@/lib/ledger/edit-drafts";
@@ -353,7 +355,7 @@ async function main(): Promise<void> {
       assert.equal(editedTransaction.description, null);
     });
 
-    await fixture("standard edit matcher still rejects multiple asset legs", async () => {
+    await fixture("unsupported structural shape falls back to named metadata-only editing", async () => {
       const unsupportedId = track(
         await createTransaction({
           entityId: env.entityId,
@@ -371,10 +373,258 @@ async function main(): Promise<void> {
           ],
         }),
       );
-      await expectCode(
-        getTransactionEditDraft(unsupportedId, env.entityId),
+      const unsupportedDraft = await getTransactionEditDraft(unsupportedId, env.entityId);
+      assert.equal(unsupportedDraft.type, "metadata_only");
+      if (unsupportedDraft.type !== "metadata_only") {
+        throw new Error("expected metadata-only draft");
+      }
+      assert.equal(
+        unsupportedDraft.postingShape,
+        "standard: bank(negative, uncategorized) + bank(negative, uncategorized) + equity(positive, categorized)",
+      );
+      const messages = JSON.parse(
+        readFileSync(join(import.meta.dirname, "..", "..", "..", "messages", "en.json"), "utf8"),
+      );
+      const refusal = messages.errors.ledger.transactionShapeUnsupported as string;
+      assert.match(refusal, /\{shape\}/);
+      assert.match(refusal, /description and notes/i);
+      assert.match(refusal, /move it to Trash and recreate/i);
+      assert.doesNotMatch(refusal, /unsupported posting shape\\. Nothing was changed\\./);
+    });
+
+    await fixture("tax settlement metadata edit preserves posting bytes and revision", async () => {
+      const settlementId = track(
+        await createTransaction({
+          entityId: env.entityId,
+          date: "2026-02-25",
+          description: "Trezorerie fixture",
+          notes: "Original note",
+          kind: "standard",
+          postings: [
+            {
+              accountId: env.bankAccountId,
+              amount: -941_500,
+              counterparty: "Trezorerie",
+              counterpartyIban: "RO00TREZTEST",
+              externalRef: `TEST-TREZ-${crypto.randomUUID()}`,
+            },
+            { accountId: env.taxLiabilityAccountId, amount: 941_500 },
+          ],
+        }),
+      );
+      await db
+        .update(transactions)
+        .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+        .where(eq(transactions.id, settlementId));
+      const before = await currentPostingState(settlementId);
+      const draft = await getTransactionEditDraft(settlementId, env.entityId);
+      assert.equal(draft.type, "transfer");
+      if (draft.type !== "transfer") throw new Error("expected tax settlement transfer draft");
+      assert.equal(draft.editMode, "tax_settlement");
+
+      await updateTransactionMetadata(
+        settlementId,
+        { description: "Updated Trezorerie", notes: "Updated note" },
+        1,
+        draft.expectedUpdatedAt,
+      );
+      const after = await currentPostingState(settlementId);
+      assert.equal(after.transaction.currentRevision, 1);
+      assert.equal(after.transaction.description, "Updated Trezorerie");
+      assert.equal(after.transaction.notes, "Updated note");
+      assert.deepEqual(after.rows, before.rows);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(taxAccruals)
+            .where(eq(taxAccruals.transactionId, settlementId))
+        ).length,
+        0,
+      );
+
+      const staleStructuralResult = await saveTransferTransaction({
+        transactionId: settlementId,
+        expectedRevision: 1,
+        expectedUpdatedAt: draft.expectedUpdatedAt,
+        editMode: "tax_settlement",
+        stay: true,
+        entityId: env.entityId,
+        fromAccountId: env.bankAccountId,
+        toAccountId: env.taxLiabilityAccountId,
+        date: "2026-02-25",
+        amountMinor: 941_500,
+        note: "Stale transfer-form note",
+      });
+      assert.equal(
+        staleStructuralResult &&
+          "error" in staleStructuralResult &&
+          staleStructuralResult.error.code,
+        "ledger.transactionRevisionConflict",
+      );
+      const afterStaleSave = await currentPostingState(settlementId);
+      assert.equal(afterStaleSave.transaction.currentRevision, 1);
+      assert.equal(afterStaleSave.transaction.description, "Updated Trezorerie");
+      assert.equal(afterStaleSave.transaction.notes, "Updated note");
+      assert.deepEqual(afterStaleSave.rows, before.rows);
+
+      const refreshedDraft = await getTransactionEditDraft(settlementId, env.entityId);
+      assert.equal(refreshedDraft.type, "transfer");
+      if (refreshedDraft.type !== "transfer") {
+        throw new Error("expected refreshed tax settlement transfer draft");
+      }
+      assert.deepEqual(
+        await saveTransferTransaction({
+          transactionId: settlementId,
+          expectedRevision: refreshedDraft.expectedRevision,
+          expectedUpdatedAt: refreshedDraft.expectedUpdatedAt,
+          editMode: "tax_settlement",
+          stay: true,
+          entityId: env.entityId,
+          fromAccountId: env.bankAccountId,
+          toAccountId: env.taxLiabilityAccountId,
+          date: "2026-02-25",
+          amountMinor: 941_500,
+          note: "Transfer-form note",
+        }),
+        { ok: true },
+      );
+      const structurallyEdited = await currentPostingState(settlementId);
+      assert.equal(structurallyEdited.transaction.currentRevision, 2);
+      const currentRows = structurallyEdited.rows.filter(
+        (row) => row.revision === 2 && row.deletedAt === null,
+      );
+      assert.equal(currentRows.length, 2);
+      assert.equal(
+        currentRows.find((row) => row.accountId === env.bankAccountId)?.externalRef,
+        before.rows.find((row) => row.accountId === env.bankAccountId)?.externalRef,
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(taxAccruals)
+            .where(eq(taxAccruals.transactionId, settlementId))
+        ).length,
+        0,
+      );
+      const beforeInvalidShape = await currentPostingState(settlementId);
+      const invalidShapeResult = await saveTransferTransaction({
+        transactionId: settlementId,
+        expectedRevision: 2,
+        expectedUpdatedAt:
+          beforeInvalidShape.transaction.updatedAt.toISOString(),
+        editMode: "tax_settlement",
+        stay: true,
+        entityId: env.entityId,
+        fromAccountId: env.bankAccountId,
+        toAccountId: secondBank.id,
+        date: "2026-02-25",
+        amountMinor: 941_500,
+      });
+      assert.equal(
+        invalidShapeResult &&
+          "error" in invalidShapeResult &&
+          invalidShapeResult.error.code,
         "ledger.transactionShapeUnsupported",
       );
+      assert.deepEqual(await currentPostingState(settlementId), beforeInvalidShape);
+      const messages = JSON.parse(
+        readFileSync(join(import.meta.dirname, "..", "..", "..", "messages", "en.json"), "utf8"),
+      );
+      const notice = messages.transactions.taxSettlementEditNotice as string;
+      assert.match(notice, /tax settlement/i);
+      assert.match(notice, /clear a recorded liability/i);
+      assert.match(notice, /never categorised as an expense/i);
+      assert.match(notice, /description and notes/i);
+    });
+
+    await fixture("bank-fee metadata edit preserves posting bytes and revision", async () => {
+      const bankFeeId = track(
+        await createTransaction(
+          expenseInput(
+            env.entityId,
+            env.bankAccountId,
+            env.equityAccountId,
+            env.categoryId("Bank fees|expense"),
+            "Bank fee fixture",
+            51,
+            "2026-02-25",
+          ),
+        ),
+      );
+      const before = await currentPostingState(bankFeeId);
+      await updateTransactionMetadata(
+        bankFeeId,
+        { description: "ING fee", notes: "Metadata only" },
+        1,
+      );
+      const after = await currentPostingState(bankFeeId);
+      assert.equal(after.transaction.currentRevision, 1);
+      assert.equal(after.transaction.description, "ING fee");
+      assert.equal(after.transaction.notes, "Metadata only");
+      assert.deepEqual(after.rows, before.rows);
+    });
+
+    await fixture("accrual-linked settlement stays metadata-only and cannot orphan its accrual", async () => {
+      const [rule] = await db.select({ id: taxRules.id }).from(taxRules).limit(1);
+      assert.ok(rule);
+      const settlementId = track(
+        await createTransaction({
+          entityId: env.entityId,
+          date: "2026-02-26",
+          description: "Accrual-linked settlement fixture",
+          kind: "standard",
+          postings: [
+            { accountId: env.bankAccountId, amount: -10_100 },
+            { accountId: env.taxLiabilityAccountId, amount: 10_100 },
+          ],
+          accruals: [
+            {
+              postingIndex: 1,
+              taxRuleId: rule.id,
+              year: 2026,
+              quarter: 1,
+            },
+          ],
+        }),
+      );
+      const draft = await getTransactionEditDraft(settlementId, env.entityId);
+      assert.equal(draft.type, "metadata_only");
+      await updateTransactionMetadata(
+        settlementId,
+        { description: "Metadata remains editable", notes: "Accrual preserved" },
+        1,
+      );
+      const [beforeAccrual] = await db
+        .select()
+        .from(taxAccruals)
+        .where(eq(taxAccruals.transactionId, settlementId));
+      assert.ok(beforeAccrual);
+      const result = await saveTransferTransaction({
+        transactionId: settlementId,
+        expectedRevision: 1,
+        editMode: "tax_settlement",
+        stay: true,
+        entityId: env.entityId,
+        fromAccountId: env.bankAccountId,
+        toAccountId: env.taxLiabilityAccountId,
+        date: "2026-02-26",
+        amountMinor: 10_100,
+      });
+      assert.equal(
+        result && "error" in result && result.error.code,
+        "ledger.transactionShapeUnsupported",
+      );
+      const [afterAccrual] = await db
+        .select()
+        .from(taxAccruals)
+        .where(eq(taxAccruals.transactionId, settlementId));
+      assert.equal(afterAccrual.postingId, beforeAccrual.postingId);
+      assert.equal(afterAccrual.deletedAt, null);
+      const state = await currentPostingState(settlementId);
+      assert.equal(state.transaction.currentRevision, 1);
+      assert.ok(state.rows.every((row) => row.deletedAt === null));
     });
 
     await fixture("manual expense delete is balanced, tombstoned, audited, and absent", async () => {
@@ -663,6 +913,9 @@ async function main(): Promise<void> {
         await saveOpeningBalanceTransaction({
           transactionId: openingId,
           expectedRevision: 1,
+          expectedUpdatedAt: (
+            await getTransactionEditDraft(openingId, env.entityId)
+          ).expectedUpdatedAt,
           entityId: env.entityId,
           accountId: env.bankAccountId,
           date: "2026-01-01",
@@ -888,7 +1141,7 @@ async function main(): Promise<void> {
       assert.equal(currentRows.reduce((sum, row) => sum + row.amountRon, 0), 0);
     });
 
-    assert.equal(fixtures, 14);
+    assert.equal(fixtures, 17);
   } finally {
     const ids = [...fixtureTransactionIds, ...mappedCompanyTransactionIds];
     if (ids.length > 0) {
@@ -901,7 +1154,7 @@ async function main(): Promise<void> {
     const residue = await db.select({ count: sql<number>`count(*)::int` }).from(transactions).where(eq(transactions.entityId, env.entityId));
     assert.equal(residue[0].count, 0);
   }
-  console.log("PASS fixtures 1-14 and zero fixture residue");
+  console.log("PASS fixtures 1-17 and zero fixture residue");
 }
 
 main()

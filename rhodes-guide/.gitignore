@@ -1,0 +1,5 @@
+.thumbs/
+__pycache__/
+images/
+page*.png
+map_preview.png

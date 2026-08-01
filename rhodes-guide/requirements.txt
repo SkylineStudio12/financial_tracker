@@ -1,0 +1,6 @@
+reportlab
+staticmap
+pillow
+requests
+basemap-data-hires
+pypdfium2
